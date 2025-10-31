@@ -111,10 +111,7 @@ export default async function UserPage({ params, searchParams }) {
             "Zaterdag",
             "Zondag",
           ].map((d, i) => (
-            <div
-              className="day flex flex-col items-center text-center gap-1"
-              key={d}
-            >
+            <div className="day flex flex-col items-center w-full" key={d}>
               {(() => {
                 const dayDate = new Date(
                   weekStart.getTime() + i * 24 * 60 * 60 * 1000
@@ -123,14 +120,14 @@ export default async function UserPage({ params, searchParams }) {
                   new Date().toDateString() === dayDate.toDateString();
                 return (
                   <>
-                    <div className="day-label text-[10px] tracking-wide text-gray-500 uppercase whitespace-nowrap text-center">
+                    <div className="day-label text-[10px] tracking-wide text-gray-500 uppercase whitespace-nowrap w-full text-center mb-1">
                       <span className="sm:hidden">
                         {["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"][i]}
                       </span>
                       <span className="hidden sm:inline">{d.slice(0, 3)}</span>
                     </div>
                     <div
-                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-semibold ${
+                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-semibold mb-1 mx-auto ${
                         isToday
                           ? "bg-[#008eff] text-white"
                           : "bg-gray-100 text-gray-900"
@@ -141,14 +138,16 @@ export default async function UserPage({ params, searchParams }) {
                   </>
                 );
               })()}
-              <div className="day-hours text-xs font-medium mt-1 tabular-nums">
+              <div className="day-hours text-xs font-bold mb-0.5 tabular-nums min-h-4 w-full text-center">
                 {perDay[i] ? formatHoursHMM(perDay[i]) : "0:00"}
               </div>
-              {perDayMoney[i] > 0 && (
-                <div className="day-money text-[10px] font-medium text-gray-600 mt-0.5 tabular-nums">
-                  {formatMoney(perDayMoney[i])}
-                </div>
-              )}
+              <div
+                className={`day-money text-[10px] font-medium text-gray-600 tabular-nums min-h-3.5 w-full text-center ${
+                  perDayMoney[i] > 0 ? "" : "invisible"
+                }`}
+              >
+                {perDayMoney[i] > 0 ? formatMoney(perDayMoney[i]) : "\u200B"}
+              </div>
               <div className="sr-only">
                 <span className="sm:hidden">
                   {["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"][i]}
@@ -172,7 +171,7 @@ export default async function UserPage({ params, searchParams }) {
               </div>
               {weekTotalMoney > 0 && (
                 <div className="text-sm tabular-nums">
-                  <span className="text-gray-600">Geld: </span>
+                  <span className="text-gray-600">Peso's: </span>
                   <span className="font-medium">
                     {formatMoney(weekTotalMoney)}
                   </span>

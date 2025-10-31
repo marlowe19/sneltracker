@@ -12,10 +12,12 @@ export default function RunningClockClient({ startedAt, stoppedAt }) {
     () => (stoppedAt ? new Date(stoppedAt).getTime() : null),
     [stoppedAt]
   );
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (!startMs || stopMs) return;
+    // Initialize now when startMs becomes available to avoid timing issues
+    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [startMs, stopMs]);
@@ -24,6 +26,6 @@ export default function RunningClockClient({ startedAt, stoppedAt }) {
 
   // If stopped, use the stop time; otherwise use current time
   const currentTime = stopMs || now;
-  const elapsed = currentTime - startMs;
+  const elapsed = Math.max(0, currentTime - startMs);
   return <span className="timer-text">{formatHMS(elapsed)}</span>;
 }
