@@ -58,13 +58,26 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  transition: background-color 0.15s ease, transform 0.1s ease;
 }
 .btn:hover {
   opacity: 0.9;
 }
+.btn:active {
+  background: #0066b3;
+  transform: scale(0.98);
+}
 .btn-secondary {
   background: #e5e7eb;
   color: #111827;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+.btn-secondary:hover {
+  background: #d1d5db;
+}
+.btn-secondary:active {
+  background: #9ca3af;
+  transform: scale(0.98);
 }
 .timer-box {
   display: flex;

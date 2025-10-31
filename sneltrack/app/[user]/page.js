@@ -1,10 +1,7 @@
 import { getActiveEntry, getWeekEntries } from "@/lib/dbFirestore";
 import { getWeekBounds, toIso, computeEntryDurationMs } from "@/lib/time";
 import Link from "next/link";
-import { Suspense } from "react";
-import RunningClockClient from "./RunningClockClient";
-import StartStopButtonsClient from "./StartStopButtonsClient";
-import MoneyCounterClient from "./MoneyCounterClient";
+import TimerSectionClient from "./TimerSectionClient";
 
 export const dynamic = "force-dynamic";
 
@@ -72,33 +69,7 @@ export default async function UserPage({ params, searchParams }) {
           </h2>
         </div>
 
-        <div className="timer-box flex flex-col justify-center items-center py-6">
-          {active && (
-            <div className="px-4 pb-2">
-              <div className="text-center text-sm text-gray-700">
-                {active.project && (
-                  <div className="text-xs text-gray-600 mt-1">
-                    {active.project}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          <Suspense fallback={<span>--:--:--</span>}>
-            <RunningClock startedAt={active?.start_time || null} />
-          </Suspense>
-          {active?.hourly_rate && (
-            <div className="mt-2 text-lg font-semibold text-gray-700">
-              <Suspense fallback={<span>€0.00</span>}>
-                <MoneyCounter
-                  startedAt={active.start_time}
-                  hourlyRate={active.hourly_rate}
-                />
-              </Suspense>
-            </div>
-          )}
-        </div>
-        <StartStopButtonsClient user={user} />
+        <TimerSectionClient user={user} active={active} />
       </section>
 
       <section className="panel">
@@ -213,12 +184,4 @@ export default async function UserPage({ params, searchParams }) {
       </section>
     </main>
   );
-}
-
-function RunningClock(props) {
-  return <RunningClockClient {...props} />;
-}
-
-function MoneyCounter(props) {
-  return <MoneyCounterClient {...props} />;
 }
