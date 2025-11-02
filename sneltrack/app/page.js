@@ -1,3 +1,5 @@
+import UsernameFormClient from "./UsernameFormClient";
+
 export default function Home() {
   return (
     <main
@@ -8,7 +10,7 @@ export default function Home() {
         justifyContent: "center",
       }}
     >
-      <img src="/icon-SO.svg" alt="Logo" width={236} height={184} />
+      <UsernameFormClient />
     </main>
   );
 }

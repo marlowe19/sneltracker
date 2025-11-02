@@ -1,7 +1,12 @@
 import { getActiveEntry, getWeekEntries } from "@/lib/dbFirestore";
-import { getWeekBounds, toIso, computeEntryDurationMs } from "@/lib/time";
+import {
+  getWeekBounds,
+  toIso,
+  computeEntryDurationMsClipped,
+} from "@/lib/time";
 import Link from "next/link";
 import TimerSectionClient from "./TimerSectionClient";
+import DayClickableClient from "./DayClickableClient";
 
 export const dynamic = "force-dynamic";
 
@@ -40,16 +45,45 @@ export default async function UserPage({ params, searchParams }) {
   const perDayMoney = Array(7).fill(0);
 
   for (const e of entries) {
-    const duration = computeEntryDurationMs(e.start_time, e.end_time);
-    const dow = new Date(e.start_time).getDay();
-    const idx = (dow + 6) % 7; // Monday=0
-    perDay[idx] += duration;
+    // Calculate duration clipped to week bounds (duration_ms takes precedence)
+    const duration = computeEntryDurationMsClipped(
+      e.start_time,
+      e.end_time,
+      weekStart,
+      weekEnd,
+      e.duration_ms ?? null
+    );
 
-    // Calculate money for this entry
-    if (e.hourly_rate) {
-      const hours = duration / (1000 * 60 * 60);
-      const money = hours * e.hourly_rate;
-      perDayMoney[idx] += money;
+    // Only process entries that have duration within the week
+    if (duration === 0) continue;
+
+    // Determine which day to assign this entry to
+    let dayIndex = -1;
+
+    // If entry has duration_ms, use start_time to determine the day
+    // (start_time should be set to the start of the day when duration_ms is set)
+    if (e.duration_ms !== null && e.duration_ms !== undefined && e.start_time) {
+      const entryStart = new Date(e.start_time);
+      const dow = entryStart.getDay();
+      dayIndex = (dow + 6) % 7; // Monday=0
+    } else {
+      // For time-based entries, use the start time to determine the day
+      const entryStart = new Date(e.start_time);
+      // Use the clipped start time if entry starts before the week
+      const clippedStart = entryStart > weekStart ? entryStart : weekStart;
+      const dow = clippedStart.getDay();
+      dayIndex = (dow + 6) % 7; // Monday=0
+    }
+
+    if (dayIndex >= 0 && dayIndex < 7) {
+      perDay[dayIndex] += duration;
+
+      // Calculate money for this entry
+      if (e.hourly_rate) {
+        const hours = duration / (1000 * 60 * 60);
+        const money = hours * e.hourly_rate;
+        perDayMoney[dayIndex] += money;
+      }
     }
   }
 
@@ -58,7 +92,7 @@ export default async function UserPage({ params, searchParams }) {
   const weekTotalMoney = perDayMoney.reduce((sum, val) => sum + val, 0);
 
   return (
-    <main className="container mx-auto max-w-md sm:max-w-xl md:max-w-2xl p-4 sm:p-6 flex flex-col gap-6">
+    <main className="container mx-auto max-w-md sm:max-w-xl md:max-w-2xl p-4 sm:p-2 flex flex-col gap-6">
       <section className="panel bg-white rounded-xl shadow">
         <div className="panel-header flex items-center justify-start gap-3 flex-wrap">
           <h2 className="text-left text-lg font-semibold">
@@ -72,7 +106,7 @@ export default async function UserPage({ params, searchParams }) {
         <TimerSectionClient user={user} active={active} />
       </section>
 
-      <section className="panel">
+      <section className="w-full">
         <div className="flex items-center justify-between mb-1">
           <Link
             href={`/${encodeURIComponent(user)}?w=${weekOffset - 1}`}
@@ -101,61 +135,71 @@ export default async function UserPage({ params, searchParams }) {
             ›
           </Link>
         </div>
-        <div className="week grid grid-cols-7 gap-1 items-start">
-          {[
-            "Maandag",
-            "Dinsdag",
-            "Woensdag",
-            "Donderdag",
-            "Vrijdag",
-            "Zaterdag",
-            "Zondag",
-          ].map((d, i) => (
-            <div className="day flex flex-col items-center w-full" key={d}>
-              {(() => {
-                const dayDate = new Date(
-                  weekStart.getTime() + i * 24 * 60 * 60 * 1000
-                );
-                const isToday =
-                  new Date().toDateString() === dayDate.toDateString();
-                return (
-                  <>
-                    <div className="day-label text-[10px] tracking-wide text-gray-500 uppercase whitespace-nowrap w-full text-center mb-1">
-                      <span className="sm:hidden">
-                        {["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"][i]}
-                      </span>
-                      <span className="hidden sm:inline">{d.slice(0, 3)}</span>
-                    </div>
-                    <div
-                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-semibold mb-1 mx-auto ${
-                        isToday
-                          ? "bg-[#008eff] text-white"
-                          : "bg-gray-100 text-gray-900"
-                      }`}
-                    >
-                      {dayDate.getDate()}
-                    </div>
-                  </>
-                );
-              })()}
-              <div className="day-hours text-xs font-bold mb-0.5 tabular-nums min-h-4 w-full text-center">
-                {perDay[i] ? formatHoursHMM(perDay[i]) : "0:00"}
-              </div>
-              <div
-                className={`day-money text-[10px] font-medium text-gray-600 tabular-nums min-h-3.5 w-full text-center ${
-                  perDayMoney[i] > 0 ? "" : "invisible"
-                }`}
-              >
-                {perDayMoney[i] > 0 ? formatMoney(perDayMoney[i]) : "\u200B"}
-              </div>
-              <div className="sr-only">
-                <span className="sm:hidden">
-                  {["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"][i]}
-                </span>
-                <span className="hidden sm:inline">{d}</span>
-              </div>
-            </div>
-          ))}
+        <div className="w-full min-w-0 overflow-x-auto">
+          <div className="week grid grid-cols-7 gap-1 items-start">
+            {[
+              "Maandag",
+              "Dinsdag",
+              "Woensdag",
+              "Donderdag",
+              "Vrijdag",
+              "Zaterdag",
+              "Zondag",
+            ].map((d, i) => {
+              const dayDate = new Date(
+                weekStart.getTime() + i * 24 * 60 * 60 * 1000
+              );
+              const isToday =
+                new Date().toDateString() === dayDate.toDateString();
+              return (
+                <DayClickableClient
+                  key={d}
+                  dayDate={dayDate}
+                  isToday={isToday}
+                  dayLabel={d}
+                  dayNumber={dayDate.getDate()}
+                  hours={perDay[i]}
+                  money={perDayMoney[i]}
+                  entries={entries}
+                  user={user}
+                >
+                  <div className="day-label text-[10px] tracking-wide text-gray-500 uppercase whitespace-nowrap w-full text-center mb-1">
+                    <span className="sm:hidden">
+                      {["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"][i]}
+                    </span>
+                    <span className="hidden sm:inline">{d.slice(0, 3)}</span>
+                  </div>
+                  <div
+                    className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-semibold mb-1 mx-auto ${
+                      isToday
+                        ? "bg-[#008eff] text-white"
+                        : "bg-gray-100 text-gray-900"
+                    }`}
+                  >
+                    {dayDate.getDate()}
+                  </div>
+                  <div className="day-hours text-xs font-bold mb-0.5 tabular-nums min-h-4 w-full text-center">
+                    {perDay[i] ? formatHoursHMM(perDay[i]) : "0:00"}
+                  </div>
+                  <div
+                    className={`day-money text-[10px] font-medium text-gray-600 tabular-nums min-h-3.5 w-full text-center ${
+                      perDayMoney[i] > 0 ? "" : "invisible"
+                    }`}
+                  >
+                    {perDayMoney[i] > 0
+                      ? formatMoney(perDayMoney[i])
+                      : "\u200B"}
+                  </div>
+                  <div className="sr-only">
+                    <span className="sm:hidden">
+                      {["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"][i]}
+                    </span>
+                    <span className="hidden sm:inline">{d}</span>
+                  </div>
+                </DayClickableClient>
+              );
+            })}
+          </div>
         </div>
         <div className="mt-4 pt-4 border-t border-gray-200">
           <div className="flex items-center justify-between">
@@ -171,7 +215,7 @@ export default async function UserPage({ params, searchParams }) {
               </div>
               {weekTotalMoney > 0 && (
                 <div className="text-sm tabular-nums">
-                  <span className="text-gray-600">Peso's: </span>
+                  <span className="text-gray-600">Peso&apos;s: </span>
                   <span className="font-medium">
                     {formatMoney(weekTotalMoney)}
                   </span>

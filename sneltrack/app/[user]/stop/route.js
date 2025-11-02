@@ -5,7 +5,11 @@ import { computeEntryDurationMs } from "@/lib/time";
 async function performStop(user) {
   const entry = await stopEntry(user);
   if (!entry) return null;
-  const durationMs = computeEntryDurationMs(entry.start_time, entry.end_time);
+  const durationMs = computeEntryDurationMs(
+    entry.start_time,
+    entry.end_time,
+    entry.duration_ms ?? null
+  );
   return { entry, durationMs };
 }
 

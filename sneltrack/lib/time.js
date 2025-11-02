@@ -26,10 +26,60 @@ export function floorTo15Minutes(ms) {
   return Math.floor(ms / fifteen) * fifteen;
 }
 
-export function computeEntryDurationMs(startIso, endIso) {
+export function computeEntryDurationMs(startIso, endIso, durationMs = null) {
+  // If duration_ms is provided, use it directly
+  if (durationMs !== null && durationMs !== undefined) {
+    return durationMs;
+  }
+  // Otherwise calculate from start/end times
   const start = parseISO(startIso);
   const end = endIso ? parseISO(endIso) : new Date();
   return Math.max(0, differenceInMilliseconds(end, start));
+}
+
+/**
+ * Calculate the duration of an entry clipped to week bounds.
+ * Returns only the portion of the entry that falls within the specified week.
+ * @param {string} startIso - Entry start time in ISO format
+ * @param {string|null} endIso - Entry end time in ISO format (null for active entries)
+ * @param {Date} weekStart - Start of the week
+ * @param {Date} weekEnd - End of the week
+ * @param {number|null} durationMs - Optional duration_ms field (takes precedence)
+ * @returns {number} Duration in milliseconds
+ */
+export function computeEntryDurationMsClipped(
+  startIso,
+  endIso,
+  weekStart,
+  weekEnd,
+  durationMs = null
+) {
+  // If duration_ms is provided, use it directly (assume it's for the day it's assigned to)
+  if (durationMs !== null && durationMs !== undefined) {
+    // Check if the entry's day falls within the week
+    const entryStart = startIso ? parseISO(startIso) : new Date(weekStart);
+    const entryDay = new Date(entryStart);
+    entryDay.setHours(0, 0, 0, 0);
+
+    // If entry day is within the week, return full duration_ms
+    if (entryDay >= weekStart && entryDay < weekEnd) {
+      return durationMs;
+    }
+    return 0;
+  }
+
+  // Otherwise calculate from start/end times with clipping
+  const entryStart = parseISO(startIso);
+  const entryEnd = endIso ? parseISO(endIso) : new Date();
+
+  // Calculate the clipped boundaries
+  const clippedStart = entryStart > weekStart ? entryStart : weekStart;
+  const clippedEnd = entryEnd < weekEnd ? entryEnd : weekEnd;
+
+  // Ensure clipped start is before clipped end
+  if (clippedStart >= clippedEnd) return 0;
+
+  return Math.max(0, differenceInMilliseconds(clippedEnd, clippedStart));
 }
 
 export function formatHMS(ms) {
