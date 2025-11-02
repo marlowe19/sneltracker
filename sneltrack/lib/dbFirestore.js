@@ -1,4 +1,5 @@
 import { getDb } from "./firebaseAdmin";
+import { computeEntryDurationMs } from "./time";
 
 function toIso(ts) {
   if (!ts) return null;
@@ -55,9 +56,21 @@ export async function startEntry(userName, hourlyRate = null, project = null) {
     end_time: null,
     created_at: now,
   };
-  if (hourlyRate !== null) {
+
+  // If project is provided but no hourly rate, try to get rate from project
+  let finalHourlyRate = hourlyRate;
+  if ((finalHourlyRate === null || finalHourlyRate === undefined) && project) {
+    const projectDoc = await getProject(userName, project);
+    if (projectDoc && projectDoc.hourly_rate) {
+      finalHourlyRate = projectDoc.hourly_rate;
+    }
+  }
+
+  if (finalHourlyRate !== null && finalHourlyRate !== undefined) {
     entryData.hourly_rate =
-      typeof hourlyRate === "string" ? parseFloat(hourlyRate) : hourlyRate;
+      typeof finalHourlyRate === "string"
+        ? parseFloat(finalHourlyRate)
+        : finalHourlyRate;
   }
   if (project !== null && project !== undefined) {
     entryData.project = project;
@@ -210,4 +223,160 @@ export async function updateEntry(userName, entryId, updates) {
   await docRef.update(updateData);
   const updated = await docRef.get();
   return docToEntry(updated);
+}
+
+// Projects functions
+
+function getUserProjectsCollection(userName) {
+  const db = getDb();
+  return db.collection("users").doc(userName).collection("projects");
+}
+
+function docToProject(doc) {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    name: data.name,
+    hourly_rate: data.hourly_rate ?? null,
+    is_default: data.is_default ?? false,
+    created_at: toIso(data.created_at),
+    modified_at: toIso(data.modified_at),
+  };
+}
+
+export async function getAllProjects(userName) {
+  const ref = getUserProjectsCollection(userName);
+  const snap = await ref.orderBy("created_at", "desc").get();
+  return snap.docs.map(docToProject);
+}
+
+export async function getProject(userName, projectId) {
+  const ref = getUserProjectsCollection(userName);
+  const doc = await ref.doc(projectId).get();
+  if (!doc.exists) return null;
+  return docToProject(doc);
+}
+
+export async function getDefaultProject(userName) {
+  const ref = getUserProjectsCollection(userName);
+  const snap = await ref.where("is_default", "==", true).limit(1).get();
+  if (snap.empty) return null;
+  return docToProject(snap.docs[0]);
+}
+
+export async function createProject(
+  userName,
+  name,
+  hourlyRate = null,
+  isDefault = false
+) {
+  const ref = getUserProjectsCollection(userName);
+  const now = new Date();
+
+  // If setting as default, clear any existing default project
+  if (isDefault) {
+    const existingDefault = await getDefaultProject(userName);
+    if (existingDefault) {
+      await ref.doc(existingDefault.id).update({ is_default: false });
+    }
+  }
+
+  const projectData = {
+    name,
+    hourly_rate:
+      hourlyRate !== null && hourlyRate !== undefined
+        ? typeof hourlyRate === "string"
+          ? parseFloat(hourlyRate)
+          : hourlyRate
+        : null,
+    is_default: isDefault,
+    created_at: now,
+    modified_at: now,
+  };
+
+  const docRef = await ref.add(projectData);
+  const doc = await docRef.get();
+  return docToProject(doc);
+}
+
+export async function updateProject(userName, projectId, updates) {
+  const ref = getUserProjectsCollection(userName);
+  const docRef = ref.doc(projectId);
+
+  const updateData = {};
+  if (updates.name !== undefined) {
+    updateData.name = updates.name;
+  }
+  if (updates.hourly_rate !== undefined) {
+    updateData.hourly_rate =
+      updates.hourly_rate === null || updates.hourly_rate === ""
+        ? null
+        : typeof updates.hourly_rate === "string"
+        ? parseFloat(updates.hourly_rate)
+        : updates.hourly_rate;
+  }
+  if (updates.is_default !== undefined) {
+    // If setting as default, clear any existing default project
+    if (updates.is_default) {
+      const existingDefault = await getDefaultProject(userName);
+      if (existingDefault && existingDefault.id !== projectId) {
+        await ref.doc(existingDefault.id).update({ is_default: false });
+      }
+    }
+    updateData.is_default = updates.is_default;
+  }
+
+  // Always update modified_at timestamp
+  updateData.modified_at = new Date();
+
+  await docRef.update(updateData);
+  const updated = await docRef.get();
+  return docToProject(updated);
+}
+
+export async function deleteProject(userName, projectId) {
+  const ref = getUserProjectsCollection(userName);
+  await ref.doc(projectId).delete();
+}
+
+export async function getProjectStatistics(userName, projectId) {
+  const ref = getUserTimeEntriesCollection(userName);
+  // Get project to find entries by project ID
+  const project = await getProject(userName, projectId);
+  if (!project) {
+    return { totalHours: 0, totalMoney: 0, entryCount: 0 };
+  }
+
+  // Query entries that have this project ID
+  const snap = await ref.where("project", "==", projectId).get();
+
+  let totalDurationMs = 0;
+  let totalMoney = 0;
+  let entryCount = 0;
+
+  for (const doc of snap.docs) {
+    const entry = docToEntry(doc);
+    const durationMs = computeEntryDurationMs(
+      entry.start_time,
+      entry.end_time,
+      entry.duration_ms
+    );
+
+    totalDurationMs += durationMs;
+    entryCount++;
+
+    // Calculate money for this entry
+    // Use entry's hourly_rate if available, otherwise use project's hourly_rate
+    const rate = entry.hourly_rate ?? project.hourly_rate;
+    if (rate) {
+      const hours = durationMs / (1000 * 60 * 60);
+      totalMoney += hours * rate;
+    }
+  }
+
+  return {
+    totalHours: totalDurationMs / (1000 * 60 * 60),
+    totalMoney,
+    entryCount,
+  };
 }

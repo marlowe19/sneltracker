@@ -94,13 +94,19 @@ export default async function UserPage({ params, searchParams }) {
   return (
     <main className="container mx-auto max-w-md sm:max-w-xl md:max-w-2xl p-4 sm:p-2 flex flex-col gap-6">
       <section className="panel bg-white rounded-xl shadow">
-        <div className="panel-header flex items-center justify-start gap-3 flex-wrap">
+        <div className="panel-header flex items-center justify-between gap-3 flex-wrap">
           <h2 className="text-left text-lg font-semibold">
             Hi{" "}
             <span className="text-gray-700 inline-block capitalize">
               {user},
             </span>
           </h2>
+          <Link
+            href={`/${encodeURIComponent(user)}/projecten`}
+            className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50"
+          >
+            Projecten
+          </Link>
         </div>
 
         <TimerSectionClient user={user} active={active} />

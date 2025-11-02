@@ -91,6 +91,22 @@ export default function DayEntriesModalClient({
   const [localEntries, setLocalEntries] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [projects, setProjects] = useState([]);
+
+  useEffect(() => {
+    async function loadProjects() {
+      try {
+        const res = await fetch(`/${encodeURIComponent(user)}/projecten/api`);
+        const data = await res.json();
+        setProjects(data.projects || []);
+      } catch (error) {
+        console.error("Error loading projects:", error);
+      }
+    }
+    if (isOpen) {
+      loadProjects();
+    }
+  }, [isOpen, user]);
 
   useEffect(() => {
     if (isOpen && entries && dayDate) {
@@ -301,7 +317,9 @@ export default function DayEntriesModalClient({
         // Update project if changed
         if (entry.project_editable !== undefined) {
           const newProject =
-            entry.project_editable === "" ? null : entry.project_editable;
+            entry.project_editable === "" || entry.project_editable === null
+              ? null
+              : entry.project_editable;
           const currentProject = entry.project;
           if (newProject !== currentProject) {
             updates.project = newProject;
@@ -497,23 +515,28 @@ export default function DayEntriesModalClient({
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Projectnaam
                     </label>
-                    <input
-                      type="text"
-                      placeholder="Projectnaam"
+                    <select
                       value={
                         entry.project_editable !== undefined
-                          ? entry.project_editable
+                          ? entry.project_editable || ""
                           : entry.project || ""
                       }
                       onChange={(e) =>
                         handleEntryChange(
                           index,
                           "project_editable",
-                          e.target.value
+                          e.target.value || null
                         )
                       }
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff]"
-                    />
+                    >
+                      <option value="">Geen project</option>
+                      {projects.map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>
