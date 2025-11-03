@@ -19,18 +19,43 @@ export default function ProjectFormClient({
 }) {
   const [name, setName] = useState("");
   const [hourlyRate, setHourlyRate] = useState("");
+  const [budgetHours, setBudgetHours] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState(null);
+  const [stats, setStats] = useState(null);
 
   useEffect(() => {
     if (project) {
       setName(project.name || "");
       setHourlyRate(project.hourly_rate ? String(project.hourly_rate) : "");
+      setBudgetHours(project.budget_hours ? String(project.budget_hours) : "");
       setIsDefault(project.is_default || false);
+      // Load statistics for existing project
+      if (project.id) {
+        loadStatistics(project.id);
+      }
+    } else {
+      setStats(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project]);
+
+  async function loadStatistics(projectId) {
+    if (!projectId) return;
+    try {
+      const res = await fetch(
+        `/${encodeURIComponent(
+          user
+        )}/projecten/api?projectId=${projectId}&stats=true`
+      );
+      const data = await res.json();
+      setStats(data.statistics);
+    } catch (error) {
+      console.error("Error loading statistics:", error);
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -41,6 +66,7 @@ export default function ProjectFormClient({
       const body = {
         name: name.trim(),
         hourly_rate: hourlyRate ? parseFloat(hourlyRate) : null,
+        budget_hours: budgetHours ? parseFloat(budgetHours) : null,
         is_default: isDefault,
       };
 
@@ -178,6 +204,25 @@ export default function ProjectFormClient({
               />
             </div>
 
+            <div>
+              <label
+                htmlFor="budgetHours"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Begroting (uren)
+              </label>
+              <input
+                type="number"
+                id="budgetHours"
+                value={budgetHours}
+                onChange={(e) => setBudgetHours(e.target.value)}
+                step="0.01"
+                min="0"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400"
+                placeholder="0.00"
+              />
+            </div>
+
             <div className="flex items-center">
               <input
                 type="checkbox"
@@ -190,6 +235,73 @@ export default function ProjectFormClient({
                 Als standaard project instellen
               </label>
             </div>
+
+            {project && stats && stats.budgetHours && (
+              <div className="pt-2 border-t border-gray-200">
+                <div className="text-sm font-medium text-gray-700 mb-2">
+                  Budget Status
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs text-gray-600 mb-1">
+                    <span>
+                      {stats.totalHours.toFixed(1)} / {stats.budgetHours} uren
+                    </span>
+                    <span
+                      className={
+                        stats.isOverBudget
+                          ? "text-red-600 font-semibold"
+                          : "text-gray-600"
+                      }
+                    >
+                      {stats.budgetPercentage !== null
+                        ? `${stats.budgetPercentage.toFixed(1)}%`
+                        : "-"}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div
+                      className={`h-2.5 rounded-full ${
+                        stats.isOverBudget
+                          ? "bg-red-500"
+                          : stats.budgetPercentage > 80
+                          ? "bg-yellow-500"
+                          : "bg-green-500"
+                      }`}
+                      style={{
+                        width: `${
+                          stats.budgetPercentage !== null
+                            ? Math.min(stats.budgetPercentage, 100)
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                  {stats.isOverBudget && stats.budgetPercentage !== null && (
+                    <div className="w-full bg-red-200 rounded-full h-2.5 -mt-2.5">
+                      <div
+                        className="h-2.5 rounded-full bg-red-600"
+                        style={{
+                          width: `${stats.budgetPercentage - 100}%`,
+                          marginLeft: "100%",
+                        }}
+                      />
+                    </div>
+                  )}
+                  {stats.budgetPrice !== null && project.hourly_rate && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Budget: {formatMoney(stats.budgetPrice)} | Actueel:{" "}
+                      {formatMoney(stats.totalMoney)}
+                      {stats.isOverBudget && (
+                        <span className="text-red-600 ml-1">
+                          (+
+                          {formatMoney(stats.totalMoney - stats.budgetPrice)})
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="text-sm text-red-600 bg-red-50 p-2 rounded">

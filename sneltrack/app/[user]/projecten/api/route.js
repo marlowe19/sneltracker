@@ -51,8 +51,15 @@ export async function POST(req, context) {
     const name = body.name.trim();
     const hourlyRate = body.hourly_rate ?? null;
     const isDefault = body.is_default === true;
+    const budgetHours = body.budget_hours ?? null;
 
-    const newProject = await createProject(user, name, hourlyRate, isDefault);
+    const newProject = await createProject(
+      user,
+      name,
+      hourlyRate,
+      isDefault,
+      budgetHours
+    );
     return NextResponse.json({ project: newProject }, { status: 201 });
   } catch (error) {
     console.error("Error creating project:", error);
@@ -87,6 +94,9 @@ export async function PATCH(req, context) {
     }
     if (body.hourly_rate !== undefined) {
       updates.hourly_rate = body.hourly_rate;
+    }
+    if (body.budget_hours !== undefined) {
+      updates.budget_hours = body.budget_hours;
     }
     if (body.is_default !== undefined) {
       updates.is_default = body.is_default === true;

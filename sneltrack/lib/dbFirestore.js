@@ -238,6 +238,7 @@ function docToProject(doc) {
     id: doc.id,
     name: data.name,
     hourly_rate: data.hourly_rate ?? null,
+    budget_hours: data.budget_hours ?? null,
     is_default: data.is_default ?? false,
     created_at: toIso(data.created_at),
     modified_at: toIso(data.modified_at),
@@ -268,7 +269,8 @@ export async function createProject(
   userName,
   name,
   hourlyRate = null,
-  isDefault = false
+  isDefault = false,
+  budgetHours = null
 ) {
   const ref = getUserProjectsCollection(userName);
   const now = new Date();
@@ -288,6 +290,12 @@ export async function createProject(
         ? typeof hourlyRate === "string"
           ? parseFloat(hourlyRate)
           : hourlyRate
+        : null,
+    budget_hours:
+      budgetHours !== null && budgetHours !== undefined
+        ? typeof budgetHours === "string"
+          ? parseFloat(budgetHours)
+          : budgetHours
         : null,
     is_default: isDefault,
     created_at: now,
@@ -314,6 +322,14 @@ export async function updateProject(userName, projectId, updates) {
         : typeof updates.hourly_rate === "string"
         ? parseFloat(updates.hourly_rate)
         : updates.hourly_rate;
+  }
+  if (updates.budget_hours !== undefined) {
+    updateData.budget_hours =
+      updates.budget_hours === null || updates.budget_hours === ""
+        ? null
+        : typeof updates.budget_hours === "string"
+        ? parseFloat(updates.budget_hours)
+        : updates.budget_hours;
   }
   if (updates.is_default !== undefined) {
     // If setting as default, clear any existing default project
@@ -374,9 +390,26 @@ export async function getProjectStatistics(userName, projectId) {
     }
   }
 
+  const totalHours = totalDurationMs / (1000 * 60 * 60);
+  const budgetHours = project.budget_hours ?? null;
+  const budgetPercentage =
+    budgetHours !== null && budgetHours > 0
+      ? (totalHours / budgetHours) * 100
+      : null;
+  const budgetPrice =
+    budgetHours !== null && budgetHours > 0 && project.hourly_rate
+      ? budgetHours * project.hourly_rate
+      : null;
+  const isOverBudget =
+    budgetPercentage !== null && budgetPercentage > 100 ? true : false;
+
   return {
-    totalHours: totalDurationMs / (1000 * 60 * 60),
+    totalHours,
     totalMoney,
     entryCount,
+    budgetHours,
+    budgetPercentage,
+    budgetPrice,
+    isOverBudget,
   };
 }

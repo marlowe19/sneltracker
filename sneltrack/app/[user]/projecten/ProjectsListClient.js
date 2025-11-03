@@ -173,7 +173,72 @@ export default function ProjectsListClient({ user, initialProjects }) {
                       </div>
                     )}
 
-                    {stats && stats.entryCount > 0 && (
+                    {stats && stats.budgetHours && (
+                      <div className="mb-2">
+                        <div className="flex justify-between text-xs text-gray-600 mb-1">
+                          <span>
+                            {stats.totalHours.toFixed(1)} / {stats.budgetHours}{" "}
+                            uren
+                          </span>
+                          <span
+                            className={
+                              stats.isOverBudget
+                                ? "text-red-600 font-semibold"
+                                : "text-gray-600"
+                            }
+                          >
+                            {stats.budgetPercentage !== null
+                              ? `${stats.budgetPercentage.toFixed(1)}%`
+                              : "-"}
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2.5">
+                          <div
+                            className={`h-2.5 rounded-full ${
+                              stats.isOverBudget
+                                ? "bg-red-500"
+                                : stats.budgetPercentage > 80
+                                ? "bg-yellow-500"
+                                : "bg-green-500"
+                            }`}
+                            style={{
+                              width: `${
+                                stats.budgetPercentage !== null
+                                  ? Math.min(stats.budgetPercentage, 100)
+                                  : 0
+                              }%`,
+                            }}
+                          />
+                        </div>
+                        {stats.isOverBudget && stats.budgetPercentage !== null && (
+                          <div className="w-full bg-red-200 rounded-full h-2.5 -mt-2.5">
+                            <div
+                              className="h-2.5 rounded-full bg-red-600"
+                              style={{
+                                width: `${stats.budgetPercentage - 100}%`,
+                                marginLeft: "100%",
+                              }}
+                            />
+                          </div>
+                        )}
+                        {stats.budgetPrice !== null && project.hourly_rate && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Budget: {formatMoney(stats.budgetPrice)} | Actueel:{" "}
+                            {formatMoney(stats.totalMoney)}
+                            {stats.isOverBudget && (
+                              <span className="text-red-600 ml-1">
+                                (+
+                                {formatMoney(
+                                  stats.totalMoney - stats.budgetPrice
+                                )})
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {stats && stats.entryCount > 0 && !stats.budgetHours && (
                       <div className="text-xs text-gray-500 mt-2 space-y-1">
                         <div>
                           Tijd: {formatHours(stats.totalHours)} (
