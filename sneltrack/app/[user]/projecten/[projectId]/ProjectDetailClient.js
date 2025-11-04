@@ -125,10 +125,22 @@ export default function ProjectDetailClient({
       );
       url.searchParams.set("rangeType", rangeType);
       url.searchParams.set("referenceDate", bounds.start.toISOString());
+      // Send both start and end to avoid timezone recalculation issues
+      url.searchParams.set("startDate", bounds.start.toISOString());
+      url.searchParams.set("endDate", bounds.end.toISOString());
 
       const res = await fetch(url);
       if (!res.ok) {
-        throw new Error("Failed to fetch member statistics");
+        const errorData = await res.json().catch(() => ({}));
+        console.error("API Error fetching member statistics:", {
+          status: res.status,
+          statusText: res.statusText,
+          error: errorData,
+          url: url.toString(),
+        });
+        throw new Error(
+          errorData.error || `Failed to fetch member statistics (${res.status})`
+        );
       }
 
       const data = await res.json();

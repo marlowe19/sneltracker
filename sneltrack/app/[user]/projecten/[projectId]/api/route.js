@@ -19,37 +19,50 @@ export async function GET(req, context) {
     const url = new URL(req.url);
     const rangeType = url.searchParams.get("rangeType");
     const referenceDateParam = url.searchParams.get("referenceDate");
+    const startDateParam = url.searchParams.get("startDate");
+    const endDateParam = url.searchParams.get("endDate");
 
-    if (!rangeType || !referenceDateParam) {
-      return NextResponse.json(
-        { error: "rangeType and referenceDate are required" },
-        { status: 400 }
-      );
-    }
-
-    // Parse reference date
-    const referenceDate = new Date(referenceDateParam);
-    if (isNaN(referenceDate.getTime())) {
-      return NextResponse.json(
-        { error: "Invalid referenceDate" },
-        { status: 400 }
-      );
-    }
-
-    // Calculate date bounds based on range type
+    // Prefer startDate/endDate if provided (avoids timezone recalculation issues)
     let dateRange;
-    if (rangeType === "week") {
-      const { start, end } = getWeekBounds(referenceDate);
+    if (startDateParam && endDateParam) {
+      const start = new Date(startDateParam);
+      const end = new Date(endDateParam);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return NextResponse.json(
+          { error: "Invalid startDate or endDate" },
+          { status: 400 }
+        );
+      }
       dateRange = { start, end };
-    } else if (rangeType === "month") {
-      const { start, end } = getMonthBounds(referenceDate);
-      dateRange = { start, end };
-    } else if (rangeType === "quarter") {
-      const { start, end } = getQuarterBounds(referenceDate);
-      dateRange = { start, end };
+    } else if (rangeType && referenceDateParam) {
+      // Fallback to calculating from reference date
+      const referenceDate = new Date(referenceDateParam);
+      if (isNaN(referenceDate.getTime())) {
+        return NextResponse.json(
+          { error: "Invalid referenceDate" },
+          { status: 400 }
+        );
+      }
+
+      // Calculate date bounds based on range type
+      if (rangeType === "week") {
+        const { start, end } = getWeekBounds(referenceDate);
+        dateRange = { start, end };
+      } else if (rangeType === "month") {
+        const { start, end } = getMonthBounds(referenceDate);
+        dateRange = { start, end };
+      } else if (rangeType === "quarter") {
+        const { start, end } = getQuarterBounds(referenceDate);
+        dateRange = { start, end };
+      } else {
+        return NextResponse.json(
+          { error: "Invalid rangeType. Must be 'week', 'month', or 'quarter'" },
+          { status: 400 }
+        );
+      }
     } else {
       return NextResponse.json(
-        { error: "Invalid rangeType. Must be 'week', 'month', or 'quarter'" },
+        { error: "rangeType and referenceDate are required, or startDate and endDate" },
         { status: 400 }
       );
     }
