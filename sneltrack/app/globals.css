@@ -23,7 +23,6 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), ui-sans-serif, system-ui;
-  padding-top: 40px; /* space for fixed header icon */
 }
 
 .container {

@@ -96,12 +96,21 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
                       : "text-gray-700"
                   }`}
                 >
-                  {project.name}
-                  {project.is_default && (
-                    <span className="ml-2 text-xs text-gray-500">
-                      (Standaard)
-                    </span>
-                  )}
+                  <div className="flex items-center justify-between">
+                    <span>{project.name}</span>
+                    <div className="flex items-center gap-2">
+                      {project.is_default && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                          Standaard
+                        </span>
+                      )}
+                      {project.is_shared && (
+                        <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                          Gedeeld
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </button>
               ))}
             </div>

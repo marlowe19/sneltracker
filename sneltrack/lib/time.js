@@ -1,6 +1,10 @@
 import {
   startOfWeek,
   endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  startOfQuarter,
+  endOfQuarter,
   parseISO,
   differenceInMilliseconds,
   addMilliseconds,
@@ -9,6 +13,18 @@ import {
 export function getWeekBounds(date = new Date()) {
   const start = startOfWeek(date, { weekStartsOn: 1 }); // Monday
   const end = endOfWeek(date, { weekStartsOn: 1 });
+  return { start, end };
+}
+
+export function getMonthBounds(date = new Date()) {
+  const start = startOfMonth(date);
+  const end = endOfMonth(date);
+  return { start, end };
+}
+
+export function getQuarterBounds(date = new Date()) {
+  const start = startOfQuarter(date);
+  const end = endOfQuarter(date);
   return { start, end };
 }
 
@@ -38,31 +54,31 @@ export function computeEntryDurationMs(startIso, endIso, durationMs = null) {
 }
 
 /**
- * Calculate the duration of an entry clipped to week bounds.
- * Returns only the portion of the entry that falls within the specified week.
+ * Calculate the duration of an entry clipped to date range bounds.
+ * Returns only the portion of the entry that falls within the specified range.
  * @param {string} startIso - Entry start time in ISO format
  * @param {string|null} endIso - Entry end time in ISO format (null for active entries)
- * @param {Date} weekStart - Start of the week
- * @param {Date} weekEnd - End of the week
+ * @param {Date} rangeStart - Start of the range
+ * @param {Date} rangeEnd - End of the range
  * @param {number|null} durationMs - Optional duration_ms field (takes precedence)
  * @returns {number} Duration in milliseconds
  */
 export function computeEntryDurationMsClipped(
   startIso,
   endIso,
-  weekStart,
-  weekEnd,
+  rangeStart,
+  rangeEnd,
   durationMs = null
 ) {
   // If duration_ms is provided, use it directly (assume it's for the day it's assigned to)
   if (durationMs !== null && durationMs !== undefined) {
-    // Check if the entry's day falls within the week
-    const entryStart = startIso ? parseISO(startIso) : new Date(weekStart);
+    // Check if the entry's day falls within the range
+    const entryStart = startIso ? parseISO(startIso) : new Date(rangeStart);
     const entryDay = new Date(entryStart);
     entryDay.setHours(0, 0, 0, 0);
 
-    // If entry day is within the week, return full duration_ms
-    if (entryDay >= weekStart && entryDay < weekEnd) {
+    // If entry day is within the range, return full duration_ms
+    if (entryDay >= rangeStart && entryDay < rangeEnd) {
       return durationMs;
     }
     return 0;
@@ -73,8 +89,8 @@ export function computeEntryDurationMsClipped(
   const entryEnd = endIso ? parseISO(endIso) : new Date();
 
   // Calculate the clipped boundaries
-  const clippedStart = entryStart > weekStart ? entryStart : weekStart;
-  const clippedEnd = entryEnd < weekEnd ? entryEnd : weekEnd;
+  const clippedStart = entryStart > rangeStart ? entryStart : rangeStart;
+  const clippedEnd = entryEnd < rangeEnd ? entryEnd : rangeEnd;
 
   // Ensure clipped start is before clipped end
   if (clippedStart >= clippedEnd) return 0;

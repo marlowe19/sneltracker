@@ -93,6 +93,15 @@ export default async function UserPage({ params, searchParams }) {
 
   return (
     <main className="container mx-auto max-w-md sm:max-w-xl md:max-w-2xl p-4 sm:p-2 flex flex-col gap-6">
+      <header className="fixed top-3 left-3 z-50">
+        <img
+          src="/icon-SO.svg"
+          alt="SO icon"
+          width="28"
+          height="22"
+          className="opacity-60"
+        />
+      </header>
       <section className="panel bg-white rounded-xl shadow">
         <div className="panel-header flex items-center justify-between gap-3 flex-wrap">
           <h2 className="text-left text-lg font-semibold">

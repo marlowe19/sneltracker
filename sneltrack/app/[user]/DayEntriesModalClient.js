@@ -137,9 +137,42 @@ export default function DayEntriesModalClient({
 
   if (!isOpen) return null;
 
-  const handleEntryChange = (index, field, value) => {
+  const handleEntryChange = async (index, field, value) => {
     const updated = [...localEntries];
     updated[index] = { ...updated[index], [field]: value };
+
+    // If project changed, check if it's a shared project and auto-populate member rate
+    if (field === "project_editable" && value) {
+      const selectedProject = projects.find((p) => p.id === value);
+      if (selectedProject && selectedProject.is_shared) {
+        try {
+          // Fetch project members to get the current user's hourly rate
+          const res = await fetch(
+            `/${encodeURIComponent(
+              user
+            )}/projecten/api?action=members&projectId=${value}`
+          );
+          const data = await res.json();
+          const members = data.members || [];
+          const currentUserMember = members.find((m) => m.user_name === user);
+          if (currentUserMember && currentUserMember.hourly_rate !== null && currentUserMember.hourly_rate !== undefined) {
+            updated[index].hourly_rate_editable = String(currentUserMember.hourly_rate);
+          } else if (selectedProject.hourly_rate) {
+            // Fall back to project rate if member rate not set
+            updated[index].hourly_rate_editable = String(selectedProject.hourly_rate);
+          }
+        } catch (error) {
+          console.error("Error fetching member rate:", error);
+          // If fetch fails, try project rate
+          if (selectedProject.hourly_rate) {
+            updated[index].hourly_rate_editable = String(selectedProject.hourly_rate);
+          }
+        }
+      } else if (selectedProject && selectedProject.hourly_rate) {
+        // For non-shared projects, use project rate
+        updated[index].hourly_rate_editable = String(selectedProject.hourly_rate);
+      }
+    }
 
     // If duration changed, just store the raw value (no formatting while typing)
     // Formatting will happen on blur
@@ -534,6 +567,8 @@ export default function DayEntriesModalClient({
                       {projects.map((project) => (
                         <option key={project.id} value={project.id}>
                           {project.name}
+                          {project.is_default && " (Standaard)"}
+                          {project.is_shared && " (Gedeeld)"}
                         </option>
                       ))}
                     </select>

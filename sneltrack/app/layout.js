@@ -45,15 +45,6 @@ export default function RootLayout({ children }) {
       <body
         className={`${jakartaSans.variable} ${geistMono.variable} antialiased`}
       >
-        <header className="fixed top-3 left-3 z-50">
-          <img
-            src="/icon-SO.svg"
-            alt="SO icon"
-            width="28"
-            height="22"
-            className="opacity-60"
-          />
-        </header>
         {children}
       </body>
     </html>
