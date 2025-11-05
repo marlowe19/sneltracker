@@ -600,7 +600,7 @@ export default function DayEntriesModalClient({
         className="fixed inset-x-0 bottom-0 bg-white rounded-t-xl shadow-2xl h-full flex flex-col transition-transform duration-300 ease-out translate-y-0"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-white z-10 border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between shrink-0">
+        <div className="bg-white z-10 border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between shrink-0">
           <h2 className="text-lg sm:text-base font-semibold text-gray-900">
             Bewerk entries - {dayDateFormatted}
           </h2>
