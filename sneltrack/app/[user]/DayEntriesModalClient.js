@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useStore } from "@/stores/useStore";
+import { getWeekBounds, toIso } from "@/lib/time";
 import { computeEntryDurationMs } from "@/lib/time";
 
 function formatTime(isoString) {
@@ -98,26 +101,25 @@ export default function DayEntriesModalClient({
   entries,
   user,
 }) {
+  const router = useRouter();
+  const projects = useStore((state) => state.projects);
+  const fetchProjects = useStore((state) => state.fetchProjects);
+  const addEntry = useStore((state) => state.addEntry);
+  const updateEntry = useStore((state) => state.updateEntry);
+  const replaceTempEntry = useStore((state) => state.replaceTempEntry);
+  const deleteEntry = useStore((state) => state.deleteEntry);
+  const weekOffset = useStore((state) => state.weekOffset);
   const [localEntries, setLocalEntries] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState(null);
-  const [projects, setProjects] = useState([]);
+  const [successMessage, setSuccessMessage] = useState(null);
 
   useEffect(() => {
-    async function loadProjects() {
-      try {
-        const res = await fetch(`/${encodeURIComponent(user)}/projecten/api`);
-        const data = await res.json();
-        setProjects(data.projects || []);
-      } catch (error) {
-        console.error("Error loading projects:", error);
-      }
+    if (isOpen && projects.length === 0) {
+      fetchProjects(user);
     }
-    if (isOpen) {
-      loadProjects();
-    }
-  }, [isOpen, user]);
+  }, [isOpen, user, projects.length, fetchProjects]);
 
   useEffect(() => {
     if (isOpen && entries && dayDate) {
@@ -264,6 +266,7 @@ export default function DayEntriesModalClient({
   const handleSave = async () => {
     setIsSaving(true);
     setError(null);
+    setSuccessMessage(null);
 
     try {
       // Process each entry
@@ -369,7 +372,13 @@ export default function DayEntriesModalClient({
             throw new Error(errorData.error || "Failed to create entry");
           }
 
-          return; // New entry created, no update needed
+          // Parse response and replace temp entry with real entry
+          const responseData = await response.json();
+          if (responseData.entry) {
+            replaceTempEntry(entry.id, responseData.entry);
+          }
+
+          return { success: true }; // New entry created
         }
 
         // Existing entry - update it
@@ -483,17 +492,33 @@ export default function DayEntriesModalClient({
             const errorData = await response.json();
             throw new Error(errorData.error || "Failed to update entry");
           }
+
+          // Parse response and update store with full entry object
+          const responseData = await response.json();
+          if (responseData.entry) {
+            updateEntry(entry.id, responseData.entry);
+          }
+
+          return { success: true };
         }
+
+        return { success: true }; // No updates needed
       });
 
       await Promise.all(updatePromises);
 
-      // Close modal and refresh the page to show updated data
-      handleCancel();
-      window.location.reload();
+      // Show success message
+      setSuccessMessage("Wijzigingen opgeslagen");
+      setIsSaving(false);
+
+      // Wait briefly to show success message, then close modal
+      setTimeout(() => {
+        handleCancel();
+      }, 1500);
     } catch (err) {
       setError(err.message || "Failed to save changes");
       setIsSaving(false);
+      // Keep modal open on error so user can retry
     }
   };
 
@@ -518,15 +543,27 @@ export default function DayEntriesModalClient({
         throw new Error(errorData.error || "Failed to delete entry");
       }
 
+      // Optimistically delete from store
+      deleteEntry(entryId);
+
       // Remove from local state immediately
       const updated = localEntries.filter((_, i) => i !== index);
       setLocalEntries(updated);
       setIsDeleting(false);
 
-      // If no entries left, close drawer and refresh
+      // Refetch week entries to get updated data
+      const referenceDate = new Date(
+        new Date().getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000
+      );
+      const { start: weekStart, end: weekEnd } = getWeekBounds(referenceDate);
+      await fetchWeekEntries(user, toIso(weekStart), toIso(weekEnd));
+
+      // Refresh router for active timers
+      router.refresh();
+
+      // If no entries left, close drawer
       if (updated.length === 0) {
         handleCancel();
-        window.location.reload();
       }
     } catch (err) {
       setError(err.message || "Failed to delete entry");
@@ -537,6 +574,7 @@ export default function DayEntriesModalClient({
   const handleCancel = () => {
     setLocalEntries([]);
     setError(null);
+    setSuccessMessage(null);
     setIsSaving(false);
     setIsDeleting(false);
     onClose();
@@ -559,11 +597,11 @@ export default function DayEntriesModalClient({
       onClick={handleCancel}
     >
       <div
-        className="fixed inset-x-0 bottom-0 bg-white rounded-t-xl shadow-2xl h-full overflow-y-auto transition-transform duration-300 ease-out translate-y-0"
+        className="fixed inset-x-0 bottom-0 bg-white rounded-t-xl shadow-2xl h-full flex flex-col transition-transform duration-300 ease-out translate-y-0"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-white z-10 border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between">
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+        <div className="sticky top-0 bg-white z-10 border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between shrink-0">
+          <h2 className="text-lg sm:text-base font-semibold text-gray-900">
             Bewerk entries - {dayDateFormatted}
           </h2>
           <div className="flex items-center gap-3">
@@ -585,10 +623,15 @@ export default function DayEntriesModalClient({
           </div>
         </div>
 
-        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 bg-[#f2f2f2]">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
               {error}
+            </div>
+          )}
+          {successMessage && (
+            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
+              {successMessage}
             </div>
           )}
 
@@ -600,144 +643,161 @@ export default function DayEntriesModalClient({
             localEntries.map((entry, index) => (
               <div
                 key={entry.id}
-                className="border border-gray-200 rounded-lg p-4 space-y-4"
+                className=" rounded-lg p-4 space-y-4 bg-white"
               >
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-medium text-gray-700">
                     Entry {index + 1}
                   </div>
-                  {entry.id && !entry.id.startsWith("temp-") && (
-                    <button
-                      onClick={() => handleDeleteEntry(entry.id, index)}
-                      disabled={isSaving || isDeleting}
-                      className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                      aria-label="Entry verwijderen"
-                    >
-                      Verwijderen
-                    </button>
-                  )}
+                  {entry.id &&
+                    !entry.id.startsWith("temp-") &&
+                    entry.is_running !== true && (
+                      <button
+                        onClick={() => handleDeleteEntry(entry.id, index)}
+                        disabled={isSaving || isDeleting}
+                        className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                        aria-label="Entry verwijderen"
+                      >
+                        Verwijderen
+                      </button>
+                    )}
                 </div>
 
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Projectnaam *
-                    </label>
-                    <select
-                      value={
-                        entry.project_editable !== undefined
-                          ? entry.project_editable || ""
-                          : entry.project || ""
-                      }
-                      onChange={(e) =>
-                        handleEntryChange(
-                          index,
-                          "project_editable",
-                          e.target.value || null
-                        )
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
-                      required
-                    >
-                      <option value="">Selecteer een project</option>
-                      {projects.map((project) => (
-                        <option key={project.id} value={project.id}>
-                          {project.name}
-                          {project.is_default && " (Standaard)"}
-                          {project.is_shared && " (Gedeeld)"}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Only show other fields if project is selected */}
-                  {(entry.project_editable || entry.project) && (
+                  {entry.is_running === true ? (
+                    <div className="py-4 text-center">
+                      <p className="text-lg font-semibold text-[#008eff]">
+                        Timer actief
+                      </p>
+                    </div>
+                  ) : (
                     <>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Starttijd
-                          </label>
-                          <input
-                            type="time"
-                            value={entry.start_time_editable || ""}
-                            onChange={(e) =>
-                              handleEntryChange(
-                                index,
-                                "start_time_editable",
-                                e.target.value
-                              )
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Eindtijd
-                          </label>
-                          <input
-                            type="time"
-                            value={entry.end_time_editable || ""}
-                            onChange={(e) =>
-                              handleEntryChange(
-                                index,
-                                "end_time_editable",
-                                e.target.value
-                              )
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
-                          />
-                        </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Projectnaam *
+                        </label>
+                        <select
+                          value={
+                            entry.project_editable !== undefined
+                              ? entry.project_editable || ""
+                              : entry.project || ""
+                          }
+                          onChange={(e) =>
+                            handleEntryChange(
+                              index,
+                              "project_editable",
+                              e.target.value || null
+                            )
+                          }
+                          disabled={isSaving || isDeleting}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                          required
+                        >
+                          <option value="">Selecteer een project</option>
+                          {projects.map((project) => (
+                            <option key={project.id} value={project.id}>
+                              {project.name}
+                              {project.is_default && " (Standaard)"}
+                              {project.is_shared && " (Gedeeld)"}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Duur (U:MM)
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="0:00"
-                            value={entry.duration_editable || ""}
-                            onChange={(e) =>
-                              handleEntryChange(
-                                index,
-                                "duration_editable",
-                                e.target.value
-                              )
-                            }
-                            onBlur={() => handleDurationBlur(index)}
-                            pattern="[0-9]+:[0-5][0-9]"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
-                          />
-                        </div>
+                      {/* Only show other fields if project is selected */}
+                      {(entry.project_editable || entry.project) && (
+                        <>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Starttijd
+                              </label>
+                              <input
+                                type="time"
+                                value={entry.start_time_editable || ""}
+                                onChange={(e) =>
+                                  handleEntryChange(
+                                    index,
+                                    "start_time_editable",
+                                    e.target.value
+                                  )
+                                }
+                                disabled={isSaving || isDeleting}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
+                            </div>
 
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Uurtarief (€)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="0.00"
-                            value={
-                              entry.hourly_rate_editable !== undefined
-                                ? entry.hourly_rate_editable
-                                : entry.hourly_rate || ""
-                            }
-                            onChange={(e) =>
-                              handleEntryChange(
-                                index,
-                                "hourly_rate_editable",
-                                e.target.value === "" ? "" : e.target.value
-                              )
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
-                          />
-                        </div>
-                      </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Eindtijd
+                              </label>
+                              <input
+                                type="time"
+                                value={entry.end_time_editable || ""}
+                                onChange={(e) =>
+                                  handleEntryChange(
+                                    index,
+                                    "end_time_editable",
+                                    e.target.value
+                                  )
+                                }
+                                disabled={isSaving || isDeleting}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Duur (U:MM)
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="0:00"
+                                value={entry.duration_editable || ""}
+                                onChange={(e) =>
+                                  handleEntryChange(
+                                    index,
+                                    "duration_editable",
+                                    e.target.value
+                                  )
+                                }
+                                onBlur={() => handleDurationBlur(index)}
+                                pattern="[0-9]+:[0-5][0-9]"
+                                disabled={isSaving || isDeleting}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Uurtarief (€)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                                value={
+                                  entry.hourly_rate_editable !== undefined
+                                    ? entry.hourly_rate_editable
+                                    : entry.hourly_rate || ""
+                                }
+                                onChange={(e) =>
+                                  handleEntryChange(
+                                    index,
+                                    "hourly_rate_editable",
+                                    e.target.value === "" ? "" : e.target.value
+                                  )
+                                }
+                                disabled={isSaving || isDeleting}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </>
                   )}
                 </div>
@@ -746,7 +806,7 @@ export default function DayEntriesModalClient({
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-white z-10 border-t border-gray-200 px-4 sm:px-6 py-4 flex justify-end gap-3">
+        <div className="sticky bottom-0 bg-white z-10 border-t border-gray-200 px-4 sm:px-6 py-4 flex justify-end gap-3 shrink-0">
           <button
             onClick={handleCancel}
             disabled={isSaving || isDeleting}

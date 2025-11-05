@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useStore } from "@/stores/useStore";
 import DayEntriesModalClient from "./DayEntriesModalClient";
 
 function isSameDay(date1, date2) {
@@ -59,11 +60,11 @@ export default function DayClickableClient({
   dayNumber,
   hours,
   money,
-  entries,
   user,
   children,
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const entries = useStore((state) => state.entries);
   const dayEntries = filterEntriesForDay(entries, dayDate);
 
   const handleDayClick = () => {

@@ -27,6 +27,8 @@ function docToEntry(doc) {
     project: data.project ?? null,
     created_at: toIso(data.created_at),
     modified_at: toIso(data.modified_at),
+    creation_method: data.creation_method ?? null,
+    is_running: data.is_running ?? false,
   };
 }
 
@@ -38,13 +40,17 @@ function getUserTimeEntriesCollection(userName) {
 export async function getActiveEntry(userName) {
   // Check user entries first
   const userRef = getUserTimeEntriesCollection(userName);
-  const userSnap = await userRef
-    .where("end_time", "==", null)
+  
+  // Query for timer entries with is_running === true
+  const runningSnap = await userRef
+    .where("is_running", "==", true)
+    .where("creation_method", "==", "timer")
     .orderBy("start_time", "desc")
     .limit(1)
     .get();
-  if (!userSnap.empty) {
-    return docToEntry(userSnap.docs[0]);
+  
+  if (!runningSnap.empty) {
+    return docToEntry(runningSnap.docs[0]);
   }
   
   // Check shared project entries
@@ -61,24 +67,31 @@ export async function getActiveEntry(userName) {
 
 export async function getActiveEntries(userName) {
   const activeEntries = [];
+  const entryIds = new Set(); // Track entries to avoid duplicates
   
-  // Get all user entries
+  // Get all user timer entries with is_running === true
   const userRef = getUserTimeEntriesCollection(userName);
-  const userSnap = await userRef
-    .where("end_time", "==", null)
+  const runningSnap = await userRef
+    .where("is_running", "==", true)
+    .where("creation_method", "==", "timer")
     .orderBy("start_time", "desc")
     .get();
   
-  if (!userSnap.empty) {
-    activeEntries.push(...userSnap.docs.map(docToEntry));
+  if (!runningSnap.empty) {
+    const entries = runningSnap.docs.map(docToEntry);
+    for (const entry of entries) {
+      activeEntries.push(entry);
+      entryIds.add(entry.id);
+    }
   }
   
   // Get all shared project entries
   const sharedProjects = await getAllSharedProjects(userName);
   for (const project of sharedProjects) {
     const activeEntry = await getProjectActiveEntry(project.id, userName);
-    if (activeEntry) {
+    if (activeEntry && !entryIds.has(activeEntry.id)) {
       activeEntries.push(activeEntry);
+      entryIds.add(activeEntry.id);
     }
   }
   
@@ -86,6 +99,55 @@ export async function getActiveEntries(userName) {
   activeEntries.sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
   
   return activeEntries;
+}
+
+export async function getStoppedTimersForToday(userName) {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  
+  const stoppedTimers = [];
+  
+  // Get user timer entries stopped today
+  const userRef = getUserTimeEntriesCollection(userName);
+  const userSnap = await userRef
+    .where("creation_method", "==", "timer")
+    .where("is_running", "==", false)
+    .where("end_time", ">=", todayStart)
+    .where("end_time", "<=", todayEnd)
+    .orderBy("end_time", "desc")
+    .get();
+  
+  if (!userSnap.empty) {
+    stoppedTimers.push(...userSnap.docs.map(docToEntry));
+  }
+  
+  // Get shared project timer entries stopped today
+  const sharedProjects = await getAllSharedProjects(userName);
+  for (const project of sharedProjects) {
+    const projectRef = getSharedProjectTimeEntriesCollection(project.id);
+    const projectSnap = await projectRef
+      .where("user_name", "==", userName)
+      .where("creation_method", "==", "timer")
+      .where("is_running", "==", false)
+      .where("end_time", ">=", todayStart)
+      .where("end_time", "<=", todayEnd)
+      .orderBy("end_time", "desc")
+      .get();
+    
+    if (!projectSnap.empty) {
+      stoppedTimers.push(...projectSnap.docs.map(docToEntry));
+    }
+  }
+  
+  // Sort by end_time descending (most recent first)
+  stoppedTimers.sort((a, b) => {
+    const aEnd = a.end_time ? new Date(a.end_time).getTime() : 0;
+    const bEnd = b.end_time ? new Date(b.end_time).getTime() : 0;
+    return bEnd - aEnd;
+  });
+  
+  return stoppedTimers;
 }
 
 export async function startEntry(userName, hourlyRate = null, project = null) {
@@ -129,7 +191,9 @@ export async function startEntry(userName, hourlyRate = null, project = null) {
       now,
       null,
       null,
-      finalHourlyRate
+      finalHourlyRate,
+      "timer",
+      true
     );
   } else {
     // Store in user time entries (existing behavior)
@@ -139,6 +203,8 @@ export async function startEntry(userName, hourlyRate = null, project = null) {
       start_time: now,
       end_time: null,
       created_at: now,
+      creation_method: "timer",
+      is_running: true,
     };
 
     if (finalHourlyRate !== null && finalHourlyRate !== undefined) {
@@ -193,7 +259,7 @@ export async function stopEntry(userName, entryId = null) {
     if (projectDoc && projectDoc.is_shared) {
       // Update in shared project time entries
       const end = new Date();
-      return await updateProjectTimeEntry(active.project, active.id, { end_time: end });
+      return await updateProjectTimeEntry(active.project, active.id, { end_time: end, is_running: false });
     }
   }
   
@@ -201,7 +267,7 @@ export async function stopEntry(userName, entryId = null) {
   const ref = getUserTimeEntriesCollection(userName);
   const docRef = ref.doc(active.id);
   const end = new Date();
-  await docRef.update({ end_time: end });
+  await docRef.update({ end_time: end, is_running: false });
   const updated = await docRef.get();
   return docToEntry(updated);
 }
@@ -317,7 +383,9 @@ export async function createEntry(
       dayStart,
       endTime,
       durationMs,
-      finalHourlyRate
+      finalHourlyRate,
+      "manual",
+      false
     );
   } else {
     // Store in user time entries (existing behavior)
@@ -328,6 +396,8 @@ export async function createEntry(
       end_time: endTime,
       created_at: now,
       modified_at: now,
+      creation_method: "manual",
+      is_running: false,
     };
 
     if (durationMs !== null && durationMs !== undefined) {
@@ -385,6 +455,12 @@ export async function updateEntry(userName, entryId, updates) {
   }
   if (updates.project !== undefined) {
     updateData.project = updates.project === "" ? null : updates.project;
+  }
+  if (updates.creation_method !== undefined) {
+    updateData.creation_method = updates.creation_method === "" ? null : updates.creation_method;
+  }
+  if (updates.is_running !== undefined) {
+    updateData.is_running = updates.is_running === null || updates.is_running === "" ? false : Boolean(updates.is_running);
   }
 
   // Always update modified_at timestamp
@@ -455,7 +531,9 @@ export async function updateEntry(userName, entryId, updates) {
         startTime,
         endTime,
         updateData.duration_ms !== undefined ? updateData.duration_ms : userEntryData.duration_ms,
-        finalHourlyRate
+        finalHourlyRate,
+        userEntryData.creation_method ?? null,
+        userEntryData.is_running ?? false
       );
       
       // Delete old entry from user collection
@@ -592,7 +670,9 @@ export async function updateEntry(userName, entryId, updates) {
           startTime,
           endTime,
           updateData.duration_ms !== undefined ? updateData.duration_ms : entryData.duration_ms,
-          finalHourlyRate
+          finalHourlyRate,
+          entryData.creation_method ?? null,
+          entryData.is_running ?? false
         );
         
         // Delete from old shared project
@@ -880,7 +960,9 @@ export async function createProjectTimeEntry(
   startTime,
   endTime = null,
   durationMs = null,
-  hourlyRate = null
+  hourlyRate = null,
+  creationMethod = null,
+  isRunning = false
 ) {
   const ref = getSharedProjectTimeEntriesCollection(projectId);
   const now = new Date();
@@ -902,6 +984,14 @@ export async function createProjectTimeEntry(
   if (hourlyRate !== null && hourlyRate !== undefined) {
     entryData.hourly_rate =
       typeof hourlyRate === "string" ? parseFloat(hourlyRate) : hourlyRate;
+  }
+  
+  if (creationMethod !== null && creationMethod !== undefined) {
+    entryData.creation_method = creationMethod;
+  }
+  
+  if (isRunning !== null && isRunning !== undefined) {
+    entryData.is_running = isRunning;
   }
   
   const docRef = await ref.add(entryData);
@@ -930,14 +1020,21 @@ export async function getProjectTimeEntryById(projectId, entryId) {
 
 export async function getProjectActiveEntry(projectId, userName) {
   const ref = getSharedProjectTimeEntriesCollection(projectId);
-  const snap = await ref
+  
+  // Query for timer entries with is_running === true
+  const runningSnap = await ref
     .where("user_name", "==", userName)
-    .where("end_time", "==", null)
+    .where("is_running", "==", true)
+    .where("creation_method", "==", "timer")
     .orderBy("start_time", "desc")
     .limit(1)
     .get();
-  if (snap.empty) return null;
-  return docToEntry(snap.docs[0]);
+  
+  if (!runningSnap.empty) {
+    return docToEntry(runningSnap.docs[0]);
+  }
+  
+  return null;
 }
 
 export async function updateProjectTimeEntry(projectId, entryId, updates) {
@@ -974,6 +1071,12 @@ export async function updateProjectTimeEntry(projectId, entryId, updates) {
         : typeof updates.hourly_rate === "string"
         ? parseFloat(updates.hourly_rate)
         : updates.hourly_rate;
+  }
+  if (updates.creation_method !== undefined) {
+    updateData.creation_method = updates.creation_method === "" ? null : updates.creation_method;
+  }
+  if (updates.is_running !== undefined) {
+    updateData.is_running = updates.is_running === null || updates.is_running === "" ? false : Boolean(updates.is_running);
   }
   
   // Always update modified_at timestamp
@@ -1386,6 +1489,8 @@ export async function convertToSharedProject(userName, projectId) {
       hourly_rate: entryData.hourly_rate ?? null,
       created_at: entryData.created_at,
       modified_at: entryData.modified_at,
+      creation_method: entryData.creation_method ?? null,
+      is_running: entryData.is_running ?? false,
     });
     // Delete old entry
     batch.delete(entryDoc.ref);
