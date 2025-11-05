@@ -83,13 +83,38 @@ body {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
+
   font-size: 40px;
+}
+
+/* For timer rows in multiple timer layout */
+.timer-box.flex.items-center.justify-between {
+  font-size: 32px;
+  padding: 16px;
 }
 .timer-text {
   font-variant-numeric: tabular-nums;
   letter-spacing: 1px;
+}
+
+.timer-colon {
+  display: inline-block;
+  margin: 0 2px;
+}
+
+.timer-colon.blink {
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
 .week {
   display: grid;

@@ -59,11 +59,38 @@ export async function getActiveEntry(userName) {
   return null;
 }
 
+export async function getActiveEntries(userName) {
+  const activeEntries = [];
+  
+  // Get all user entries
+  const userRef = getUserTimeEntriesCollection(userName);
+  const userSnap = await userRef
+    .where("end_time", "==", null)
+    .orderBy("start_time", "desc")
+    .get();
+  
+  if (!userSnap.empty) {
+    activeEntries.push(...userSnap.docs.map(docToEntry));
+  }
+  
+  // Get all shared project entries
+  const sharedProjects = await getAllSharedProjects(userName);
+  for (const project of sharedProjects) {
+    const activeEntry = await getProjectActiveEntry(project.id, userName);
+    if (activeEntry) {
+      activeEntries.push(activeEntry);
+    }
+  }
+  
+  // Sort by start_time descending
+  activeEntries.sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
+  
+  return activeEntries;
+}
+
 export async function startEntry(userName, hourlyRate = null, project = null) {
   console.log("startEntry--------------------", userName);
-  const existing = await getActiveEntry(userName);
-  console.log("existing--------------------", existing);
-  if (existing) return existing;
+  // Allow multiple timers - removed check for existing active entry
   
   const now = new Date();
   
@@ -129,8 +156,35 @@ export async function startEntry(userName, hourlyRate = null, project = null) {
   }
 }
 
-export async function stopEntry(userName) {
-  const active = await getActiveEntry(userName);
+export async function stopEntry(userName, entryId = null) {
+  let active;
+  
+  if (entryId) {
+    // Stop specific entry by ID
+    // First check user entries
+    const userRef = getUserTimeEntriesCollection(userName);
+    const userDoc = await userRef.doc(entryId).get();
+    if (userDoc.exists) {
+      const data = userDoc.data();
+      if (data.end_time === null) {
+        active = docToEntry(userDoc);
+      }
+    } else {
+      // Check shared project entries
+      const sharedProjects = await getAllSharedProjects(userName);
+      for (const project of sharedProjects) {
+        const projectEntry = await getProjectTimeEntryById(project.id, entryId);
+        if (projectEntry && projectEntry.end_time === null) {
+          active = projectEntry;
+          break;
+        }
+      }
+    }
+  } else {
+    // Legacy behavior: stop first active entry
+    active = await getActiveEntry(userName);
+  }
+  
   if (!active) return null;
   
   // Check if entry is from a shared project
@@ -372,11 +426,34 @@ export async function updateEntry(userName, entryId, updates) {
       }
       
       // Create entry in shared project collection
+      // Convert Firestore Timestamps to Date objects properly
+      let startTime = updateData.start_time;
+      if (startTime === undefined) {
+        startTime = userEntryData.start_time;
+        if (startTime && typeof startTime.toDate === "function") {
+          startTime = startTime.toDate();
+        } else if (startTime && !(startTime instanceof Date)) {
+          startTime = new Date(startTime);
+        }
+      }
+      
+      let endTime = updateData.end_time;
+      if (endTime === undefined) {
+        endTime = userEntryData.end_time;
+        if (endTime && typeof endTime.toDate === "function") {
+          endTime = endTime.toDate();
+        } else if (endTime && !(endTime instanceof Date)) {
+          endTime = new Date(endTime);
+        } else if (!endTime) {
+          endTime = null;
+        }
+      }
+      
       const newEntry = await createProjectTimeEntry(
         newProject,
         userName,
-        updateData.start_time !== undefined ? updateData.start_time : (userEntryData.start_time instanceof Date ? userEntryData.start_time : new Date(userEntryData.start_time)),
-        updateData.end_time !== undefined ? updateData.end_time : (userEntryData.end_time ? (userEntryData.end_time instanceof Date ? userEntryData.end_time : new Date(userEntryData.end_time)) : null),
+        startTime,
+        endTime,
         updateData.duration_ms !== undefined ? updateData.duration_ms : userEntryData.duration_ms,
         finalHourlyRate
       );
@@ -417,13 +494,44 @@ export async function updateEntry(userName, entryId, updates) {
     // If project is being removed or changed to non-shared project, migrate back to user entries
     if (newProject === null || newProject === "") {
       const userRef = getUserTimeEntriesCollection(userName);
+      
+      // Convert Firestore Timestamps to Date objects properly
+      let startTime = updateData.start_time;
+      if (startTime === undefined) {
+        startTime = entryData.start_time;
+        if (startTime && typeof startTime.toDate === "function") {
+          startTime = startTime.toDate();
+        } else if (startTime && !(startTime instanceof Date)) {
+          startTime = new Date(startTime);
+        }
+      }
+      
+      let endTime = updateData.end_time;
+      if (endTime === undefined) {
+        endTime = entryData.end_time;
+        if (endTime && typeof endTime.toDate === "function") {
+          endTime = endTime.toDate();
+        } else if (endTime && !(endTime instanceof Date)) {
+          endTime = new Date(endTime);
+        } else if (!endTime) {
+          endTime = null;
+        }
+      }
+      
+      let createdAt = entryData.created_at;
+      if (createdAt && typeof createdAt.toDate === "function") {
+        createdAt = createdAt.toDate();
+      } else if (createdAt && !(createdAt instanceof Date)) {
+        createdAt = new Date(createdAt);
+      }
+      
       const newUserEntry = {
         user_name: userName,
-        start_time: updateData.start_time !== undefined ? updateData.start_time : (entryData.start_time instanceof Date ? entryData.start_time : new Date(entryData.start_time)),
-        end_time: updateData.end_time !== undefined ? updateData.end_time : (entryData.end_time ? (entryData.end_time instanceof Date ? entryData.end_time : new Date(entryData.end_time)) : null),
+        start_time: startTime,
+        end_time: endTime,
         duration_ms: updateData.duration_ms !== undefined ? updateData.duration_ms : entryData.duration_ms,
         hourly_rate: updateData.hourly_rate !== undefined ? updateData.hourly_rate : entryData.hourly_rate,
-        created_at: entryData.created_at,
+        created_at: createdAt,
         modified_at: updateData.modified_at,
       };
       await userRef.doc(entryId).set(newUserEntry);
@@ -455,11 +563,34 @@ export async function updateEntry(userName, entryId, updates) {
         }
         
         // Create entry in new shared project
+        // Convert Firestore Timestamps to Date objects properly
+        let startTime = updateData.start_time;
+        if (startTime === undefined) {
+          startTime = entryData.start_time;
+          if (startTime && typeof startTime.toDate === "function") {
+            startTime = startTime.toDate();
+          } else if (startTime && !(startTime instanceof Date)) {
+            startTime = new Date(startTime);
+          }
+        }
+        
+        let endTime = updateData.end_time;
+        if (endTime === undefined) {
+          endTime = entryData.end_time;
+          if (endTime && typeof endTime.toDate === "function") {
+            endTime = endTime.toDate();
+          } else if (endTime && !(endTime instanceof Date)) {
+            endTime = new Date(endTime);
+          } else if (!endTime) {
+            endTime = null;
+          }
+        }
+        
         const newEntry = await createProjectTimeEntry(
           newProject,
           userName,
-          updateData.start_time !== undefined ? updateData.start_time : (entryData.start_time instanceof Date ? entryData.start_time : new Date(entryData.start_time)),
-          updateData.end_time !== undefined ? updateData.end_time : (entryData.end_time ? (entryData.end_time instanceof Date ? entryData.end_time : new Date(entryData.end_time)) : null),
+          startTime,
+          endTime,
           updateData.duration_ms !== undefined ? updateData.duration_ms : entryData.duration_ms,
           finalHourlyRate
         );
@@ -788,6 +919,13 @@ export async function getProjectTimeEntries(projectId, userName = null) {
   
   const snap = await query.orderBy("start_time", "desc").get();
   return snap.docs.map(docToEntry);
+}
+
+export async function getProjectTimeEntryById(projectId, entryId) {
+  const ref = getSharedProjectTimeEntriesCollection(projectId);
+  const doc = await ref.doc(entryId).get();
+  if (!doc.exists) return null;
+  return docToEntry(doc);
 }
 
 export async function getProjectActiveEntry(projectId, userName) {

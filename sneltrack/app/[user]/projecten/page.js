@@ -19,8 +19,8 @@ export default async function ProjectenPage({ params }) {
 
   return (
     <main className="container mx-auto max-w-md sm:max-w-xl md:max-w-2xl p-4 sm:p-2 flex flex-col gap-6">
-      <section className=" bg-white ">
-        <div className="panel-header flex items-center justify-between">
+      <section className=" bg-white  ">
+        <div className="flex items-center justify-between">
           <h2 className="text-left text-lg font-semibold">Projecten</h2>
           <Link
             href={`/${encodeURIComponent(user)}`}

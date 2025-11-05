@@ -1,11 +1,11 @@
-import { getActiveEntry, getWeekEntries } from "@/lib/dbFirestore";
+import { getActiveEntries, getWeekEntries } from "@/lib/dbFirestore";
 import {
   getWeekBounds,
   toIso,
   computeEntryDurationMsClipped,
 } from "@/lib/time";
 import Link from "next/link";
-import TimerSectionClient from "./TimerSectionClient";
+import TimerSectionWrapperClient from "./TimerSectionWrapperClient";
 import DayClickableClient from "./DayClickableClient";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +34,7 @@ function formatMoney(amount) {
 export default async function UserPage({ params, searchParams }) {
   const { user } = await params;
   const weekOffset = Number((await searchParams)?.w || 0) || 0;
-  const active = await getActiveEntry(user);
+  const activeEntries = await getActiveEntries(user);
   const referenceDate = new Date(
     new Date().getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000
   );
@@ -92,24 +92,21 @@ export default async function UserPage({ params, searchParams }) {
   const weekTotalMoney = perDayMoney.reduce((sum, val) => sum + val, 0);
 
   return (
-    <main className="container mx-auto max-w-md sm:max-w-xl md:max-w-2xl p-4 sm:p-2 flex flex-col gap-6">
-      <header className="fixed top-3 left-3 z-50">
-        <img
-          src="/icon-SO.svg"
-          alt="SO icon"
-          width="28"
-          height="22"
-          className="opacity-60"
-        />
-      </header>
-      <section className="panel bg-white rounded-xl shadow">
-        <div className="panel-header flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="text-left text-lg font-semibold">
-            Hi{" "}
-            <span className="text-gray-700 inline-block capitalize">
-              {user},
-            </span>
-          </h2>
+    <main className=" mx-auto max-w-md sm:max-w-xl md:max-w-2xl flex flex-col h-screen overflow-hidden">
+      <div className="flex relative w-full p-4">
+        <div className="">
+          <header className=" top-3 left-3 z-50">
+            <img
+              src="/icon-SO.svg"
+              alt="SO icon"
+              width="28"
+              height="22"
+              className="opacity-60"
+            />
+          </header>
+        </div>
+
+        <div className="ml-auto">
           <Link
             href={`/${encodeURIComponent(user)}/projecten`}
             className="text-base text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50"
@@ -117,11 +114,10 @@ export default async function UserPage({ params, searchParams }) {
             Projecten
           </Link>
         </div>
+      </div>
 
-        <TimerSectionClient user={user} active={active} />
-      </section>
-
-      <section className="w-full">
+      <TimerSectionWrapperClient user={user} activeEntries={activeEntries} />
+      <section className="w-full mt-auto pb-4">
         <div className="flex items-center justify-between mb-1">
           <Link
             href={`/${encodeURIComponent(user)}?w=${weekOffset - 1}`}
@@ -216,7 +212,7 @@ export default async function UserPage({ params, searchParams }) {
             })}
           </div>
         </div>
-        <div className="mt-4 pt-4 border-t border-gray-200">
+        <div className="mt-4 pt-4 px-4 border-t border-gray-200">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold text-gray-700">
               Week Totaal

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { formatHMS } from "@/lib/time";
+import { formatHM } from "@/lib/time";
 
 export default function RunningClockClient({ startedAt, stoppedAt }) {
   const startMs = useMemo(
@@ -22,10 +22,27 @@ export default function RunningClockClient({ startedAt, stoppedAt }) {
     return () => clearInterval(id);
   }, [startMs, stopMs]);
 
-  if (!startMs) return <span>00:00:00</span>;
-
-  // If stopped, use the stop time; otherwise use current time
+  const isRunning = startMs && !stopMs;
   const currentTime = stopMs || now;
-  const elapsed = Math.max(0, currentTime - startMs);
-  return <span className="timer-text">{formatHMS(elapsed)}</span>;
+  const elapsed = startMs ? Math.max(0, currentTime - startMs) : 0;
+  const formatted = formatHM(elapsed);
+  const [hours, minutes] = formatted.split(":");
+
+  if (!startMs) {
+    return (
+      <span className="timer-text">
+        <span>00</span>
+        <span className="timer-colon">:</span>
+        <span>00</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="timer-text">
+      <span>{hours}</span>
+      <span className={`timer-colon ${isRunning ? "blink" : ""}`}>:</span>
+      <span>{minutes}</span>
+    </span>
+  );
 }

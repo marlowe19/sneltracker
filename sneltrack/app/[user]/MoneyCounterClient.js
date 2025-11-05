@@ -15,11 +15,18 @@ export default function MoneyCounterClient({
     () => (stoppedAt ? new Date(stoppedAt).getTime() : null),
     [stoppedAt]
   );
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (!startMs || stopMs) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    if (!startMs) return;
+    // Update every minute (60000ms) to match the timer's display cadence
+    // The timer displays in minute intervals, so money should update the same way
+    const id = setInterval(() => {
+      if (!stopMs) {
+        // Only update if timer is still running
+        setNow(Date.now());
+      }
+    }, 60000); // Update every minute instead of every second
     return () => clearInterval(id);
   }, [startMs, stopMs]);
 
@@ -28,7 +35,13 @@ export default function MoneyCounterClient({
   // If stopped, use the stop time; otherwise use current time
   const currentTime = stopMs || now;
   const elapsed = currentTime - startMs;
-  const hours = elapsed / (1000 * 60 * 60);
+
+  // Round elapsed time to nearest minute (matching formatHM behavior)
+  // This ensures the money counter updates at the same cadence as the timer display
+  const elapsedMinutes = Math.floor(elapsed / 60000);
+  const elapsedMs = elapsedMinutes * 60000;
+
+  const hours = elapsedMs / (1000 * 60 * 60);
   const money = hours * hourlyRate;
   const formattedMoney = new Intl.NumberFormat("nl-NL", {
     style: "currency",

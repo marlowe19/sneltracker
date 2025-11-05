@@ -110,6 +110,15 @@ export function formatHMS(ms) {
   return `${hours}:${minutes}:${seconds}`;
 }
 
+export function formatHM(ms) {
+  const totalMinutes = Math.floor(ms / 60000);
+  const hours = Math.floor(totalMinutes / 60)
+    .toString()
+    .padStart(2, "0");
+  const minutes = (totalMinutes % 60).toString().padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
 export function daysBetween(start, end) {
   const days = [];
   const dayMs = 24 * 60 * 60 * 1000;
