@@ -43,7 +43,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body
-        className={`${jakartaSans.variable} ${geistMono.variable} antialiased`}
+        className={`${jakartaSans.variable} ${geistMono.variable} antialiased bg-white`}
       >
         {children}
       </body>

@@ -112,7 +112,7 @@ export default async function UserPage({ params, searchParams }) {
           </h2>
           <Link
             href={`/${encodeURIComponent(user)}/projecten`}
-            className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50"
+            className="text-base text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50"
           >
             Projecten
           </Link>
@@ -125,14 +125,14 @@ export default async function UserPage({ params, searchParams }) {
         <div className="flex items-center justify-between mb-1">
           <Link
             href={`/${encodeURIComponent(user)}?w=${weekOffset - 1}`}
-            className="px-2 py-1 rounded-full text-gray-600 hover:bg-gray-100"
+            className="px-6 py-5 sm:px-5 sm:py-4 rounded-full text-gray-600 hover:bg-gray-100 text-5xl sm:text-4xl min-w-[56px] min-h-[56px] sm:min-w-[48px] sm:min-h-[48px] flex items-center justify-center"
             aria-label="Previous week"
           >
             ‹
           </Link>
           <Link
             href={`/${encodeURIComponent(user)}?w=0`}
-            className="px-2.5 py-0.5 rounded-full border text-xs text-gray-700 hover:bg-gray-100"
+            className="px-4 py-3 sm:px-3 sm:py-2 rounded-full border text-sm text-gray-700 hover:bg-gray-100 min-h-[44px] flex items-center justify-center"
             aria-label="Ga naar deze week"
           >
             Vandaag:{" "}
@@ -144,7 +144,7 @@ export default async function UserPage({ params, searchParams }) {
           </Link>
           <Link
             href={`/${encodeURIComponent(user)}?w=${weekOffset + 1}`}
-            className="px-2 py-1 rounded-full text-gray-600 hover:bg-gray-100"
+            className="px-6 py-5 sm:px-5 sm:py-4 rounded-full text-gray-600 hover:bg-gray-100 text-5xl sm:text-4xl min-w-[56px] min-h-[56px] sm:min-w-[48px] sm:min-h-[48px] flex items-center justify-center"
             aria-label="Next week"
           >
             ›

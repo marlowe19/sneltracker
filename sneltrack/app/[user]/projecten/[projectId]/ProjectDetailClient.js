@@ -326,7 +326,7 @@ export default function ProjectDetailClient({
                 onChange={(e) => setName(e.target.value)}
                 required
                 disabled={!canEdit}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 ${
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-base ${
                   !canEdit ? "bg-gray-100 cursor-not-allowed" : ""
                 }`}
                 placeholder="Projectnaam"
@@ -348,7 +348,7 @@ export default function ProjectDetailClient({
                 step="0.01"
                 min="0"
                 disabled={!canEdit}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 ${
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-base ${
                   !canEdit ? "bg-gray-100 cursor-not-allowed" : ""
                 }`}
                 placeholder="0.00"
@@ -370,7 +370,7 @@ export default function ProjectDetailClient({
                 step="0.01"
                 min="0"
                 disabled={!canEdit}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 ${
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-base ${
                   !canEdit ? "bg-gray-100 cursor-not-allowed" : ""
                 }`}
                 placeholder="0.00"
@@ -431,7 +431,7 @@ export default function ProjectDetailClient({
                         }
                       }}
                       placeholder="Gebruikersnaam"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-sm"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-base"
                     />
                     <button
                       type="button"
@@ -453,7 +453,7 @@ export default function ProjectDetailClient({
                       value={newMemberRate}
                       onChange={(e) => setNewMemberRate(e.target.value)}
                       placeholder="0.00"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-base"
                     />
                   </div>
                   {memberError && (

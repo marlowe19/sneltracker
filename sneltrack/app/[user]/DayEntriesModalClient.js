@@ -14,9 +14,19 @@ function formatTime(isoString) {
 function combineDayDateWithTime(dayDate, timeString) {
   if (!dayDate || !timeString) return null;
   const [hours, minutes] = timeString.split(":");
+
+  // Use local date components to avoid timezone issues
   const date = new Date(dayDate);
-  date.setHours(parseInt(hours, 10) || 0, parseInt(minutes, 10) || 0, 0, 0);
-  return date;
+  const localDate = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    parseInt(hours, 10) || 0,
+    parseInt(minutes, 10) || 0,
+    0,
+    0
+  );
+  return localDate;
 }
 
 function formatHoursMinutes(ms) {
@@ -90,6 +100,7 @@ export default function DayEntriesModalClient({
 }) {
   const [localEntries, setLocalEntries] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState(null);
   const [projects, setProjects] = useState([]);
 
@@ -135,8 +146,6 @@ export default function DayEntriesModalClient({
     }
   }, [isOpen, entries, dayDate]);
 
-  if (!isOpen) return null;
-
   const handleEntryChange = async (index, field, value) => {
     const updated = [...localEntries];
     updated[index] = { ...updated[index], [field]: value };
@@ -155,22 +164,34 @@ export default function DayEntriesModalClient({
           const data = await res.json();
           const members = data.members || [];
           const currentUserMember = members.find((m) => m.user_name === user);
-          if (currentUserMember && currentUserMember.hourly_rate !== null && currentUserMember.hourly_rate !== undefined) {
-            updated[index].hourly_rate_editable = String(currentUserMember.hourly_rate);
+          if (
+            currentUserMember &&
+            currentUserMember.hourly_rate !== null &&
+            currentUserMember.hourly_rate !== undefined
+          ) {
+            updated[index].hourly_rate_editable = String(
+              currentUserMember.hourly_rate
+            );
           } else if (selectedProject.hourly_rate) {
             // Fall back to project rate if member rate not set
-            updated[index].hourly_rate_editable = String(selectedProject.hourly_rate);
+            updated[index].hourly_rate_editable = String(
+              selectedProject.hourly_rate
+            );
           }
         } catch (error) {
           console.error("Error fetching member rate:", error);
           // If fetch fails, try project rate
           if (selectedProject.hourly_rate) {
-            updated[index].hourly_rate_editable = String(selectedProject.hourly_rate);
+            updated[index].hourly_rate_editable = String(
+              selectedProject.hourly_rate
+            );
           }
         }
       } else if (selectedProject && selectedProject.hourly_rate) {
         // For non-shared projects, use project rate
-        updated[index].hourly_rate_editable = String(selectedProject.hourly_rate);
+        updated[index].hourly_rate_editable = String(
+          selectedProject.hourly_rate
+        );
       }
     }
 
@@ -215,54 +236,29 @@ export default function DayEntriesModalClient({
     }
   };
 
-  const handleAddEntry = async () => {
+  const handleAddEntry = () => {
     if (!dayDate) return;
 
-    setIsSaving(true);
-    setError(null);
+    // Create a new entry in local state only (will be created in backend on save)
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
+    const newEntry = {
+      id: tempId,
+      user_name: user,
+      start_time: null,
+      end_time: null,
+      duration_ms: null,
+      hourly_rate: null,
+      project: null,
+      created_at: new Date().toISOString(),
+      modified_at: new Date().toISOString(),
+      start_time_editable: "",
+      end_time_editable: "",
+      duration_editable: "",
+      hourly_rate_editable: "",
+      project_editable: "",
+    };
 
-    try {
-      // Create a new entry for the selected day
-      const response = await fetch(`/${encodeURIComponent(user)}/entries`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dayDate: dayDate.toISOString(),
-          duration_ms: null,
-          hourly_rate: null,
-          project: null,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to create entry");
-      }
-
-      const { entry } = await response.json();
-
-      // Add the new entry to localEntries
-      const durationMs =
-        entry.duration_ms ??
-        (entry.end_time
-          ? computeEntryDurationMs(entry.start_time, entry.end_time, null)
-          : null);
-
-      const newEntry = {
-        ...entry,
-        start_time_editable: formatTime(entry.start_time),
-        end_time_editable: formatTime(entry.end_time),
-        duration_editable: durationMs ? formatHoursMinutes(durationMs) : "",
-        hourly_rate_editable: entry.hourly_rate ?? "",
-        project_editable: entry.project ?? "",
-      };
-
-      setLocalEntries([...localEntries, newEntry]);
-      setIsSaving(false);
-    } catch (err) {
-      setError(err.message || "Failed to create entry");
-      setIsSaving(false);
-    }
+    setLocalEntries([...localEntries, newEntry]);
   };
 
   const handleSave = async () => {
@@ -270,8 +266,113 @@ export default function DayEntriesModalClient({
     setError(null);
 
     try {
-      // Update each entry
+      // Process each entry
       const updatePromises = localEntries.map(async (entry) => {
+        // Check if this is a new entry (has temp ID)
+        const isNewEntry = entry.id && entry.id.startsWith("temp-");
+
+        if (isNewEntry) {
+          // Create new entry in backend
+          if (!dayDate) {
+            throw new Error("Day date is required");
+          }
+
+          const updates = {};
+          let durationWasEdited = false;
+
+          // Check if duration was edited
+          if (
+            entry.duration_editable !== undefined &&
+            entry.duration_editable !== ""
+          ) {
+            const newDurationMs = parseDuration(entry.duration_editable);
+            if (newDurationMs !== null) {
+              updates.duration_ms = newDurationMs;
+              durationWasEdited = true;
+            }
+          }
+
+          // If duration was edited, calculate start_time and end_time from the day
+          if (durationWasEdited && dayDate && updates.duration_ms) {
+            // Set start_time to start of the selected day using local date components
+            const date = new Date(dayDate);
+            const dayStart = new Date(
+              date.getFullYear(),
+              date.getMonth(),
+              date.getDate(),
+              0,
+              0,
+              0,
+              0
+            );
+
+            // Calculate end_time from start_time + duration
+            const dayEnd = new Date(dayStart.getTime() + updates.duration_ms);
+
+            updates.start_time = dayStart.toISOString();
+            updates.end_time = dayEnd.toISOString();
+          } else {
+            // Use start_time and end_time if provided
+            if (entry.start_time_editable && dayDate) {
+              const newStart = combineDayDateWithTime(
+                dayDate,
+                entry.start_time_editable
+              );
+              if (newStart) {
+                updates.start_time = newStart.toISOString();
+              }
+            }
+
+            if (entry.end_time_editable && dayDate) {
+              const newEnd = combineDayDateWithTime(
+                dayDate,
+                entry.end_time_editable
+              );
+              if (newEnd) {
+                updates.end_time = newEnd.toISOString();
+              }
+            }
+          }
+
+          // Set hourly_rate if provided
+          if (
+            entry.hourly_rate_editable !== undefined &&
+            entry.hourly_rate_editable !== ""
+          ) {
+            updates.hourly_rate = parseFloat(entry.hourly_rate_editable);
+          }
+
+          // Set project if provided
+          if (
+            entry.project_editable !== undefined &&
+            entry.project_editable !== ""
+          ) {
+            updates.project = entry.project_editable;
+          }
+
+          // Create entry in backend
+          const response = await fetch(`/${encodeURIComponent(user)}/entries`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              dayDate: dayDate.toISOString(),
+              duration_ms: updates.duration_ms ?? null,
+              hourly_rate: updates.hourly_rate ?? null,
+              project: updates.project ?? null,
+              start_time: updates.start_time ?? null,
+              end_time: updates.end_time ?? null,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Failed to create entry");
+          }
+
+          return; // New entry created, no update needed
+        }
+
+        // Existing entry - update it
         const updates = {};
         let durationWasEdited = false;
 
@@ -291,9 +392,17 @@ export default function DayEntriesModalClient({
 
         // If duration was edited, calculate start_time and end_time from the day
         if (durationWasEdited && dayDate && updates.duration_ms) {
-          // Set start_time to start of the selected day
-          const dayStart = new Date(dayDate);
-          dayStart.setHours(0, 0, 0, 0);
+          // Set start_time to start of the selected day using local date components
+          const date = new Date(dayDate);
+          const dayStart = new Date(
+            date.getFullYear(),
+            date.getMonth(),
+            date.getDate(),
+            0,
+            0,
+            0,
+            0
+          );
 
           // Calculate end_time from start_time + duration
           const dayEnd = new Date(dayStart.getTime() + updates.duration_ms);
@@ -388,10 +497,48 @@ export default function DayEntriesModalClient({
     }
   };
 
+  const handleDeleteEntry = async (entryId, index) => {
+    if (!confirm("Weet je zeker dat je deze entry wilt verwijderen?")) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/${encodeURIComponent(user)}/entries/${entryId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete entry");
+      }
+
+      // Remove from local state immediately
+      const updated = localEntries.filter((_, i) => i !== index);
+      setLocalEntries(updated);
+      setIsDeleting(false);
+
+      // If no entries left, close drawer and refresh
+      if (updated.length === 0) {
+        handleCancel();
+        window.location.reload();
+      }
+    } catch (err) {
+      setError(err.message || "Failed to delete entry");
+      setIsDeleting(false);
+    }
+  };
+
   const handleCancel = () => {
     setLocalEntries([]);
     setError(null);
     setIsSaving(false);
+    setIsDeleting(false);
     onClose();
   };
 
@@ -404,23 +551,25 @@ export default function DayEntriesModalClient({
       })
     : "";
 
+  if (!isOpen) return null;
+
   return (
     <div
-      className="fixed inset-0  bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 z-50 transition-opacity duration-300"
       onClick={handleCancel}
     >
       <div
-        className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+        className="fixed inset-x-0 bottom-0 bg-white rounded-t-xl shadow-2xl h-full overflow-y-auto transition-transform duration-300 ease-out translate-y-0"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-white opacity-100 border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900">
+        <div className="sticky top-0 bg-white z-10 border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
             Bewerk entries - {dayDateFormatted}
           </h2>
           <div className="flex items-center gap-3">
             <button
               onClick={handleAddEntry}
-              disabled={isSaving}
+              disabled={isSaving || isDeleting}
               className="w-10 h-10 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-2xl font-bold"
               aria-label="Entry toevoegen"
             >
@@ -436,7 +585,7 @@ export default function DayEntriesModalClient({
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
               {error}
@@ -453,100 +602,26 @@ export default function DayEntriesModalClient({
                 key={entry.id}
                 className="border border-gray-200 rounded-lg p-4 space-y-4"
               >
-                <div className="text-sm font-medium text-gray-700">
-                  Entry {index + 1}
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium text-gray-700">
+                    Entry {index + 1}
+                  </div>
+                  {entry.id && !entry.id.startsWith("temp-") && (
+                    <button
+                      onClick={() => handleDeleteEntry(entry.id, index)}
+                      disabled={isSaving || isDeleting}
+                      className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                      aria-label="Entry verwijderen"
+                    >
+                      Verwijderen
+                    </button>
+                  )}
                 </div>
 
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Starttijd
-                      </label>
-                      <input
-                        type="time"
-                        value={entry.start_time_editable || ""}
-                        onChange={(e) =>
-                          handleEntryChange(
-                            index,
-                            "start_time_editable",
-                            e.target.value
-                          )
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff]"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Eindtijd
-                      </label>
-                      <input
-                        type="time"
-                        value={entry.end_time_editable || ""}
-                        onChange={(e) =>
-                          handleEntryChange(
-                            index,
-                            "end_time_editable",
-                            e.target.value
-                          )
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff]"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Duur (U:MM)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="0:00"
-                        value={entry.duration_editable || ""}
-                        onChange={(e) =>
-                          handleEntryChange(
-                            index,
-                            "duration_editable",
-                            e.target.value
-                          )
-                        }
-                        onBlur={() => handleDurationBlur(index)}
-                        pattern="[0-9]+:[0-5][0-9]"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff]"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Uurtarief (€)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0.00"
-                        value={
-                          entry.hourly_rate_editable !== undefined
-                            ? entry.hourly_rate_editable
-                            : entry.hourly_rate || ""
-                        }
-                        onChange={(e) =>
-                          handleEntryChange(
-                            index,
-                            "hourly_rate_editable",
-                            e.target.value === "" ? "" : e.target.value
-                          )
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff]"
-                      />
-                    </div>
-                  </div>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Projectnaam
+                      Projectnaam *
                     </label>
                     <select
                       value={
@@ -561,9 +636,10 @@ export default function DayEntriesModalClient({
                           e.target.value || null
                         )
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff]"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
+                      required
                     >
-                      <option value="">Geen project</option>
+                      <option value="">Selecteer een project</option>
                       {projects.map((project) => (
                         <option key={project.id} value={project.id}>
                           {project.name}
@@ -573,23 +649,114 @@ export default function DayEntriesModalClient({
                       ))}
                     </select>
                   </div>
+
+                  {/* Only show other fields if project is selected */}
+                  {(entry.project_editable || entry.project) && (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Starttijd
+                          </label>
+                          <input
+                            type="time"
+                            value={entry.start_time_editable || ""}
+                            onChange={(e) =>
+                              handleEntryChange(
+                                index,
+                                "start_time_editable",
+                                e.target.value
+                              )
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Eindtijd
+                          </label>
+                          <input
+                            type="time"
+                            value={entry.end_time_editable || ""}
+                            onChange={(e) =>
+                              handleEntryChange(
+                                index,
+                                "end_time_editable",
+                                e.target.value
+                              )
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Duur (U:MM)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="0:00"
+                            value={entry.duration_editable || ""}
+                            onChange={(e) =>
+                              handleEntryChange(
+                                index,
+                                "duration_editable",
+                                e.target.value
+                              )
+                            }
+                            onBlur={() => handleDurationBlur(index)}
+                            pattern="[0-9]+:[0-5][0-9]"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Uurtarief (€)
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0.00"
+                            value={
+                              entry.hourly_rate_editable !== undefined
+                                ? entry.hourly_rate_editable
+                                : entry.hourly_rate || ""
+                            }
+                            onChange={(e) =>
+                              handleEntryChange(
+                                index,
+                                "hourly_rate_editable",
+                                e.target.value === "" ? "" : e.target.value
+                              )
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             ))
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
+        <div className="sticky bottom-0 bg-white z-10 border-t border-gray-200 px-4 sm:px-6 py-4 flex justify-end gap-3">
           <button
             onClick={handleCancel}
-            disabled={isSaving}
+            disabled={isSaving || isDeleting}
             className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
             Annuleren
           </button>
           <button
             onClick={handleSave}
-            disabled={isSaving || localEntries.length === 0}
+            disabled={isSaving || isDeleting || localEntries.length === 0}
             className="px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSaving ? "Opslaan..." : "Wijzigingen opslaan"}

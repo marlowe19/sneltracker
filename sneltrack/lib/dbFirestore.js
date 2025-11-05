@@ -477,6 +477,31 @@ export async function updateEntry(userName, entryId, updates) {
   throw new Error(`Entry ${entryId} not found`);
 }
 
+export async function deleteEntry(userName, entryId) {
+  // Check if entry exists in user entries first
+  const userRef = getUserTimeEntriesCollection(userName);
+  const userDoc = await userRef.doc(entryId).get();
+  
+  if (userDoc.exists) {
+    await userRef.doc(entryId).delete();
+    return;
+  }
+  
+  // Entry not in user collection, check shared projects
+  const sharedProjects = await getAllSharedProjects(userName);
+  
+  for (const project of sharedProjects) {
+    const entriesRef = getSharedProjectTimeEntriesCollection(project.id);
+    const entryDoc = await entriesRef.doc(entryId).get();
+    if (entryDoc.exists) {
+      await entriesRef.doc(entryId).delete();
+      return;
+    }
+  }
+  
+  throw new Error(`Entry ${entryId} not found`);
+}
+
 // Projects functions
 
 function getUserProjectsCollection(userName) {

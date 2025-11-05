@@ -12,6 +12,7 @@ import {
   DateRangeSelector,
   ProjectStatistics,
 } from "./ProjectStatisticsContainer";
+import BackButtonClient from "./BackButtonClient";
 
 export const dynamic = "force-dynamic";
 
@@ -48,12 +49,7 @@ export default async function ProjectDetailPage({ params }) {
   return (
     <main className="flex flex-col ">
       <div className=" flex items-center justify-between p-4">
-        <Link
-          href={`/${encodeURIComponent(user)}/projecten`}
-          className="text-sm text-gray-600 hover:text-gray-900"
-        >
-          ← Terug naar projecten
-        </Link>
+        <BackButtonClient />
       </div>
       <section className="bg-white rounded-xl">
         <div className="">

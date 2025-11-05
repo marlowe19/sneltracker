@@ -157,7 +157,7 @@ export default function ProjectsListClient({ user, initialProjects }) {
   return (
     <>
       {/* Tabs */}
-      <div className="flex gap-2 mb-4 border-b border-gray-200">
+      <div className="flex gap-2 mb-4 border-b border-gray-200 dark:bg-white bg-white">
         <button
           type="button"
           onClick={() => setActiveTab("user")}

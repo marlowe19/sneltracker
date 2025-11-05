@@ -147,7 +147,7 @@ export default function MembersListClient({
                       value={editRateValue}
                       onChange={(e) => setEditRateValue(e.target.value)}
                       placeholder="0.00"
-                      className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                      className="w-24 px-2 py-1 border border-gray-300 rounded text-base"
                       autoFocus
                     />
                     <button

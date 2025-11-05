@@ -245,7 +245,7 @@ export default function ProjectFormClient({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-base"
                 placeholder="Projectnaam"
               />
             </div>
@@ -266,7 +266,7 @@ export default function ProjectFormClient({
                   step="0.01"
                   min="0"
                   disabled={project?.is_shared && !isOwner}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed text-base"
                   placeholder="0.00"
                 />
               </div>
@@ -299,7 +299,7 @@ export default function ProjectFormClient({
                   step="0.01"
                   min="0"
                   disabled={project?.is_shared && !isOwner}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed text-base"
                   placeholder="0.00"
                 />
               </div>

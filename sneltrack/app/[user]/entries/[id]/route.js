@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { updateEntry } from "@/lib/dbFirestore";
+import { updateEntry, deleteEntry } from "@/lib/dbFirestore";
 
 export async function PATCH(req, context) {
   try {
@@ -45,6 +45,29 @@ export async function PATCH(req, context) {
     console.error("Error updating entry:", error);
     return NextResponse.json(
       { error: "Failed to update entry", message: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req, context) {
+  try {
+    const { user, id } = await context.params;
+
+    // Validate required fields
+    if (!id) {
+      return NextResponse.json(
+        { error: "Entry ID is required" },
+        { status: 400 }
+      );
+    }
+
+    await deleteEntry(user, id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting entry:", error);
+    return NextResponse.json(
+      { error: "Failed to delete entry", message: error.message },
       { status: 500 }
     );
   }

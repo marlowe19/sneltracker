@@ -24,7 +24,7 @@ export default async function ProjectenPage({ params }) {
           <h2 className="text-left text-lg font-semibold">Projecten</h2>
           <Link
             href={`/${encodeURIComponent(user)}`}
-            className="text-sm text-gray-600 hover:text-gray-900"
+            className="text-base text-gray-600 hover:text-gray-900"
           >
             ← Terug
           </Link>
