@@ -282,7 +282,7 @@ export default function ProjectStatisticsClient({
                   label={({ percentage, amount }) => {
                     // Only show label if slice is large enough (e.g., > 5%)
                     if (percentage > 5) {
-                      return `€${amount.toFixed(0)}`;
+                      return `€${amount.toFixed(1)}`;
                     }
                     return "";
                   }}
@@ -340,7 +340,83 @@ export default function ProjectStatisticsClient({
     });
   }
 
-  // Card 5: Budget Progress Chart
+  // Card 5: Total Money Breakdown Pie Chart
+  if (statistics.totalMoney > 0 && project.hourly_rate) {
+    const totalBreakdownData = HOURLY_RATE_BREAKDOWN.map((item) => ({
+      name: item.category,
+      percentage: item.percentage,
+      amount: statistics.totalMoney * (item.percentage / 100),
+    }));
+
+    cards.push({
+      id: "total-money-breakdown",
+      title: `Verdeling van totale opbrengst van ${formatMoney(
+        statistics.totalMoney
+      )}`,
+      content: (
+        <div className="w-full">
+          <div style={{ height: "240px" }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart margin={{ top: 30, right: 30, bottom: 20, left: 30 }}>
+                <Pie
+                  data={totalBreakdownData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={true}
+                  label={({ percentage, amount }) => {
+                    // Only show label if slice is large enough (e.g., > 5%)
+                    if (percentage > 5) {
+                      return `€${amount.toFixed(1)}`;
+                    }
+                    return "";
+                  }}
+                  outerRadius={70}
+                  innerRadius={40}
+                  fill="#8884d8"
+                  dataKey="percentage"
+                >
+                  {totalBreakdownData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[index % COLORS.length]}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value, name, props) => [
+                    `${formatMoney(props.payload.amount)} (${value}%)`,
+                    props.payload.name,
+                  ]}
+                  contentStyle={{
+                    backgroundColor: "white",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "0.5rem",
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-6 flex flex-col gap-2">
+            {totalBreakdownData.map((item, index) => (
+              <div key={item.name} className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{
+                    backgroundColor: COLORS[index % COLORS.length],
+                  }}
+                />
+                <span className="text-xs text-gray-700">
+                  {item.name}: ({item.percentage}%)
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ),
+    });
+  }
+
+  // Card 6: Budget Progress Chart
   if (statistics.budgetHours && project.hourly_rate) {
     const budgetData = [
       {
@@ -480,115 +556,6 @@ export default function ProjectStatisticsClient({
               {formatMoney(statistics.totalMoney)}
             </div>
           )}
-        </div>
-      ),
-    });
-  }
-
-  // Card 6: Profitability
-  if (
-    statistics.budgetHours !== null &&
-    statistics.hoursSaved !== null &&
-    project.hourly_rate
-  ) {
-    cards.push({
-      id: "profitability",
-      title: "Winstgevendheid",
-      content: (
-        <div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-sm text-gray-600">Bespaarde uren</div>
-              <div
-                className={`text-xl font-bold ${
-                  statistics.hoursSaved > 0
-                    ? "text-green-600"
-                    : statistics.hoursSaved < 0
-                    ? "text-red-600"
-                    : "text-gray-900"
-                }`}
-              >
-                {statistics.hoursSaved > 0 ? "+" : ""}
-                {formatHours(statistics.hoursSaved * 60 * 60 * 1000)}
-              </div>
-            </div>
-            <div>
-              <div className="text-sm text-gray-600">Budget gebruik</div>
-              <div
-                className={`text-xl font-bold ${
-                  statistics.budgetPercentage !== null
-                    ? statistics.budgetPercentage < 80
-                      ? "text-green-600"
-                      : statistics.budgetPercentage <= 100
-                      ? "text-yellow-600"
-                      : "text-red-600"
-                    : "text-gray-900"
-                }`}
-              >
-                {statistics.budgetPercentage !== null
-                  ? `${statistics.budgetPercentage.toFixed(1)}%`
-                  : "-"}
-              </div>
-            </div>
-          </div>
-
-          {/* Profitability Status Indicator */}
-          {statistics.profitabilityStatus && (
-            <div className="mt-4">
-              <div className="flex items-center gap-2">
-                <div
-                  className={`w-3 h-3 rounded-full ${
-                    statistics.profitabilityStatus === "profitable"
-                      ? "bg-green-500"
-                      : statistics.profitabilityStatus === "at_risk"
-                      ? "bg-yellow-500"
-                      : "bg-red-500"
-                  }`}
-                />
-                <span className="text-sm text-gray-700">
-                  {statistics.profitabilityStatus === "profitable"
-                    ? "Winstgevend - Onder 80% van budget gebruikt"
-                    : statistics.profitabilityStatus === "at_risk"
-                    ? "Risico - Dicht bij budget (80-100%)"
-                    : "Over budget - Meer dan 100% gebruikt"}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Additional context */}
-          {statistics.moneySaved !== null && statistics.moneySaved > 0 && (
-            <div className="mt-3 text-xs text-gray-500">
-              <div>
-                Bespaard: {formatMoney(statistics.moneySaved)} | Budget:{" "}
-                {formatMoney(statistics.budgetPrice)} | Gebruikt:{" "}
-                {formatMoney(statistics.totalMoney)}
-              </div>
-            </div>
-          )}
-          {statistics.hoursSaved !== null && statistics.hoursSaved < 0 && (
-            <div className="mt-3 text-xs text-red-500">
-              <div>
-                Over budget:{" "}
-                {formatHours(Math.abs(statistics.hoursSaved) * 60 * 60 * 1000)}{" "}
-                | Extra kosten:{" "}
-                {formatMoney(
-                  Math.abs(statistics.hoursSaved) * project.hourly_rate
-                )}
-              </div>
-            </div>
-          )}
-          {statistics.hoursSaved !== null &&
-            statistics.hoursSaved === 0 &&
-            statistics.budgetPercentage !== null &&
-            statistics.budgetPercentage === 100 && (
-              <div className="mt-3 text-xs text-gray-500">
-                <div>
-                  Exact op budget: {formatMoney(statistics.budgetPrice)} |{" "}
-                  Gebruikt: {formatMoney(statistics.totalMoney)}
-                </div>
-              </div>
-            )}
         </div>
       ),
     });

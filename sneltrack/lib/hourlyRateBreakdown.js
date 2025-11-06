@@ -27,4 +27,3 @@ export const HOURLY_RATE_BREAKDOWN = [
     percentage: 15,
   },
 ];
-
