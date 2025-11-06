@@ -17,6 +17,14 @@ export const useStore = create(
       loadingProjects: false,
       projectsError: null,
 
+      // ========== Expenses State ==========
+      expenses: [], // Day expenses - fetched client-side only
+      loadingExpenses: false,
+      expensesError: null,
+      weekExpenses: [], // Week expenses - fetched client-side only
+      loadingWeekExpenses: false,
+      weekExpensesError: null,
+
       // ========== UI State ==========
       openDropdowns: {},
       stoppedTimers: {},
@@ -107,7 +115,18 @@ export const useStore = create(
       },
 
       // ========== Projects Actions ==========
+      // Hydrate projects from server (initial load)
+      hydrateProjects: (serverProjects) => {
+        set({ projects: serverProjects || [] });
+      },
+
       fetchProjects: async (user) => {
+        const currentState = get();
+        // Prevent concurrent fetches
+        if (currentState.loadingProjects) {
+          return;
+        }
+
         set({ loadingProjects: true, projectsError: null });
         try {
           const res = await fetch(`/${encodeURIComponent(user)}/projecten/api`);
@@ -134,6 +153,114 @@ export const useStore = create(
       deleteProject: (projectId) => {
         set((state) => ({
           projects: state.projects.filter((p) => p.id !== projectId),
+        }));
+      },
+
+      // ========== Expenses Actions ==========
+      fetchDayExpenses: async (user, dayDate) => {
+        const currentState = get();
+        // Prevent concurrent fetches
+        if (currentState.loadingExpenses) {
+          return;
+        }
+
+        set({ loadingExpenses: true, expensesError: null });
+        try {
+          const res = await fetch(
+            `/${encodeURIComponent(
+              user
+            )}/api/day-expenses?dayDate=${dayDate.toISOString()}`
+          );
+          if (!res.ok) throw new Error("Failed to fetch day expenses");
+          const data = await res.json();
+          set({ expenses: data.expenses || [], loadingExpenses: false });
+        } catch (error) {
+          set({ expensesError: error.message, loadingExpenses: false });
+        }
+      },
+
+      fetchWeekExpenses: async (user, weekStart, weekEnd) => {
+        const currentState = get();
+        // Prevent concurrent fetches
+        if (currentState.loadingWeekExpenses) {
+          return;
+        }
+
+        set({ loadingWeekExpenses: true, weekExpensesError: null });
+        try {
+          const res = await fetch(
+            `/${encodeURIComponent(
+              user
+            )}/expenses?weekStart=${weekStart}&weekEnd=${weekEnd}`
+          );
+          if (!res.ok) throw new Error("Failed to fetch week expenses");
+          const data = await res.json();
+          set({
+            weekExpenses: data.expenses || [],
+            loadingWeekExpenses: false,
+          });
+        } catch (error) {
+          set({ weekExpensesError: error.message, loadingWeekExpenses: false });
+        }
+      },
+
+      addExpense: (newExpense) => {
+        const tempId = `temp-${Date.now()}`;
+        set((state) => ({
+          expenses: [...state.expenses, { ...newExpense, id: tempId }],
+          weekExpenses: [...state.weekExpenses, { ...newExpense, id: tempId }],
+        }));
+      },
+
+      updateExpense: (expenseId, updates) => {
+        set((state) => ({
+          expenses: state.expenses.map((expense) =>
+            expense.id === expenseId ? { ...expense, ...updates } : expense
+          ),
+          weekExpenses: state.weekExpenses.map((expense) =>
+            expense.id === expenseId ? { ...expense, ...updates } : expense
+          ),
+        }));
+      },
+
+      replaceTempExpense: (tempId, realExpense) => {
+        set((state) => {
+          const expenseIndex = state.expenses.findIndex(
+            (expense) => expense.id === tempId
+          );
+          const weekExpenseIndex = state.weekExpenses.findIndex(
+            (expense) => expense.id === tempId
+          );
+
+          let newExpenses = state.expenses;
+          let newWeekExpenses = state.weekExpenses;
+
+          if (expenseIndex !== -1) {
+            newExpenses = [...state.expenses];
+            newExpenses[expenseIndex] = realExpense;
+          } else {
+            newExpenses = [...state.expenses, realExpense];
+          }
+
+          if (weekExpenseIndex !== -1) {
+            newWeekExpenses = [...state.weekExpenses];
+            newWeekExpenses[weekExpenseIndex] = realExpense;
+          } else {
+            newWeekExpenses = [...state.weekExpenses, realExpense];
+          }
+
+          return { expenses: newExpenses, weekExpenses: newWeekExpenses };
+        });
+      },
+
+      deleteExpense: (expenseId) => {
+        set((state) => ({
+          expenses: state.expenses.filter(
+            (expense) => expense.id !== expenseId
+          ),
+          weekExpenses: state.weekExpenses.filter(
+            (expense) => expense.id !== expenseId
+          ),
         }));
       },
 

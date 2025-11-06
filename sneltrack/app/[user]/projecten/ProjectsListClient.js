@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import ProjectFormClient from "./ProjectFormClient";
+import { useStore } from "@/stores/useStore";
 
 function formatMoney(amount) {
   return new Intl.NumberFormat("nl-NL", {
@@ -13,49 +14,19 @@ function formatMoney(amount) {
   }).format(amount);
 }
 
-function formatHours(totalHours) {
-  const hours = Math.floor(totalHours);
-  const minutes = Math.round((totalHours - hours) * 60);
-  if (hours === 0) {
-    return `${minutes}m`;
-  }
-  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-}
-
 export default function ProjectsListClient({ user, initialProjects }) {
   const router = useRouter();
-  const [projects, setProjects] = useState(initialProjects);
+  const projects = useStore((state) => state.projects);
+  const fetchProjects = useStore((state) => state.fetchProjects);
   const [isPending, startTransition] = useTransition();
   const [editingProject, setEditingProject] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [statistics, setStatistics] = useState({});
   const [copiedProjectId, setCopiedProjectId] = useState(null);
   const [activeTab, setActiveTab] = useState("user"); // "user" or "shared"
-  const [members, setMembers] = useState({}); // projectId -> members array
 
-  async function loadProjects() {
-    try {
-      const res = await fetch(`/${encodeURIComponent(user)}/projecten/api`);
-      const data = await res.json();
-      setProjects(data.projects || []);
-    } catch (error) {
-      console.error("Error loading projects:", error);
-    }
-  }
-
-  async function loadStatistics(projectId) {
-    try {
-      const res = await fetch(
-        `/${encodeURIComponent(
-          user
-        )}/projecten/api?projectId=${projectId}&stats=true`
-      );
-      const data = await res.json();
-      setStatistics((prev) => ({ ...prev, [projectId]: data.statistics }));
-    } catch (error) {
-      console.error("Error loading statistics:", error);
-    }
-  }
+  // Use projects from store, fallback to initialProjects if store is empty
+  const displayProjects =
+    projects.length > 0 ? projects : initialProjects || [];
 
   function handleCreate() {
     setEditingProject(null);
@@ -76,10 +47,8 @@ export default function ProjectsListClient({ user, initialProjects }) {
       if (res.ok) {
         setIsFormOpen(false);
         setEditingProject(null);
-        startTransition(() => {
-          router.refresh();
-          loadProjects();
-        });
+        // Refresh projects from store
+        fetchProjects(user);
       } else {
         const data = await res.json();
         alert(data.error || "Failed to delete project");
@@ -93,10 +62,8 @@ export default function ProjectsListClient({ user, initialProjects }) {
   function handleFormClose() {
     setIsFormOpen(false);
     setEditingProject(null);
-    startTransition(() => {
-      router.refresh();
-      loadProjects();
-    });
+    // Refresh projects from store
+    fetchProjects(user);
   }
 
   async function handleCopyLink(e, projectId) {
@@ -119,34 +86,8 @@ export default function ProjectsListClient({ user, initialProjects }) {
     }
   }
 
-  async function loadMembers(projectId) {
-    if (!projectId) return;
-    try {
-      const res = await fetch(
-        `/${encodeURIComponent(
-          user
-        )}/projecten/api?action=members&projectId=${projectId}`
-      );
-      const data = await res.json();
-      setMembers((prev) => ({ ...prev, [projectId]: data.members || [] }));
-    } catch (error) {
-      console.error("Error loading members:", error);
-    }
-  }
-
-  // Load statistics for all projects on mount
-  useEffect(() => {
-    projects.forEach((project) => {
-      loadStatistics(project.id);
-      if (project.is_shared) {
-        loadMembers(project.id);
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projects]);
-
   // Filter projects based on active tab
-  const filteredProjects = projects.filter((project) => {
+  const filteredProjects = displayProjects.filter((project) => {
     if (activeTab === "shared") {
       return project.is_shared === true;
     } else {
@@ -167,7 +108,7 @@ export default function ProjectsListClient({ user, initialProjects }) {
               : "text-gray-600 hover:text-gray-900"
           }`}
         >
-          Mijn Projecten ({projects.filter((p) => !p.is_shared).length})
+          Mijn Projecten ({displayProjects.filter((p) => !p.is_shared).length})
         </button>
         <button
           type="button"
@@ -178,7 +119,8 @@ export default function ProjectsListClient({ user, initialProjects }) {
               : "text-gray-600 hover:text-gray-900"
           }`}
         >
-          Gedeelde Projecten ({projects.filter((p) => p.is_shared).length})
+          Gedeelde Projecten (
+          {displayProjects.filter((p) => p.is_shared).length})
         </button>
       </div>
 
@@ -203,8 +145,6 @@ export default function ProjectsListClient({ user, initialProjects }) {
       ) : (
         <div className="space-y-3">
           {filteredProjects.map((project) => {
-            const stats = statistics[project.id];
-            const projectMembers = members[project.id] || [];
             const isOwner = project.is_shared && project.owner === user;
             return (
               <div
@@ -299,12 +239,6 @@ export default function ProjectsListClient({ user, initialProjects }) {
                         <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
                           {isOwner ? "Eigenaar" : "Gedeeld"}
                         </span>
-                        {projectMembers.length > 0 && (
-                          <span className="text-xs text-gray-500">
-                            {projectMembers.length}{" "}
-                            {projectMembers.length === 1 ? "lid" : "leden"}
-                          </span>
-                        )}
                       </div>
                     )}
                   </div>
@@ -312,84 +246,6 @@ export default function ProjectsListClient({ user, initialProjects }) {
                   {project.hourly_rate && (
                     <div className="text-sm text-gray-600 mb-2">
                       Tarief: {formatMoney(project.hourly_rate)}/uur
-                    </div>
-                  )}
-
-                  {stats && stats.budgetHours && (
-                    <div className="mb-2">
-                      <div className="flex justify-between text-xs text-gray-600 mb-1">
-                        <span>
-                          {stats.totalHours.toFixed(1)} / {stats.budgetHours}{" "}
-                          uren
-                        </span>
-                        <span
-                          className={
-                            stats.isOverBudget
-                              ? "text-red-600 font-semibold"
-                              : "text-gray-600"
-                          }
-                        >
-                          {stats.budgetPercentage !== null
-                            ? `${stats.budgetPercentage.toFixed(1)}%`
-                            : "-"}
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2.5 relative overflow-hidden">
-                        <div
-                          className={`h-2.5 rounded-full ${
-                            stats.isOverBudget
-                              ? "bg-red-500"
-                              : stats.budgetPercentage > 80
-                              ? "bg-yellow-500"
-                              : "bg-green-500"
-                          }`}
-                          style={{
-                            width: `${
-                              stats.budgetPercentage !== null
-                                ? Math.min(stats.budgetPercentage, 100)
-                                : 0
-                            }%`,
-                          }}
-                        />
-                        {stats.isOverBudget &&
-                          stats.budgetPercentage !== null && (
-                            <div
-                              className="h-2.5 rounded-full bg-red-600 absolute top-0"
-                              style={{
-                                width: `${stats.budgetPercentage - 100}%`,
-                                left: "100%",
-                              }}
-                            />
-                          )}
-                      </div>
-                      {stats.budgetPrice !== null && project.hourly_rate && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          Budget: {formatMoney(stats.budgetPrice)} | Actueel:{" "}
-                          {formatMoney(stats.totalMoney)}
-                          {stats.isOverBudget && (
-                            <span className="text-red-600 ml-1">
-                              (+
-                              {formatMoney(
-                                stats.totalMoney - stats.budgetPrice
-                              )}
-                              )
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {stats && stats.entryCount > 0 && !stats.budgetHours && (
-                    <div className="text-xs text-gray-500 mt-2 space-y-1">
-                      <div>
-                        Tijd: {formatHours(stats.totalHours)} (
-                        {stats.entryCount}{" "}
-                        {stats.entryCount === 1 ? "entry" : "entries"})
-                      </div>
-                      {stats.totalMoney > 0 && (
-                        <div>Verdiend: {formatMoney(stats.totalMoney)}</div>
-                      )}
                     </div>
                   )}
                 </div>

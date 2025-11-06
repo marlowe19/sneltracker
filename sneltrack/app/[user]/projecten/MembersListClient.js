@@ -82,14 +82,14 @@ export default function MembersListClient({
         throw new Error(data.error || "Failed to update rate");
       }
 
-      // Reload members
-      const membersRes = await fetch(
-        `/${encodeURIComponent(
-          user
-        )}/projecten/api?action=members&projectId=${projectId}`
+      // Optimistically update members list with new rate
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.user_name === memberName
+            ? { ...m, hourly_rate: editRateValue ? parseFloat(editRateValue) : null }
+            : m
+        )
       );
-      const membersData = await membersRes.json();
-      setMembers(membersData.members || []);
       setEditingRate(null);
       setEditRateValue("");
     } catch (err) {

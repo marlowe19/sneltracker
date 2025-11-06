@@ -55,7 +55,7 @@ export default function ProjectStatisticsClient({
 }) {
   const [statistics, setStatistics] = useState(null);
   const [memberStatistics, setMemberStatistics] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -65,6 +65,11 @@ export default function ProjectStatisticsClient({
   const touchStartX = useRef(null);
   const touchEndX = useRef(null);
   const touchStartY = useRef(null);
+
+  // Extract date string for dependency array
+  const referenceDateString = referenceDate
+    ? referenceDate.toISOString()
+    : null;
 
   useEffect(() => {
     async function fetchStatistics() {
@@ -123,7 +128,8 @@ export default function ProjectStatisticsClient({
     if (rangeType && referenceDate) {
       fetchStatistics();
     }
-  }, [user, projectId, rangeType, referenceDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, projectId, rangeType, referenceDateString]);
 
   if (loading) {
     return (

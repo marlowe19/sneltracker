@@ -53,7 +53,7 @@ export default function ProjectFormClient({
       setMembers([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project]);
+  }, [project?.id, project?.is_shared, user]);
 
   async function loadStatistics(projectId) {
     if (!projectId) return;

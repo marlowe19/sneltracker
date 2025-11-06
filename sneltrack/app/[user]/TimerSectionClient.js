@@ -14,8 +14,6 @@ export default function TimerSectionClient({ user }) {
   const activeEntries = useStore((state) => state.activeEntries);
   const stoppedTimersList = useStore((state) => state.stoppedTimers);
   const projects = useStore((state) => state.projects);
-  const loadingProjects = useStore((state) => state.loadingProjects);
-  const fetchProjects = useStore((state) => state.fetchProjects);
   const openDropdowns = useStore((state) => state.openDropdowns);
   const stoppedTimers = useStore((state) => state.stoppedTimers);
   const pendingTimers = useStore((state) => state.pendingTimers);
@@ -25,13 +23,6 @@ export default function TimerSectionClient({ user }) {
   const removePendingTimer = useStore((state) => state.removePendingTimer);
   const updatePendingTimer = useStore((state) => state.updatePendingTimer);
   const dropdownRefs = useRef({}); // timerId -> ref
-
-  // Load projects
-  useEffect(() => {
-    if (!loadingProjects && projects.length === 0) {
-      fetchProjects(user);
-    }
-  }, [user, projects.length, loadingProjects, fetchProjects]);
 
   // Click outside handler to close dropdowns
   useEffect(() => {
@@ -129,10 +120,10 @@ export default function TimerSectionClient({ user }) {
     return (
       <div
         key={timerId}
-        className="timer-box flex flex-col items-start mb-4 bg-white"
+        className="timer-box flex flex-row items-center pl-4 pr-4 pt-2 pb-2 rounded-lg mb-4 bg-white"
       >
-        {/* Top: Project selector and Start/Stop button */}
-        <div className="flex items-center justify-between w-full">
+        {/* Left column: Project selector and counter */}
+        <div className="flex flex-col flex-1">
           <div
             ref={(el) => {
               dropdownRefs.current[timerId] = el;
@@ -280,6 +271,28 @@ export default function TimerSectionClient({ user }) {
             )}
           </div>
 
+          {/* Timer and Money */}
+          <div className="flex flex-col items-start">
+            <div className="text-3xl font-semibold">
+              <RunningClockClient
+                startedAt={entry?.start_time || null}
+                stoppedAt={stoppedAt}
+              />
+            </div>
+            {entry?.hourly_rate && (
+              <div className="mt-1 text-base font-semibold text-gray-700">
+                <MoneyCounterClient
+                  startedAt={entry.start_time}
+                  hourlyRate={entry.hourly_rate}
+                  stoppedAt={stoppedAt}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right column: Play/Stop button */}
+        <div className="flex items-center justify-center shrink-0 pl-4 self-center">
           {isPendingTimer ? (
             <button
               type="button"
@@ -324,25 +337,6 @@ export default function TimerSectionClient({ user }) {
                 />
               </svg>
             </button>
-          )}
-        </div>
-
-        {/* Bottom: Timer and Money */}
-        <div className="flex flex-col items-start w-full">
-          <div className="text-3xl font-semibold">
-            <RunningClockClient
-              startedAt={entry?.start_time || null}
-              stoppedAt={stoppedAt}
-            />
-          </div>
-          {entry?.hourly_rate && (
-            <div className="mt-1 text-base font-semibold text-gray-700">
-              <MoneyCounterClient
-                startedAt={entry.start_time}
-                hourlyRate={entry.hourly_rate}
-                stoppedAt={stoppedAt}
-              />
-            </div>
           )}
         </div>
       </div>
@@ -435,7 +429,7 @@ export default function TimerSectionClient({ user }) {
   };
 
   return (
-    <div className="">
+    <div className="p-2">
       {/* Active Timer list */}
       {allTimers.length === 0 && stoppedTimersList.length === 0 ? (
         <div className="text-center text-gray-500 py-8">
@@ -447,7 +441,7 @@ export default function TimerSectionClient({ user }) {
             <>{allTimers.map((timer) => renderTimer(timer))}</>
           )}
 
-          {stoppedTimersList.length > 0 && (
+          {/* {stoppedTimersList.length > 0 && (
             <>
               <div className="my-6 border-t border-gray-300"></div>
               <div className="text-sm font-medium text-gray-500 mb-3 px-4">
@@ -455,7 +449,7 @@ export default function TimerSectionClient({ user }) {
               </div>
               {stoppedTimersList.map((entry) => renderStoppedTimer(entry))}
             </>
-          )}
+          )} */}
         </>
       )}
     </div>

@@ -103,29 +103,50 @@ export default function DayEntriesModalClient({
 }) {
   const router = useRouter();
   const projects = useStore((state) => state.projects);
-  const fetchProjects = useStore((state) => state.fetchProjects);
   const addEntry = useStore((state) => state.addEntry);
   const updateEntry = useStore((state) => state.updateEntry);
   const replaceTempEntry = useStore((state) => state.replaceTempEntry);
   const deleteEntry = useStore((state) => state.deleteEntry);
+  const fetchWeekEntries = useStore((state) => state.fetchWeekEntries);
+  const expenses = useStore((state) => state.expenses);
+  const fetchDayExpenses = useStore((state) => state.fetchDayExpenses);
+  const addExpense = useStore((state) => state.addExpense);
+  const updateExpense = useStore((state) => state.updateExpense);
+  const replaceTempExpense = useStore((state) => state.replaceTempExpense);
+  const deleteExpense = useStore((state) => state.deleteExpense);
   const weekOffset = useStore((state) => state.weekOffset);
+  const loadingExpenses = useStore((state) => state.loadingExpenses);
+  const expensesError = useStore((state) => state.expensesError);
   const [localEntries, setLocalEntries] = useState([]);
+  const [localExpenses, setLocalExpenses] = useState([]);
+  const [membersCache, setMembersCache] = useState({}); // Cache members by projectId
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
+  const [activeTab, setActiveTab] = useState("entries");
+
+  // Extract dayDate string for dependency array
+  const dayDateString = dayDate?.toISOString();
 
   useEffect(() => {
-    if (isOpen && projects.length === 0) {
-      fetchProjects(user);
+    if (isOpen && dayDate && !loadingExpenses && !expensesError) {
+      fetchDayExpenses(user, dayDate);
     }
-  }, [isOpen, user, projects.length, fetchProjects]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, dayDateString, user]);
 
   useEffect(() => {
     if (isOpen && entries && dayDate) {
-      // Initialize local state with entries
+      // Initialize local state with entries, sorted by created_at descending (newest first)
+      const sortedEntries = [...entries].sort((a, b) => {
+        const dateA = new Date(a.created_at || a.modified_at || 0);
+        const dateB = new Date(b.created_at || b.modified_at || 0);
+        return dateB - dateA; // Descending order
+      });
+
       setLocalEntries(
-        entries.map((entry) => {
+        sortedEntries.map((entry) => {
           // Use duration_ms if available, otherwise calculate from start/end
           const durationMs =
             entry.duration_ms ??
@@ -148,6 +169,31 @@ export default function DayEntriesModalClient({
     }
   }, [isOpen, entries, dayDate]);
 
+  useEffect(() => {
+    if (isOpen && expenses && dayDate) {
+      // Initialize local state with expenses, sorted by created_at descending (newest first)
+      const sortedExpenses = [...expenses].sort((a, b) => {
+        const dateA = new Date(a.created_at || a.modified_at || 0);
+        const dateB = new Date(b.created_at || b.modified_at || 0);
+        return dateB - dateA; // Descending order
+      });
+
+      setLocalExpenses(
+        sortedExpenses.map((expense) => ({
+          ...expense,
+          // Convert to editable format
+          name_editable: expense.name ?? "",
+          price_editable:
+            expense.price !== null && expense.price !== undefined
+              ? String(expense.price)
+              : "",
+          project_editable: expense.project ?? "",
+          includes_vat_editable: expense.includes_vat ?? false,
+        }))
+      );
+    }
+  }, [isOpen, expenses, dayDate]);
+
   const handleEntryChange = async (index, field, value) => {
     const updated = [...localEntries];
     updated[index] = { ...updated[index], [field]: value };
@@ -156,15 +202,9 @@ export default function DayEntriesModalClient({
     if (field === "project_editable" && value) {
       const selectedProject = projects.find((p) => p.id === value);
       if (selectedProject && selectedProject.is_shared) {
-        try {
-          // Fetch project members to get the current user's hourly rate
-          const res = await fetch(
-            `/${encodeURIComponent(
-              user
-            )}/projecten/api?action=members&projectId=${value}`
-          );
-          const data = await res.json();
-          const members = data.members || [];
+        // Check cache first
+        if (membersCache[value]) {
+          const members = membersCache[value];
           const currentUserMember = members.find((m) => m.user_name === user);
           if (
             currentUserMember &&
@@ -175,18 +215,45 @@ export default function DayEntriesModalClient({
               currentUserMember.hourly_rate
             );
           } else if (selectedProject.hourly_rate) {
-            // Fall back to project rate if member rate not set
             updated[index].hourly_rate_editable = String(
               selectedProject.hourly_rate
             );
           }
-        } catch (error) {
-          console.error("Error fetching member rate:", error);
-          // If fetch fails, try project rate
-          if (selectedProject.hourly_rate) {
-            updated[index].hourly_rate_editable = String(
-              selectedProject.hourly_rate
+        } else {
+          // Fetch project members to get the current user's hourly rate
+          try {
+            const res = await fetch(
+              `/${encodeURIComponent(
+                user
+              )}/projecten/api?action=members&projectId=${value}`
             );
+            const data = await res.json();
+            const members = data.members || [];
+            // Cache the members
+            setMembersCache((prev) => ({ ...prev, [value]: members }));
+            const currentUserMember = members.find((m) => m.user_name === user);
+            if (
+              currentUserMember &&
+              currentUserMember.hourly_rate !== null &&
+              currentUserMember.hourly_rate !== undefined
+            ) {
+              updated[index].hourly_rate_editable = String(
+                currentUserMember.hourly_rate
+              );
+            } else if (selectedProject.hourly_rate) {
+              // Fall back to project rate if member rate not set
+              updated[index].hourly_rate_editable = String(
+                selectedProject.hourly_rate
+              );
+            }
+          } catch (error) {
+            console.error("Error fetching member rate:", error);
+            // If fetch fails, try project rate
+            if (selectedProject.hourly_rate) {
+              updated[index].hourly_rate_editable = String(
+                selectedProject.hourly_rate
+              );
+            }
           }
         }
       } else if (selectedProject && selectedProject.hourly_rate) {
@@ -260,7 +327,40 @@ export default function DayEntriesModalClient({
       project_editable: "",
     };
 
-    setLocalEntries([...localEntries, newEntry]);
+    // Add new entry at the beginning (newest first)
+    setLocalEntries([newEntry, ...localEntries]);
+  };
+
+  const handleExpenseChange = (index, field, value) => {
+    const updated = [...localExpenses];
+    updated[index] = { ...updated[index], [field]: value };
+    setLocalExpenses(updated);
+  };
+
+  const handleAddExpense = () => {
+    if (!dayDate) return;
+
+    // Create a new expense in local state only (will be created in backend on save)
+    const tempId = `temp-expense-${Date.now()}-${Math.random()}`;
+    const newExpense = {
+      id: tempId,
+      user_name: user,
+      project: null,
+      name: "",
+      price: null,
+      includes_vat: false,
+      expense_type: "materials",
+      date: dayDate.toISOString(),
+      created_at: new Date().toISOString(),
+      modified_at: new Date().toISOString(),
+      name_editable: "",
+      price_editable: "",
+      project_editable: "",
+      includes_vat_editable: false,
+    };
+
+    // Add new expense at the beginning (newest first)
+    setLocalExpenses([newExpense, ...localExpenses]);
   };
 
   const handleSave = async () => {
@@ -507,6 +607,132 @@ export default function DayEntriesModalClient({
 
       await Promise.all(updatePromises);
 
+      // Process each expense
+      const expensePromises = localExpenses.map(async (expense) => {
+        // Check if this is a new expense (has temp ID)
+        const isNewExpense =
+          expense.id && expense.id.startsWith("temp-expense-");
+
+        if (isNewExpense) {
+          // Create new expense in backend
+          if (!dayDate) {
+            throw new Error("Day date is required");
+          }
+
+          if (!expense.project_editable || expense.project_editable === "") {
+            throw new Error("Project is required for expense");
+          }
+          if (!expense.name_editable || expense.name_editable.trim() === "") {
+            throw new Error("Name is required for expense");
+          }
+          if (!expense.price_editable || expense.price_editable === "") {
+            throw new Error("Price is required for expense");
+          }
+
+          const response = await fetch(
+            `/${encodeURIComponent(user)}/expenses`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                dayDate: dayDate.toISOString(),
+                project: expense.project_editable,
+                name: expense.name_editable.trim(),
+                price: parseFloat(expense.price_editable),
+                includes_vat: expense.includes_vat_editable ?? false,
+                expense_type: "materials",
+              }),
+            }
+          );
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Failed to create expense");
+          }
+
+          // Parse response and replace temp expense with real expense
+          const responseData = await response.json();
+          if (responseData.expense) {
+            replaceTempExpense(expense.id, responseData.expense);
+          }
+
+          return { success: true };
+        }
+
+        // Existing expense - update it
+        const updates = {};
+
+        // Update name if changed
+        if (expense.name_editable !== undefined) {
+          const newName = expense.name_editable.trim();
+          if (newName !== expense.name) {
+            updates.name = newName;
+          }
+        }
+
+        // Update price if changed
+        if (expense.price_editable !== undefined) {
+          const newPrice =
+            expense.price_editable === "" || expense.price_editable === null
+              ? null
+              : parseFloat(expense.price_editable);
+          const currentPrice = expense.price;
+          if (newPrice !== currentPrice) {
+            updates.price = newPrice;
+          }
+        }
+
+        // Update includes_vat if changed
+        if (expense.includes_vat_editable !== undefined) {
+          const newIncludesVat = Boolean(expense.includes_vat_editable);
+          const currentIncludesVat = expense.includes_vat ?? false;
+          if (newIncludesVat !== currentIncludesVat) {
+            updates.includes_vat = newIncludesVat;
+          }
+        }
+
+        // Update project if changed
+        if (expense.project_editable !== undefined) {
+          const newProject =
+            expense.project_editable === "" || expense.project_editable === null
+              ? null
+              : expense.project_editable;
+          const currentProject = expense.project;
+          if (newProject !== currentProject) {
+            updates.project = newProject;
+          }
+        }
+
+        // Only make API call if there are updates
+        if (Object.keys(updates).length > 0) {
+          const response = await fetch(
+            `/${encodeURIComponent(user)}/expenses/${expense.id}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(updates),
+            }
+          );
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Failed to update expense");
+          }
+
+          // Parse response and update store with full expense object
+          const responseData = await response.json();
+          if (responseData.expense) {
+            updateExpense(expense.id, responseData.expense);
+          }
+
+          return { success: true };
+        }
+
+        return { success: true }; // No updates needed
+      });
+
+      await Promise.all(expensePromises);
+
       // Show success message
       setSuccessMessage("Wijzigingen opgeslagen");
       setIsSaving(false);
@@ -571,14 +797,110 @@ export default function DayEntriesModalClient({
     }
   };
 
+  const handleDeleteExpense = async (expenseId, index) => {
+    if (!confirm("Weet je zeker dat je deze uitgave wilt verwijderen?")) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/${encodeURIComponent(user)}/expenses/${expenseId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete expense");
+      }
+
+      // Optimistically delete from store
+      deleteExpense(expenseId);
+
+      // Remove from local state immediately
+      const updated = localExpenses.filter((_, i) => i !== index);
+      setLocalExpenses(updated);
+      setIsDeleting(false);
+
+      // Refetch day expenses
+      await fetchDayExpenses(user, dayDate);
+    } catch (err) {
+      setError(err.message || "Failed to delete expense");
+      setIsDeleting(false);
+    }
+  };
+
   const handleCancel = () => {
     setLocalEntries([]);
+    setLocalExpenses([]);
     setError(null);
     setSuccessMessage(null);
     setIsSaving(false);
     setIsDeleting(false);
+    setActiveTab("entries");
     onClose();
   };
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+  };
+
+  // Calculate summary totals for entries
+  const calculateEntrySummary = () => {
+    const entryCount = localEntries.length;
+    let totalHoursMs = 0;
+    let totalPrice = 0;
+
+    localEntries.forEach((entry) => {
+      const durationMs =
+        entry.duration_ms ??
+        (entry.end_time
+          ? computeEntryDurationMs(entry.start_time, entry.end_time, null)
+          : 0);
+      totalHoursMs += durationMs || 0;
+
+      if (durationMs) {
+        const hourlyRate =
+          entry.hourly_rate_editable !== undefined &&
+          entry.hourly_rate_editable !== ""
+            ? parseFloat(entry.hourly_rate_editable)
+            : entry.hourly_rate;
+        if (hourlyRate) {
+          const hours = durationMs / (1000 * 60 * 60);
+          totalPrice += hours * hourlyRate;
+        }
+      }
+    });
+
+    return {
+      count: entryCount,
+      totalHours: formatHoursMinutes(totalHoursMs),
+      totalPrice: totalPrice.toFixed(2),
+    };
+  };
+
+  // Calculate summary totals for expenses
+  const calculateExpenseSummary = () => {
+    const expenseCount = localExpenses.length;
+    let totalPrice = 0;
+
+    localExpenses.forEach((expense) => {
+      const price = parseFloat(expense.price_editable || expense.price || 0);
+      totalPrice += price || 0;
+    });
+
+    return {
+      count: expenseCount,
+      totalPrice: totalPrice.toFixed(2),
+    };
+  };
+
+  const entrySummary = calculateEntrySummary();
+  const expenseSummary = calculateExpenseSummary();
 
   const dayDateFormatted = dayDate
     ? dayDate.toLocaleDateString("nl-NL", {
@@ -600,19 +922,11 @@ export default function DayEntriesModalClient({
         className="fixed inset-x-0 bottom-0 bg-white rounded-t-xl shadow-2xl h-full flex flex-col transition-transform duration-300 ease-out translate-y-0"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="bg-white z-10 border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between shrink-0">
-          <h2 className="text-lg sm:text-base font-semibold text-gray-900">
-            Bewerk entries - {dayDateFormatted}
-          </h2>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleAddEntry}
-              disabled={isSaving || isDeleting}
-              className="w-10 h-10 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-2xl font-bold"
-              aria-label="Entry toevoegen"
-            >
-              +
-            </button>
+        <div className="bg-white z-10 border-b border-gray-200 shrink-0">
+          <div className="px-4 sm:px-6 py-4 flex items-center justify-between">
+            <h2 className="text-lg sm:text-base font-semibold text-gray-900">
+              Bewerk entries - {dayDateFormatted}
+            </h2>
             <button
               onClick={handleCancel}
               className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
@@ -621,69 +935,349 @@ export default function DayEntriesModalClient({
               ×
             </button>
           </div>
+          {/* Tab Navigation */}
+          <div className="flex border-b border-gray-200">
+            <button
+              onClick={() => handleTabChange("entries")}
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === "entries"
+                  ? "text-[#008eff] border-b-2 border-[#008eff]"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Tijdregistraties
+            </button>
+            <button
+              onClick={() => handleTabChange("expenses")}
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === "expenses"
+                  ? "text-[#008eff] border-b-2 border-[#008eff]"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Uitgaven
+            </button>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 bg-[#f2f2f2]">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#f2f2f2]">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
               {error}
             </div>
           )}
           {successMessage && (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
+            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4">
               {successMessage}
             </div>
           )}
 
-          {localEntries.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">
-              Geen entries gevonden voor deze dag
-            </p>
-          ) : (
-            localEntries.map((entry, index) => (
-              <div
-                key={entry.id}
-                className=" rounded-lg p-4 space-y-4 bg-white"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium text-gray-700">
-                    Entry {index + 1}
-                  </div>
-                  {entry.id &&
-                    !entry.id.startsWith("temp-") &&
-                    entry.is_running !== true && (
-                      <button
-                        onClick={() => handleDeleteEntry(entry.id, index)}
-                        disabled={isSaving || isDeleting}
-                        className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                        aria-label="Entry verwijderen"
-                      >
-                        Verwijderen
-                      </button>
-                    )}
-                </div>
-
-                <div className="space-y-4">
-                  {entry.is_running === true ? (
-                    <div className="py-4 text-center">
-                      <p className="text-lg font-semibold text-[#008eff]">
-                        Timer actief
-                      </p>
+          {/* Time Entries Tab */}
+          <div className={activeTab === "entries" ? "" : "hidden"}>
+            {/* Summary Bar */}
+            <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-6">
+                  <div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide">
+                      Aantal entries
                     </div>
-                  ) : (
-                    <>
+                    <div className="text-lg font-semibold text-gray-900">
+                      {entrySummary.count}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide">
+                      Totaal uren
+                    </div>
+                    <div className="text-lg font-semibold text-gray-900">
+                      {entrySummary.totalHours}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide">
+                      Totaal prijs
+                    </div>
+                    <div className="text-lg font-semibold text-gray-900">
+                      €{entrySummary.totalPrice}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Add Entry Button */}
+            <div className="mb-4">
+              <button
+                onClick={handleAddEntry}
+                disabled={isSaving || isDeleting}
+                className="w-full sm:w-auto px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
+                aria-label="Entry toevoegen"
+              >
+                <span className="text-xl">+</span>
+                <span>Entry toevoegen</span>
+              </button>
+            </div>
+
+            {/* Entries List */}
+            {localEntries.length === 0 ? (
+              <p className="text-gray-500 text-center py-8 bg-white rounded-lg">
+                Geen entries gevonden voor deze dag
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {localEntries.map((entry, index) => (
+                  <div
+                    key={entry.id}
+                    className="rounded-lg p-4 space-y-4 bg-white"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium text-gray-700">
+                        Entry {index + 1}
+                      </div>
+                      {entry.id &&
+                        !entry.id.startsWith("temp-") &&
+                        entry.is_running !== true && (
+                          <button
+                            onClick={() => handleDeleteEntry(entry.id, index)}
+                            disabled={isSaving || isDeleting}
+                            className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                            aria-label="Entry verwijderen"
+                          >
+                            Verwijderen
+                          </button>
+                        )}
+                    </div>
+
+                    <div className="space-y-4">
+                      {entry.is_running === true ? (
+                        <div className="py-4 text-center">
+                          <p className="text-lg font-semibold text-[#008eff]">
+                            Timer actief
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Projectnaam *
+                            </label>
+                            <select
+                              value={
+                                entry.project_editable !== undefined
+                                  ? entry.project_editable || ""
+                                  : entry.project || ""
+                              }
+                              onChange={(e) =>
+                                handleEntryChange(
+                                  index,
+                                  "project_editable",
+                                  e.target.value || null
+                                )
+                              }
+                              disabled={isSaving || isDeleting}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                              required
+                            >
+                              <option value="">Selecteer een project</option>
+                              {projects.map((project) => (
+                                <option key={project.id} value={project.id}>
+                                  {project.name}
+                                  {project.is_default && " (Standaard)"}
+                                  {project.is_shared && " (Gedeeld)"}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Only show other fields if project is selected */}
+                          {(entry.project_editable || entry.project) && (
+                            <>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Starttijd
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={entry.start_time_editable || ""}
+                                    onChange={(e) =>
+                                      handleEntryChange(
+                                        index,
+                                        "start_time_editable",
+                                        e.target.value
+                                      )
+                                    }
+                                    disabled={isSaving || isDeleting}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Eindtijd
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={entry.end_time_editable || ""}
+                                    onChange={(e) =>
+                                      handleEntryChange(
+                                        index,
+                                        "end_time_editable",
+                                        e.target.value
+                                      )
+                                    }
+                                    disabled={isSaving || isDeleting}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Duur (U:MM)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    placeholder="0:00"
+                                    value={entry.duration_editable || ""}
+                                    onChange={(e) =>
+                                      handleEntryChange(
+                                        index,
+                                        "duration_editable",
+                                        e.target.value
+                                      )
+                                    }
+                                    onBlur={() => handleDurationBlur(index)}
+                                    pattern="[0-9]+:[0-5][0-9]"
+                                    disabled={isSaving || isDeleting}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Uurtarief (€)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="0.00"
+                                    value={
+                                      entry.hourly_rate_editable !== undefined
+                                        ? entry.hourly_rate_editable
+                                        : entry.hourly_rate || ""
+                                    }
+                                    onChange={(e) =>
+                                      handleEntryChange(
+                                        index,
+                                        "hourly_rate_editable",
+                                        e.target.value === ""
+                                          ? ""
+                                          : e.target.value
+                                      )
+                                    }
+                                    disabled={isSaving || isDeleting}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Expenses Tab */}
+          <div className={activeTab === "expenses" ? "" : "hidden"}>
+            {/* Summary Bar */}
+            <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center gap-6">
+                  <div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide">
+                      Aantal uitgaven
+                    </div>
+                    <div className="text-lg font-semibold text-gray-900">
+                      {expenseSummary.count}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide">
+                      Totaal prijs
+                    </div>
+                    <div className="text-lg font-semibold text-gray-900">
+                      €{expenseSummary.totalPrice}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Add Expense Button */}
+            <div className="mb-4">
+              <button
+                onClick={handleAddExpense}
+                disabled={isSaving || isDeleting}
+                className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
+                aria-label="Uitgave toevoegen"
+              >
+                <span className="text-xl">+</span>
+                <span>Uitgave toevoegen</span>
+              </button>
+            </div>
+
+            {/* Expenses List */}
+            {localExpenses.length === 0 ? (
+              <p className="text-gray-500 text-center py-8 bg-white rounded-lg">
+                Geen uitgaven gevonden voor deze dag
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {localExpenses.map((expense, index) => (
+                  <div
+                    key={expense.id}
+                    className="rounded-lg p-4 space-y-4 bg-white"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium text-gray-700">
+                        Uitgave {index + 1}
+                      </div>
+                      {expense.id &&
+                        !expense.id.startsWith("temp-expense-") && (
+                          <button
+                            onClick={() =>
+                              handleDeleteExpense(expense.id, index)
+                            }
+                            disabled={isSaving || isDeleting}
+                            className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                            aria-label="Uitgave verwijderen"
+                          >
+                            Verwijderen
+                          </button>
+                        )}
+                    </div>
+
+                    <div className="space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Projectnaam *
                         </label>
                         <select
                           value={
-                            entry.project_editable !== undefined
-                              ? entry.project_editable || ""
-                              : entry.project || ""
+                            expense.project_editable !== undefined
+                              ? expense.project_editable || ""
+                              : expense.project || ""
                           }
                           onChange={(e) =>
-                            handleEntryChange(
+                            handleExpenseChange(
                               index,
                               "project_editable",
                               e.target.value || null
@@ -705,105 +1299,84 @@ export default function DayEntriesModalClient({
                       </div>
 
                       {/* Only show other fields if project is selected */}
-                      {(entry.project_editable || entry.project) && (
+                      {(expense.project_editable || expense.project) && (
                         <>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Starttijd
-                              </label>
-                              <input
-                                type="time"
-                                value={entry.start_time_editable || ""}
-                                onChange={(e) =>
-                                  handleEntryChange(
-                                    index,
-                                    "start_time_editable",
-                                    e.target.value
-                                  )
-                                }
-                                disabled={isSaving || isDeleting}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Eindtijd
-                              </label>
-                              <input
-                                type="time"
-                                value={entry.end_time_editable || ""}
-                                onChange={(e) =>
-                                  handleEntryChange(
-                                    index,
-                                    "end_time_editable",
-                                    e.target.value
-                                  )
-                                }
-                                disabled={isSaving || isDeleting}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                              />
-                            </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Naam *
+                            </label>
+                            <input
+                              type="text"
+                              value={expense.name_editable || ""}
+                              onChange={(e) =>
+                                handleExpenseChange(
+                                  index,
+                                  "name_editable",
+                                  e.target.value
+                                )
+                              }
+                              disabled={isSaving || isDeleting}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                              placeholder="Bijv. Materialen, Lunch, etc."
+                              required
+                            />
                           </div>
 
                           <div className="grid grid-cols-2 gap-4">
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Duur (U:MM)
-                              </label>
-                              <input
-                                type="text"
-                                placeholder="0:00"
-                                value={entry.duration_editable || ""}
-                                onChange={(e) =>
-                                  handleEntryChange(
-                                    index,
-                                    "duration_editable",
-                                    e.target.value
-                                  )
-                                }
-                                onBlur={() => handleDurationBlur(index)}
-                                pattern="[0-9]+:[0-5][0-9]"
-                                disabled={isSaving || isDeleting}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Uurtarief (€)
+                                Prijs (€) *
                               </label>
                               <input
                                 type="number"
                                 step="0.01"
                                 min="0"
                                 placeholder="0.00"
-                                value={
-                                  entry.hourly_rate_editable !== undefined
-                                    ? entry.hourly_rate_editable
-                                    : entry.hourly_rate || ""
-                                }
+                                value={expense.price_editable || ""}
                                 onChange={(e) =>
-                                  handleEntryChange(
+                                  handleExpenseChange(
                                     index,
-                                    "hourly_rate_editable",
+                                    "price_editable",
                                     e.target.value === "" ? "" : e.target.value
                                   )
                                 }
                                 disabled={isSaving || isDeleting}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                required
                               />
+                            </div>
+
+                            <div className="flex items-end">
+                              <label className="flex items-center space-x-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    expense.includes_vat_editable || false
+                                  }
+                                  onChange={(e) =>
+                                    handleExpenseChange(
+                                      index,
+                                      "includes_vat_editable",
+                                      e.target.checked
+                                    )
+                                  }
+                                  disabled={isSaving || isDeleting}
+                                  className="w-4 h-4 text-[#008eff] border-gray-300 rounded focus:ring-[#008eff] disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                <span className="text-sm font-medium text-gray-700">
+                                  Inclusief BTW
+                                </span>
+                              </label>
                             </div>
                           </div>
                         </>
                       )}
-                    </>
-                  )}
-                </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))
-          )}
+            )}
+          </div>
         </div>
 
         <div className="sticky bottom-0 bg-white z-10 border-t border-gray-200 px-4 sm:px-6 py-4 flex justify-end gap-3 shrink-0">
@@ -816,7 +1389,11 @@ export default function DayEntriesModalClient({
           </button>
           <button
             onClick={handleSave}
-            disabled={isSaving || isDeleting || localEntries.length === 0}
+            disabled={
+              isSaving ||
+              isDeleting ||
+              (localEntries.length === 0 && localExpenses.length === 0)
+            }
             className="px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSaving ? "Opslaan..." : "Wijzigingen opslaan"}

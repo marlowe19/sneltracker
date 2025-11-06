@@ -64,6 +64,11 @@ export default function ProjectDetailClient({
   // Get date range context (should be available since we're within DateRangeProvider)
   const dateRangeContext = useDateRangeContext();
 
+  // Extract date string for dependency array
+  const referenceDateString = dateRangeContext?.referenceDate
+    ? dateRangeContext.referenceDate.toISOString()
+    : null;
+
   // Update form state when project prop changes
   useEffect(() => {
     if (project) {
@@ -87,7 +92,13 @@ export default function ProjectDetailClient({
 
   // Fetch member statistics when on members tab and date range is available
   useEffect(() => {
-    if (activeTab === "members" && isShared && isOwner && dateRangeContext) {
+    if (
+      activeTab === "members" &&
+      isShared &&
+      isOwner &&
+      dateRangeContext &&
+      !loadingStats
+    ) {
       fetchMemberStatistics();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -96,11 +107,12 @@ export default function ProjectDetailClient({
     isShared,
     isOwner,
     dateRangeContext?.rangeType,
-    dateRangeContext?.referenceDate,
+    referenceDateString,
+    // loadingStats removed - it's only a guard, not a trigger
   ]);
 
   async function fetchMemberStatistics() {
-    if (!dateRangeContext) return;
+    if (!dateRangeContext || loadingStats) return; // Prevent concurrent calls
 
     setLoadingStats(true);
     try {
@@ -215,14 +227,13 @@ export default function ProjectDetailClient({
         throw new Error(data.error || "Failed to add member");
       }
 
-      // Reload members
-      const membersRes = await fetch(
-        `/${encodeURIComponent(
-          user
-        )}/projecten/api?action=members&projectId=${projectId}`
-      );
-      const membersData = await membersRes.json();
-      setMembers(membersData.members || []);
+      // Optimistically update members list
+      const newMember = {
+        user_name: newMemberName.trim(),
+        role: "member",
+        hourly_rate: newMemberRate ? parseFloat(newMemberRate) : null,
+      };
+      setMembers((prev) => [...prev, newMember]);
       setNewMemberName("");
       setNewMemberRate("");
 
@@ -259,14 +270,8 @@ export default function ProjectDetailClient({
         throw new Error(data.error || "Failed to remove member");
       }
 
-      // Reload members
-      const membersRes = await fetch(
-        `/${encodeURIComponent(
-          user
-        )}/projecten/api?action=members&projectId=${projectId}`
-      );
-      const membersData = await membersRes.json();
-      setMembers(membersData.members || []);
+      // Optimistically update members list
+      setMembers((prev) => prev.filter((m) => m.user_name !== memberName));
 
       // Refresh member statistics if on members tab
       if (activeTab === "members") {

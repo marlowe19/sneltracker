@@ -3,32 +3,25 @@
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useStore } from "@/stores/useStore";
 
 export default function StartStopButtonsClient({ user, active, onStopClick }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isLoading, setIsLoading] = useState(false);
-  const [projects, setProjects] = useState([]);
+  const projects = useStore((state) => state.projects);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [showProjectSelect, setShowProjectSelect] = useState(false);
 
+  // Pre-select default project when projects are loaded
   useEffect(() => {
-    async function loadProjects() {
-      try {
-        const res = await fetch(`/${encodeURIComponent(user)}/projecten/api`);
-        const data = await res.json();
-        setProjects(data.projects || []);
-        // Pre-select default project if available
-        const defaultProject = data.projects?.find((p) => p.is_default);
-        if (defaultProject) {
-          setSelectedProjectId(defaultProject.id);
-        }
-      } catch (error) {
-        console.error("Error loading projects:", error);
+    if (projects.length > 0 && !selectedProjectId) {
+      const defaultProject = projects.find((p) => p.is_default);
+      if (defaultProject) {
+        setSelectedProjectId(defaultProject.id);
       }
     }
-    loadProjects();
-  }, [user]);
+  }, [projects, selectedProjectId]);
 
   async function handle(action) {
     setIsLoading(true);

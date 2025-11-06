@@ -82,7 +82,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
 
   font-size: 40px;
 }
@@ -90,7 +89,6 @@ body {
 /* For timer rows in multiple timer layout */
 .timer-box.flex.items-center.justify-between {
   font-size: 32px;
-  padding: 16px;
 }
 .timer-text {
   font-variant-numeric: tabular-nums;

@@ -223,10 +223,9 @@ export async function startEntry(userName, hourlyRate = null, project = null) {
 }
 
 export async function stopEntry(userName, entryId = null) {
-  let active;
-  
   if (entryId) {
     // Stop specific entry by ID
+    let active;
     // First check user entries
     const userRef = getUserTimeEntriesCollection(userName);
     const userDoc = await userRef.doc(entryId).get();
@@ -246,30 +245,56 @@ export async function stopEntry(userName, entryId = null) {
         }
       }
     }
-  } else {
-    // Legacy behavior: stop first active entry
-    active = await getActiveEntry(userName);
-  }
-  
-  if (!active) return null;
-  
-  // Check if entry is from a shared project
-  if (active.project) {
-    const projectDoc = await getProjectById(userName, active.project);
-    if (projectDoc && projectDoc.is_shared) {
-      // Update in shared project time entries
-      const end = new Date();
-      return await updateProjectTimeEntry(active.project, active.id, { end_time: end, is_running: false });
+    
+    if (!active) return null;
+    
+    // Check if entry is from a shared project
+    if (active.project) {
+      const projectDoc = await getProjectById(userName, active.project);
+      if (projectDoc && projectDoc.is_shared) {
+        // Update in shared project time entries
+        const end = new Date();
+        return await updateProjectTimeEntry(active.project, active.id, { end_time: end, is_running: false });
+      }
     }
+    
+    // Update in user time entries (existing behavior)
+    const ref = getUserTimeEntriesCollection(userName);
+    const docRef = ref.doc(active.id);
+    const end = new Date();
+    await docRef.update({ end_time: end, is_running: false });
+    const updated = await docRef.get();
+    return docToEntry(updated);
+  } else {
+    // Stop all active entries
+    const activeEntries = await getActiveEntries(userName);
+    if (activeEntries.length === 0) return null;
+    
+    const stoppedEntries = [];
+    const end = new Date();
+    
+    for (const active of activeEntries) {
+      // Check if entry is from a shared project
+      if (active.project) {
+        const projectDoc = await getProjectById(userName, active.project);
+        if (projectDoc && projectDoc.is_shared) {
+          // Update in shared project time entries
+          const stopped = await updateProjectTimeEntry(active.project, active.id, { end_time: end, is_running: false });
+          stoppedEntries.push(stopped);
+          continue;
+        }
+      }
+      
+      // Update in user time entries
+      const ref = getUserTimeEntriesCollection(userName);
+      const docRef = ref.doc(active.id);
+      await docRef.update({ end_time: end, is_running: false });
+      const updated = await docRef.get();
+      stoppedEntries.push(docToEntry(updated));
+    }
+    
+    return stoppedEntries;
   }
-  
-  // Update in user time entries (existing behavior)
-  const ref = getUserTimeEntriesCollection(userName);
-  const docRef = ref.doc(active.id);
-  const end = new Date();
-  await docRef.update({ end_time: end, is_running: false });
-  const updated = await docRef.get();
-  return docToEntry(updated);
 }
 
 export async function getWeekEntries(userName, weekStartIso, weekEndIso) {
@@ -1502,4 +1527,177 @@ export async function convertToSharedProject(userName, projectId) {
   await getUserProjectsCollection(userName).doc(projectId).delete();
   
   return sharedProject;
+}
+
+// Expenses functions
+
+function getExpensesCollection() {
+  const db = getDb();
+  return db.collection("expenses");
+}
+
+function docToExpense(doc) {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    user_name: data.user_name,
+    project: data.project,
+    name: data.name,
+    price: data.price ?? null,
+    includes_vat: data.includes_vat ?? false,
+    expense_type: data.expense_type ?? "materials",
+    date: toIso(data.date),
+    created_at: toIso(data.created_at),
+    modified_at: toIso(data.modified_at),
+  };
+}
+
+export async function createExpense(
+  userName,
+  dayDate,
+  project,
+  name,
+  price,
+  includesVat = false,
+  expenseType = "materials"
+) {
+  const ref = getExpensesCollection();
+  const now = new Date();
+  
+  // Set date to start of the selected day
+  const expenseDate = new Date(dayDate);
+  expenseDate.setHours(0, 0, 0, 0);
+  
+  const expenseData = {
+    user_name: userName,
+    project: project,
+    name: name,
+    price: typeof price === "string" ? parseFloat(price) : price,
+    includes_vat: includesVat,
+    expense_type: expenseType,
+    date: expenseDate,
+    created_at: now,
+    modified_at: now,
+  };
+  
+  const docRef = await ref.add(expenseData);
+  const doc = await docRef.get();
+  return docToExpense(doc);
+}
+
+export async function getDayExpenses(userName, dayDate) {
+  const ref = getExpensesCollection();
+  
+  // Set date to start of the selected day
+  const dayStart = new Date(dayDate);
+  dayStart.setHours(0, 0, 0, 0);
+  
+  // Set date to end of the selected day
+  const dayEnd = new Date(dayDate);
+  dayEnd.setHours(23, 59, 59, 999);
+  
+  const snap = await ref
+    .where("user_name", "==", userName)
+    .where("date", ">=", dayStart)
+    .where("date", "<=", dayEnd)
+    .orderBy("date", "desc")
+    .get();
+  
+  return snap.docs.map(docToExpense);
+}
+
+export async function getExpenses(userName, weekStart, weekEnd) {
+  const weekStartDate = new Date(weekStart);
+  const weekEndDate = new Date(weekEnd);
+  
+  const ref = getExpensesCollection();
+  const snap = await ref
+    .where("user_name", "==", userName)
+    .where("date", ">=", weekStartDate)
+    .where("date", "<=", weekEndDate)
+    .orderBy("date", "desc")
+    .get();
+  
+  return snap.docs.map(docToExpense);
+}
+
+export async function getProjectExpenses(projectId, userName = null) {
+  const ref = getExpensesCollection();
+  let query = ref.where("project", "==", projectId);
+  
+  if (userName) {
+    query = query.where("user_name", "==", userName);
+  }
+  
+  const snap = await query.orderBy("date", "desc").get();
+  return snap.docs.map(docToExpense);
+}
+
+export async function updateExpense(userName, expenseId, updates) {
+  const ref = getExpensesCollection();
+  const docRef = ref.doc(expenseId);
+  
+  // First verify the expense exists and belongs to the user
+  const doc = await docRef.get();
+  if (!doc.exists) {
+    throw new Error(`Expense ${expenseId} not found`);
+  }
+  
+  const expenseData = doc.data();
+  if (expenseData.user_name !== userName) {
+    throw new Error("Unauthorized: Expense does not belong to user");
+  }
+  
+  const updateData = {};
+  if (updates.name !== undefined) {
+    updateData.name = updates.name;
+  }
+  if (updates.price !== undefined) {
+    updateData.price =
+      updates.price === null || updates.price === ""
+        ? null
+        : typeof updates.price === "string"
+        ? parseFloat(updates.price)
+        : updates.price;
+  }
+  if (updates.includes_vat !== undefined) {
+    updateData.includes_vat = Boolean(updates.includes_vat);
+  }
+  if (updates.expense_type !== undefined) {
+    updateData.expense_type = updates.expense_type;
+  }
+  if (updates.project !== undefined) {
+    updateData.project = updates.project === "" ? null : updates.project;
+  }
+  if (updates.date !== undefined) {
+    updateData.date =
+      updates.date instanceof Date
+        ? updates.date
+        : new Date(updates.date);
+  }
+  
+  // Always update modified_at timestamp
+  updateData.modified_at = new Date();
+  
+  await docRef.update(updateData);
+  const updated = await docRef.get();
+  return docToExpense(updated);
+}
+
+export async function deleteExpense(userName, expenseId) {
+  const ref = getExpensesCollection();
+  const docRef = ref.doc(expenseId);
+  
+  // First verify the expense exists and belongs to the user
+  const doc = await docRef.get();
+  if (!doc.exists) {
+    throw new Error(`Expense ${expenseId} not found`);
+  }
+  
+  const expenseData = doc.data();
+  if (expenseData.user_name !== userName) {
+    throw new Error("Unauthorized: Expense does not belong to user");
+  }
+  
+  await docRef.delete();
 }

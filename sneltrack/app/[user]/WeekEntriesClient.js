@@ -2,7 +2,11 @@
 
 import { useEffect } from "react";
 import { useStore } from "@/stores/useStore";
-import { getWeekBounds, toIso, computeEntryDurationMsClipped } from "@/lib/time";
+import {
+  getWeekBounds,
+  toIso,
+  computeEntryDurationMsClipped,
+} from "@/lib/time";
 import Link from "next/link";
 import DayClickableClient from "./DayClickableClient";
 
@@ -26,11 +30,11 @@ export default function WeekEntriesClient({ user, weekOffset }) {
   const entries = useStore((state) => state.entries);
   const loadingEntries = useStore((state) => state.loadingEntries);
   const fetchWeekEntries = useStore((state) => state.fetchWeekEntries);
+  const weekExpenses = useStore((state) => state.weekExpenses);
+  const fetchWeekExpenses = useStore((state) => state.fetchWeekExpenses);
   const storeWeekOffset = useStore((state) => state.weekOffset);
   const setWeekOffset = useStore((state) => state.setWeekOffset);
   const projects = useStore((state) => state.projects);
-  const loadingProjects = useStore((state) => state.loadingProjects);
-  const fetchProjects = useStore((state) => state.fetchProjects);
 
   // Sync weekOffset with store
   useEffect(() => {
@@ -39,21 +43,20 @@ export default function WeekEntriesClient({ user, weekOffset }) {
     }
   }, [weekOffset, storeWeekOffset, setWeekOffset]);
 
-  // Fetch data on mount and when week changes
   useEffect(() => {
-    if (!loadingProjects && projects.length === 0) {
-      fetchProjects(user);
-    }
-  }, [user, projects.length, loadingProjects, fetchProjects]);
-
-  useEffect(() => {
-    // Calculate week bounds
+    // Calculate week bounds ONCE
     const referenceDate = new Date(
       new Date().getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000
     );
     const { start: weekStart, end: weekEnd } = getWeekBounds(referenceDate);
-    fetchWeekEntries(user, toIso(weekStart), toIso(weekEnd));
-  }, [user, weekOffset, fetchWeekEntries]);
+    const weekStartIso = toIso(weekStart);
+    const weekEndIso = toIso(weekEnd);
+
+    // Fetch both entries and expenses together
+    fetchWeekEntries(user, weekStartIso, weekEndIso);
+    fetchWeekExpenses(user, weekStartIso, weekEndIso);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, weekOffset]);
 
   // Calculate week bounds for rendering
   const referenceDate = new Date(
@@ -61,9 +64,10 @@ export default function WeekEntriesClient({ user, weekOffset }) {
   );
   const { start: weekStart, end: weekEnd } = getWeekBounds(referenceDate);
 
-  // Calculate perDay and perDayMoney
+  // Calculate perDay, perDayMoney, and perDayExpenses
   const perDay = Array(7).fill(0);
   const perDayMoney = Array(7).fill(0);
+  const perDayExpenses = Array(7).fill(0);
 
   for (const e of entries) {
     // Calculate duration clipped to week bounds (duration_ms takes precedence)
@@ -108,12 +112,27 @@ export default function WeekEntriesClient({ user, weekOffset }) {
     }
   }
 
+  // Calculate per-day expenses
+  for (const expense of weekExpenses) {
+    if (expense.date) {
+      const expenseDate = new Date(expense.date);
+      const dow = expenseDate.getDay();
+      const dayIndex = (dow + 6) % 7; // Monday=0
+
+      if (dayIndex >= 0 && dayIndex < 7) {
+        const price = expense.price || 0;
+        perDayExpenses[dayIndex] += price;
+      }
+    }
+  }
+
   const maxMs = Math.max(1, ...perDay);
   const weekTotalTime = perDay.reduce((sum, val) => sum + val, 0);
   const weekTotalMoney = perDayMoney.reduce((sum, val) => sum + val, 0);
+  const weekTotalExpenses = perDayExpenses.reduce((sum, val) => sum + val, 0);
 
   // Show spinner while loading
-  if (loadingEntries || loadingProjects) {
+  if (loadingEntries) {
     return (
       <section className="w-full mt-auto pb-4">
         <div className="flex items-center justify-center py-12">
@@ -125,7 +144,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
   }
 
   return (
-    <section className="w-full mt-auto pb-4">
+    <section className="w-full mt-auto pb-4 border-t border-gray-200">
       <div className="flex items-center justify-between mb-1">
         <Link
           href={`/${encodeURIComponent(user)}?w=${weekOffset - 1}`}
@@ -179,6 +198,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
                 dayNumber={dayDate.getDate()}
                 hours={perDay[i]}
                 money={perDayMoney[i]}
+                expenses={perDayExpenses[i]}
                 user={user}
               >
                 <div className="day-label text-[10px] tracking-wide text-gray-500 uppercase whitespace-nowrap w-full text-center mb-1">
@@ -200,13 +220,20 @@ export default function WeekEntriesClient({ user, weekOffset }) {
                   {perDay[i] ? formatHoursHMM(perDay[i]) : "0:00"}
                 </div>
                 <div
+                  className={`day-expenses text-[10px] font-medium text-green-600 tabular-nums min-h-3.5 w-full text-center ${
+                    perDayExpenses[i] > 0 ? "" : "invisible"
+                  }`}
+                >
+                  {perDayExpenses[i] > 0
+                    ? formatMoney(perDayExpenses[i])
+                    : "\u200B"}
+                </div>
+                <div
                   className={`day-money text-[10px] font-medium text-gray-600 tabular-nums min-h-3.5 w-full text-center ${
                     perDayMoney[i] > 0 ? "" : "invisible"
                   }`}
                 >
-                  {perDayMoney[i] > 0
-                    ? formatMoney(perDayMoney[i])
-                    : "\u200B"}
+                  {perDayMoney[i] > 0 ? formatMoney(perDayMoney[i]) : "\u200B"}
                 </div>
                 <div className="sr-only">
                   <span className="sm:hidden">
@@ -221,9 +248,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
       </div>
       <div className="mt-4 pt-4 px-4 border-t border-gray-200">
         <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold text-gray-700">
-            Week Totaal
-          </div>
+          <div className="text-sm font-semibold text-gray-700">Week Totaal</div>
           <div className="flex items-center gap-4">
             <div className="text-sm tabular-nums">
               <span className="text-gray-600">Tijd: </span>
@@ -239,10 +264,17 @@ export default function WeekEntriesClient({ user, weekOffset }) {
                 </span>
               </div>
             )}
+            {weekTotalExpenses > 0 && (
+              <div className="text-sm tabular-nums">
+                <span className="text-gray-600">Uitgaven: </span>
+                <span className="font-medium text-green-600">
+                  {formatMoney(weekTotalExpenses)}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
     </section>
   );
 }
-

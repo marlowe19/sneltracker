@@ -36,7 +36,7 @@ export default function TimerSectionWrapperClient({
   return (
     <>
       <HeaderSectionClient user={user} onAddTimer={handleAddTimer} />
-      <section className="bg-gray-100 flex-1 min-h-0 overflow-y-auto">
+      <section className="bg-gray-100 flex-1 min-h-0 border-t border-gray-200 overflow-y-auto overscroll-contain">
         <div className="pt-4">
           <TimerSectionClient user={user} />
         </div>

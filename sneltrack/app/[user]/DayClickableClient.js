@@ -60,6 +60,7 @@ export default function DayClickableClient({
   dayNumber,
   hours,
   money,
+  expenses,
   user,
   children,
 }) {

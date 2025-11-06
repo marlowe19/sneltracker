@@ -1,11 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  getWeekBounds,
-  getMonthBounds,
-  getQuarterBounds,
-} from "@/lib/time";
+import { getWeekBounds, getMonthBounds, getQuarterBounds } from "@/lib/time";
 import {
   addWeeks,
   addMonths,
@@ -134,9 +130,8 @@ export default function DateRangeSelectorClient({
   const [referenceDate, setReferenceDate] = useState(initialReferenceDate);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [tempRangeType, setTempRangeType] = useState(initialRangeType);
-  const [tempReferenceDate, setTempReferenceDate] = useState(
-    initialReferenceDate
-  );
+  const [tempReferenceDate, setTempReferenceDate] =
+    useState(initialReferenceDate);
 
   // Calculate current range bounds
   const getCurrentBounds = () => {
@@ -182,7 +177,7 @@ export default function DateRangeSelectorClient({
     } else {
       tempBounds = getQuarterBounds(tempReferenceDate);
     }
-    
+
     setRangeType(tempRangeType);
     setReferenceDate(tempReferenceDate);
     onRangeChange(tempRangeType, tempReferenceDate);
@@ -313,8 +308,12 @@ export default function DateRangeSelectorClient({
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-900">{range.label}</span>
-                      <span className="text-sm text-gray-500">{range.year}</span>
+                      <span className="text-sm text-gray-900">
+                        {range.label}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        {range.year}
+                      </span>
                     </div>
                   </button>
                 );
@@ -326,4 +325,3 @@ export default function DateRangeSelectorClient({
     </>
   );
 }
-
