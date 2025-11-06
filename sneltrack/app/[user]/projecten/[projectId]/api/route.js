@@ -5,11 +5,7 @@ import {
   getProjectById,
   isProjectOwner,
 } from "@/lib/dbFirestore";
-import {
-  getWeekBounds,
-  getMonthBounds,
-  getQuarterBounds,
-} from "@/lib/time";
+import { getWeekBounds, getMonthBounds, getQuarterBounds } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +58,10 @@ export async function GET(req, context) {
       }
     } else {
       return NextResponse.json(
-        { error: "rangeType and referenceDate are required, or startDate and endDate" },
+        {
+          error:
+            "rangeType and referenceDate are required, or startDate and endDate",
+        },
         { status: 400 }
       );
     }
@@ -76,7 +75,10 @@ export async function GET(req, context) {
     if (project && project.is_shared) {
       const userIsOwner = await isProjectOwner(user, projectId);
       if (userIsOwner) {
-        memberStatistics = await getProjectStatisticsByMember(projectId, dateRange);
+        memberStatistics = await getProjectStatisticsByMember(
+          projectId,
+          dateRange
+        );
       }
     }
 
@@ -89,4 +91,3 @@ export async function GET(req, context) {
     );
   }
 }
-
