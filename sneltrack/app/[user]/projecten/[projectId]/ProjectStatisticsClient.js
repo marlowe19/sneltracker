@@ -15,6 +15,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { getWeekBounds, getMonthBounds, getQuarterBounds } from "@/lib/time";
+import { HOURLY_RATE_BREAKDOWN } from "@/lib/hourlyRateBreakdown";
 
 function formatMoney(amount) {
   return new Intl.NumberFormat("nl-NL", {
@@ -255,7 +256,91 @@ export default function ProjectStatisticsClient({
     });
   }
 
-  // Card 4: Budget Progress Chart
+  // Card 4: Hourly Rate Breakdown Pie Chart
+  if (project.hourly_rate) {
+    const breakdownData = HOURLY_RATE_BREAKDOWN.map((item) => ({
+      name: item.category,
+      percentage: item.percentage,
+      amount: project.hourly_rate * (item.percentage / 100),
+    }));
+
+    cards.push({
+      id: "hourly-rate-breakdown",
+      title: `Verdeling van een uurtarief van ${formatMoney(
+        project.hourly_rate
+      )}`,
+      content: (
+        <div className="w-full">
+          <div style={{ height: "240px" }} className="relative">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart margin={{ top: 30, right: 30, bottom: 20, left: 30 }}>
+                <Pie
+                  data={breakdownData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={true}
+                  label={({ percentage, amount }) => {
+                    // Only show label if slice is large enough (e.g., > 5%)
+                    if (percentage > 5) {
+                      return `€${amount.toFixed(0)}`;
+                    }
+                    return "";
+                  }}
+                  outerRadius={70}
+                  innerRadius={40}
+                  fill="#8884d8"
+                  dataKey="percentage"
+                >
+                  {breakdownData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[index % COLORS.length]}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value, name, props) => [
+                    `${formatMoney(props.payload.amount)} (${value}%)`,
+                    props.payload.name,
+                  ]}
+                  contentStyle={{
+                    backgroundColor: "white",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "0.5rem",
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="text-center">
+                <div className="text-lg font-semibold text-gray-900">
+                  {formatMoney(project.hourly_rate)}
+                </div>
+                <div className="text-xs text-gray-600">per uur</div>
+              </div>
+            </div>
+          </div>
+          <div className="mt-6 flex flex-col gap-2">
+            {breakdownData.map((item, index) => (
+              <div key={item.name} className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{
+                    backgroundColor: COLORS[index % COLORS.length],
+                  }}
+                />
+                <span className="text-xs text-gray-700">
+                  {item.name}: ({item.percentage}%)
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ),
+    });
+  }
+
+  // Card 5: Budget Progress Chart
   if (statistics.budgetHours && project.hourly_rate) {
     const budgetData = [
       {
@@ -400,7 +485,7 @@ export default function ProjectStatisticsClient({
     });
   }
 
-  // Card 5: Profitability
+  // Card 6: Profitability
   if (
     statistics.budgetHours !== null &&
     statistics.hoursSaved !== null &&
