@@ -37,7 +37,7 @@ export default function ProjectDetailClient({
 }) {
   const router = useRouter();
   const [members, setMembers] = useState(initialMembers);
-  const [activeTab, setActiveTab] = useState("notes");
+  const [activeTab, setActiveTab] = useState("settings"); // Temporarily changed from "notes" since notes tab is hidden
 
   // Settings form state
   const [name, setName] = useState(project?.name || "");
@@ -288,17 +288,20 @@ export default function ProjectDetailClient({
     <div>
       {/* Tabs Navigation */}
       <div className="flex border-b border-gray-200 mb-6">
-        <button
-          type="button"
-          onClick={() => setActiveTab("notes")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "notes"
-              ? "border-[#008eff] text-[#008eff]"
-              : "border-transparent text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Notities
-        </button>
+        {/* Temporarily hidden - Notes tab */}
+        {false && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("notes")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "notes"
+                ? "border-[#008eff] text-[#008eff]"
+                : "border-transparent text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Notities
+          </button>
+        )}
         {isShared && (
           <button
             type="button"
@@ -326,7 +329,8 @@ export default function ProjectDetailClient({
       </div>
 
       {/* Tab Content */}
-      {activeTab === "notes" && (
+      {/* Temporarily hidden - Notes tab content */}
+      {false && activeTab === "notes" && (
         <div>
           <ProjectNotesClient
             user={user}

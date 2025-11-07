@@ -48,13 +48,13 @@ export default function NoteClient({
       checked: false,
       checked_by: null,
       created_by: user || "anonymous",
-      position: items.length,
+      position: 0,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
 
-    // Optimistic update
-    setItems((prev) => [...prev, newItem]);
+    // Optimistic update - add to top of list
+    setItems((prev) => [newItem, ...prev]);
     setNewItemText("");
 
     // Simulate API call

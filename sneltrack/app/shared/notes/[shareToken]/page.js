@@ -58,7 +58,7 @@ export default function SharedNotePage({ params }) {
         <h1 className="text-lg font-bold text-gray-900 absolute left-1/2 transform -translate-x-1/2">
           Notitie
         </h1>
-        <button
+        {/* <button
           type="button"
           onClick={handleShareClick}
           className="px-4 py-2 bg-[#25D366] text-white rounded-lg hover:bg-[#20BA5A] text-sm flex items-center gap-2 ml-auto"
@@ -76,7 +76,7 @@ export default function SharedNotePage({ params }) {
             />
           </svg>
           <span>Delen</span>
-        </button>
+        </button> */}
       </div>
       <section className="bg-white rounded-xl p-4">
         <NoteClient
