@@ -66,7 +66,20 @@ export default function DayClickableClient({
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const entries = useStore((state) => state.entries);
-  const dayEntries = filterEntriesForDay(entries, dayDate);
+  const activeEntries = useStore((state) => state.activeEntries);
+
+  // Merge activeEntries (running timers) with entries (week entries)
+  // to ensure running timers are included even if they haven't been fetched yet
+  const allEntries = [...entries];
+
+  // Add active entries that aren't already in entries
+  activeEntries.forEach((activeEntry) => {
+    if (!allEntries.find((e) => e.id === activeEntry.id)) {
+      allEntries.push(activeEntry);
+    }
+  });
+
+  const dayEntries = filterEntriesForDay(allEntries, dayDate);
 
   const handleDayClick = () => {
     setIsModalOpen(true);

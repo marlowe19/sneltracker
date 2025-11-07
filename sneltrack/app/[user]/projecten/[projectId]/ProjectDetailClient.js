@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import MembersListClient from "../MembersListClient";
+import ProjectNotesClient from "./ProjectNotesClient";
 import { useDateRangeContext } from "./ProjectStatisticsContainer";
 import { getWeekBounds, getMonthBounds, getQuarterBounds } from "@/lib/time";
 
@@ -35,7 +37,7 @@ export default function ProjectDetailClient({
 }) {
   const router = useRouter();
   const [members, setMembers] = useState(initialMembers);
-  const [activeTab, setActiveTab] = useState(isShared ? "members" : "settings");
+  const [activeTab, setActiveTab] = useState("notes");
 
   // Settings form state
   const [name, setName] = useState(project?.name || "");
@@ -286,6 +288,17 @@ export default function ProjectDetailClient({
     <div>
       {/* Tabs Navigation */}
       <div className="flex border-b border-gray-200 mb-6">
+        <button
+          type="button"
+          onClick={() => setActiveTab("notes")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "notes"
+              ? "border-[#008eff] text-[#008eff]"
+              : "border-transparent text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          Notities
+        </button>
         {isShared && (
           <button
             type="button"
@@ -313,6 +326,16 @@ export default function ProjectDetailClient({
       </div>
 
       {/* Tab Content */}
+      {activeTab === "notes" && (
+        <div>
+          <ProjectNotesClient
+            user={user}
+            projectId={projectId}
+            isShared={isShared}
+          />
+        </div>
+      )}
+
       {activeTab === "settings" && (
         <div className="space-y-6">
           <form onSubmit={handleSaveSettings} className="space-y-4">

@@ -22,6 +22,8 @@ export default function TimerSectionClient({ user }) {
   const setStoppedTimer = useStore((state) => state.setStoppedTimer);
   const removePendingTimer = useStore((state) => state.removePendingTimer);
   const updatePendingTimer = useStore((state) => state.updatePendingTimer);
+  const addEntry = useStore((state) => state.addEntry);
+  const updateActiveEntries = useStore((state) => state.updateActiveEntries);
   const dropdownRefs = useRef({}); // timerId -> ref
 
   // Click outside handler to close dropdowns
@@ -94,11 +96,30 @@ export default function TimerSectionClient({ user }) {
     const stopTime = new Date().toISOString();
     setStoppedTimer(entry.id, stopTime);
     try {
-      await fetch(`/${encodeURIComponent(user)}/stop`, {
+      const response = await fetch(`/${encodeURIComponent(user)}/stop`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ entryId: entry.id }),
       });
+
+      if (response.ok) {
+        const data = await response.json();
+        // The stopped entry is now in the database with end_time set
+        // Create a stopped entry object from the current entry + stop time
+        const stoppedEntry = {
+          ...entry,
+          end_time: data.endedAt || stopTime,
+          is_running: false,
+          duration_ms: data.durationMs || null,
+        };
+
+        // Add to entries store immediately so it appears in day modal
+        addEntry(stoppedEntry);
+
+        // Remove from activeEntries immediately
+        updateActiveEntries(activeEntries.filter((e) => e.id !== entry.id));
+      }
+
       startTransition(() => router.refresh());
     } catch (error) {
       console.error("Error stopping timer:", error);

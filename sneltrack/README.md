@@ -51,3 +51,109 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 5. Use URLs like `/kevin/start` to start and `/kevin/stop` to stop. After starting or stopping you'll be redirected to `/<user>` where the timer and weekly overview are shown.
 6. If Firestore prompts for composite indexes, accept the suggestions. For active-entry queries, create an index on: `user_name ASC`, `end_time ASC`, `start_time DESC`.
 
+## Testing
+
+This project uses [Playwright](https://playwright.dev) for end-to-end UI testing with a focus on mobile device emulation (iOS and Android).
+
+### Setup
+
+1. Install Playwright and browsers:
+   ```bash
+   npm install
+   npx playwright install
+   ```
+
+2. Ensure the development server is running (tests will start it automatically if not running):
+   ```bash
+   npm run dev
+   ```
+
+### Running Tests
+
+- **Run all tests:**
+  ```bash
+  npm test
+  ```
+
+- **Run tests with UI mode (interactive):**
+  ```bash
+  npm run test:ui
+  ```
+
+- **Run only mobile device tests:**
+  ```bash
+  npm run test:mobile
+  ```
+
+- **Run tests in debug mode:**
+  ```bash
+  npm run test:debug
+  ```
+
+### Device Emulation
+
+Tests run on multiple mobile device emulations:
+
+**iOS Devices:**
+- iPhone 13
+- iPhone 13 Pro
+- iPhone 14 Pro
+- iPad Pro
+
+**Android Devices:**
+- Pixel 5
+- Galaxy S21
+- Galaxy Tab S4
+
+Tests are tagged with `@mobile` to allow filtering mobile-specific tests.
+
+### Test Structure
+
+Tests are organized in the `tests/` directory:
+
+- `tests/timer.spec.js` - Timer start/stop functionality
+- `tests/navigation.spec.js` - Navigation and layout tests
+- `tests/projects.spec.js` - Project management tests
+- `tests/week-entries.spec.js` - Week entries and day modal tests
+- `tests/helpers/test-helpers.js` - Common test utilities
+- `tests/helpers/fixtures.js` - Custom Playwright fixtures
+
+### Test Helpers
+
+The test helpers provide utilities for:
+- Navigating to user pages
+- Starting/stopping timers
+- Selecting projects
+- Waiting for API calls to complete
+- Interacting with week navigation
+- Opening/closing day modals
+
+### Configuration
+
+Playwright configuration is in `playwright.config.js`. The configuration:
+- Sets base URL to `http://localhost:3000`
+- Configures device emulation for iOS and Android
+- Sets up automatic screenshot/video capture on failure
+- Configures the dev server to start automatically
+
+### Writing New Tests
+
+When writing new tests:
+1. Use the `@mobile` tag for mobile-specific tests
+2. Import helpers from `tests/helpers/test-helpers.js`
+3. Use `navigateToUserPage()` to set up test context
+4. Wait for API calls using `waitForApiCalls()` after actions
+5. Test touch interactions and mobile viewport sizes
+
+Example:
+```javascript
+import { test, expect } from '@playwright/test';
+import { navigateToUserPage, clickStartStopButton } from './helpers/test-helpers';
+
+test('my test @mobile', async ({ page }) => {
+  await navigateToUserPage(page, 'testuser');
+  await clickStartStopButton(page);
+  // ... assertions
+});
+```
+

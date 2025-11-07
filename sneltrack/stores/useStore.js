@@ -63,12 +63,28 @@ export const useStore = create(
 
       // Optimistic updates for entries
       addEntry: (newEntry) => {
-        set((state) => ({
-          entries: [
-            ...state.entries,
-            { ...newEntry, id: `temp-${Date.now()}` },
-          ],
-        }));
+        set((state) => {
+          // If entry already has an ID, use it (e.g., stopped timers)
+          // Otherwise, add a temp ID for new entries
+          const entryWithId = newEntry.id
+            ? newEntry
+            : { ...newEntry, id: `temp-${Date.now()}` };
+
+          // Check if entry with this ID already exists to avoid duplicates
+          const existingIndex = state.entries.findIndex(
+            (e) => e.id === entryWithId.id
+          );
+
+          if (existingIndex !== -1) {
+            // Update existing entry
+            const updatedEntries = [...state.entries];
+            updatedEntries[existingIndex] = entryWithId;
+            return { entries: updatedEntries };
+          } else {
+            // Add new entry
+            return { entries: [...state.entries, entryWithId] };
+          }
+        });
       },
 
       updateEntry: (entryId, updates) => {

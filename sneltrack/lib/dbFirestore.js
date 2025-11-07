@@ -1,8 +1,5 @@
 import { getDb } from "./firebaseAdmin";
-import {
-  computeEntryDurationMs,
-  computeEntryDurationMsClipped,
-} from "./time";
+import { computeEntryDurationMs, computeEntryDurationMsClipped } from "./time";
 
 function toIso(ts) {
   if (!ts) return null;
@@ -40,7 +37,7 @@ function getUserTimeEntriesCollection(userName) {
 export async function getActiveEntry(userName) {
   // Check user entries first
   const userRef = getUserTimeEntriesCollection(userName);
-  
+
   // Query for timer entries with is_running === true
   const runningSnap = await userRef
     .where("is_running", "==", true)
@@ -48,11 +45,11 @@ export async function getActiveEntry(userName) {
     .orderBy("start_time", "desc")
     .limit(1)
     .get();
-  
+
   if (!runningSnap.empty) {
     return docToEntry(runningSnap.docs[0]);
   }
-  
+
   // Check shared project entries
   const sharedProjects = await getAllSharedProjects(userName);
   for (const project of sharedProjects) {
@@ -61,14 +58,14 @@ export async function getActiveEntry(userName) {
       return activeEntry;
     }
   }
-  
+
   return null;
 }
 
 export async function getActiveEntries(userName) {
   const activeEntries = [];
   const entryIds = new Set(); // Track entries to avoid duplicates
-  
+
   // Get all user timer entries with is_running === true
   const userRef = getUserTimeEntriesCollection(userName);
   const runningSnap = await userRef
@@ -76,7 +73,7 @@ export async function getActiveEntries(userName) {
     .where("creation_method", "==", "timer")
     .orderBy("start_time", "desc")
     .get();
-  
+
   if (!runningSnap.empty) {
     const entries = runningSnap.docs.map(docToEntry);
     for (const entry of entries) {
@@ -84,7 +81,7 @@ export async function getActiveEntries(userName) {
       entryIds.add(entry.id);
     }
   }
-  
+
   // Get all shared project entries
   const sharedProjects = await getAllSharedProjects(userName);
   for (const project of sharedProjects) {
@@ -94,20 +91,36 @@ export async function getActiveEntries(userName) {
       entryIds.add(activeEntry.id);
     }
   }
-  
+
   // Sort by start_time descending
   activeEntries.sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
-  
+
   return activeEntries;
 }
 
 export async function getStoppedTimersForToday(userName) {
   const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-  
+  const todayStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    0,
+    0,
+    0,
+    0
+  );
+  const todayEnd = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    23,
+    59,
+    59,
+    999
+  );
+
   const stoppedTimers = [];
-  
+
   // Get user timer entries stopped today
   const userRef = getUserTimeEntriesCollection(userName);
   const userSnap = await userRef
@@ -117,11 +130,11 @@ export async function getStoppedTimersForToday(userName) {
     .where("end_time", "<=", todayEnd)
     .orderBy("end_time", "desc")
     .get();
-  
+
   if (!userSnap.empty) {
     stoppedTimers.push(...userSnap.docs.map(docToEntry));
   }
-  
+
   // Get shared project timer entries stopped today
   const sharedProjects = await getAllSharedProjects(userName);
   for (const project of sharedProjects) {
@@ -134,34 +147,34 @@ export async function getStoppedTimersForToday(userName) {
       .where("end_time", "<=", todayEnd)
       .orderBy("end_time", "desc")
       .get();
-    
+
     if (!projectSnap.empty) {
       stoppedTimers.push(...projectSnap.docs.map(docToEntry));
     }
   }
-  
+
   // Sort by end_time descending (most recent first)
   stoppedTimers.sort((a, b) => {
     const aEnd = a.end_time ? new Date(a.end_time).getTime() : 0;
     const bEnd = b.end_time ? new Date(b.end_time).getTime() : 0;
     return bEnd - aEnd;
   });
-  
+
   return stoppedTimers;
 }
 
 export async function startEntry(userName, hourlyRate = null, project = null) {
   console.log("startEntry--------------------", userName);
   // Allow multiple timers - removed check for existing active entry
-  
+
   const now = new Date();
-  
+
   // Determine hourly rate: check member rate first, then project rate, then provided rate
   let finalHourlyRate = hourlyRate;
   let projectDoc = null;
   if (project) {
     projectDoc = await getProjectById(userName, project);
-    
+
     // Check if project is shared and get member rate
     if (projectDoc && projectDoc.is_shared) {
       const memberRate = await getMemberHourlyRate(project, userName);
@@ -174,10 +187,10 @@ export async function startEntry(userName, hourlyRate = null, project = null) {
       finalHourlyRate = projectDoc.hourly_rate;
     }
   }
-  
+
   // Check if project is shared
   const isShared = projectDoc ? projectDoc.is_shared : false;
-  
+
   if (isShared && project) {
     // Verify user is a member of the shared project
     const isMember = await isProjectMember(userName, project);
@@ -245,19 +258,22 @@ export async function stopEntry(userName, entryId = null) {
         }
       }
     }
-    
+
     if (!active) return null;
-    
+
     // Check if entry is from a shared project
     if (active.project) {
       const projectDoc = await getProjectById(userName, active.project);
       if (projectDoc && projectDoc.is_shared) {
         // Update in shared project time entries
         const end = new Date();
-        return await updateProjectTimeEntry(active.project, active.id, { end_time: end, is_running: false });
+        return await updateProjectTimeEntry(active.project, active.id, {
+          end_time: end,
+          is_running: false,
+        });
       }
     }
-    
+
     // Update in user time entries (existing behavior)
     const ref = getUserTimeEntriesCollection(userName);
     const docRef = ref.doc(active.id);
@@ -269,22 +285,26 @@ export async function stopEntry(userName, entryId = null) {
     // Stop all active entries
     const activeEntries = await getActiveEntries(userName);
     if (activeEntries.length === 0) return null;
-    
+
     const stoppedEntries = [];
     const end = new Date();
-    
+
     for (const active of activeEntries) {
       // Check if entry is from a shared project
       if (active.project) {
         const projectDoc = await getProjectById(userName, active.project);
         if (projectDoc && projectDoc.is_shared) {
           // Update in shared project time entries
-          const stopped = await updateProjectTimeEntry(active.project, active.id, { end_time: end, is_running: false });
+          const stopped = await updateProjectTimeEntry(
+            active.project,
+            active.id,
+            { end_time: end, is_running: false }
+          );
           stoppedEntries.push(stopped);
           continue;
         }
       }
-      
+
       // Update in user time entries
       const ref = getUserTimeEntriesCollection(userName);
       const docRef = ref.doc(active.id);
@@ -292,7 +312,7 @@ export async function stopEntry(userName, entryId = null) {
       const updated = await docRef.get();
       stoppedEntries.push(docToEntry(updated));
     }
-    
+
     return stoppedEntries;
   }
 }
@@ -300,7 +320,7 @@ export async function stopEntry(userName, entryId = null) {
 export async function getWeekEntries(userName, weekStartIso, weekEndIso) {
   const weekStart = new Date(weekStartIso);
   const weekEnd = new Date(weekEndIso);
-  
+
   // Get user entries
   const userRef = getUserTimeEntriesCollection(userName);
   const [q1Snap, q2Snap] = await Promise.all([
@@ -312,32 +332,32 @@ export async function getWeekEntries(userName, weekStartIso, weekEndIso) {
   for (const d of q1Snap.docs) byId.set(d.id, d);
   for (const d of q2Snap.docs) byId.set(d.id, d);
   const userEntries = Array.from(byId.values()).map(docToEntry);
-  
+
   // Get shared project entries
   const sharedProjects = await getAllSharedProjects(userName);
   const sharedEntries = [];
-  
+
   for (const project of sharedProjects) {
     const projectEntries = await getProjectTimeEntries(project.id, userName);
     // Filter entries by week bounds
     const weekEntries = projectEntries.filter((entry) => {
       const entryStart = new Date(entry.start_time);
       const entryEnd = entry.end_time ? new Date(entry.end_time) : null;
-      
+
       // Must start before week ends
       if (entryStart >= weekEnd) return false;
-      
+
       // Must end on or after week starts (or be active/null)
       if (entryEnd !== null && entryEnd < weekStart) return false;
-      
+
       return true;
     });
     sharedEntries.push(...weekEntries);
   }
-  
+
   // Merge all entries
   const allEntries = [...userEntries, ...sharedEntries];
-  
+
   // Filter to ensure entries actually overlap the week
   const filtered = allEntries.filter((entry) => {
     const entryStart = new Date(entry.start_time);
@@ -361,26 +381,49 @@ export async function createEntry(
   dayDate,
   durationMs = null,
   hourlyRate = null,
-  project = null
+  project = null,
+  startTime = null,
+  endTime = null
 ) {
   const now = new Date();
 
-  // Set start_time to the start of the selected day
-  const dayStart = new Date(dayDate);
-  dayStart.setHours(0, 0, 0, 0);
-
-  // If duration is provided, calculate end_time
-  let endTime = null;
-  if (durationMs !== null && durationMs !== undefined) {
-    endTime = new Date(dayStart.getTime() + durationMs);
+  // Use provided start_time if available, otherwise set to start of the selected day
+  let dayStart;
+  if (startTime) {
+    dayStart = startTime instanceof Date ? startTime : new Date(startTime);
+  } else {
+    dayStart = new Date(dayDate);
+    dayStart.setHours(0, 0, 0, 0);
   }
-  
+
+  // Use provided end_time if available, otherwise calculate from duration
+  let finalEndTime = endTime;
+  if (!finalEndTime && durationMs !== null && durationMs !== undefined) {
+    finalEndTime = new Date(dayStart.getTime() + durationMs);
+  }
+  if (finalEndTime && !(finalEndTime instanceof Date)) {
+    finalEndTime = new Date(finalEndTime);
+  }
+
+  // If both start_time and end_time are provided but duration_ms is not, calculate it
+  let finalDurationMs = durationMs;
+  if (
+    dayStart &&
+    finalEndTime &&
+    (finalDurationMs === null || finalDurationMs === undefined)
+  ) {
+    finalDurationMs = finalEndTime.getTime() - dayStart.getTime();
+    if (finalDurationMs < 0) {
+      finalDurationMs = null;
+    }
+  }
+
   // Determine hourly rate: check member rate first, then project rate, then provided rate
   let finalHourlyRate = hourlyRate;
   let projectDoc = null;
   if (project) {
     projectDoc = await getProjectById(userName, project);
-    
+
     // Check if project is shared and get member rate
     if (projectDoc && projectDoc.is_shared) {
       const memberRate = await getMemberHourlyRate(project, userName);
@@ -394,7 +437,7 @@ export async function createEntry(
     }
   }
   const isShared = projectDoc ? projectDoc.is_shared : false;
-  
+
   if (isShared && project) {
     // Verify user is a member of the shared project
     const isMember = await isProjectMember(userName, project);
@@ -406,8 +449,8 @@ export async function createEntry(
       project,
       userName,
       dayStart,
-      endTime,
-      durationMs,
+      finalEndTime,
+      finalDurationMs,
       finalHourlyRate,
       "manual",
       false
@@ -418,21 +461,25 @@ export async function createEntry(
     const entryData = {
       user_name: userName,
       start_time: dayStart,
-      end_time: endTime,
+      end_time: finalEndTime,
       created_at: now,
       modified_at: now,
       creation_method: "manual",
       is_running: false,
     };
 
-    if (durationMs !== null && durationMs !== undefined) {
+    if (finalDurationMs !== null && finalDurationMs !== undefined) {
       entryData.duration_ms =
-        typeof durationMs === "string" ? parseInt(durationMs, 10) : durationMs;
+        typeof finalDurationMs === "string"
+          ? parseInt(finalDurationMs, 10)
+          : finalDurationMs;
     }
 
     if (finalHourlyRate !== null && finalHourlyRate !== undefined) {
       entryData.hourly_rate =
-        typeof finalHourlyRate === "string" ? parseFloat(finalHourlyRate) : finalHourlyRate;
+        typeof finalHourlyRate === "string"
+          ? parseFloat(finalHourlyRate)
+          : finalHourlyRate;
     }
 
     if (project !== null && project !== undefined) {
@@ -482,31 +529,44 @@ export async function updateEntry(userName, entryId, updates) {
     updateData.project = updates.project === "" ? null : updates.project;
   }
   if (updates.creation_method !== undefined) {
-    updateData.creation_method = updates.creation_method === "" ? null : updates.creation_method;
+    updateData.creation_method =
+      updates.creation_method === "" ? null : updates.creation_method;
   }
   if (updates.is_running !== undefined) {
-    updateData.is_running = updates.is_running === null || updates.is_running === "" ? false : Boolean(updates.is_running);
+    updateData.is_running =
+      updates.is_running === null || updates.is_running === ""
+        ? false
+        : Boolean(updates.is_running);
   }
 
   // Always update modified_at timestamp
   updateData.modified_at = new Date();
-  
+
   // Check if entry exists in user entries first
   const userRef = getUserTimeEntriesCollection(userName);
   const userDoc = await userRef.doc(entryId).get();
-  
+
   if (userDoc.exists) {
     const userEntryData = userDoc.data();
     const oldProject = userEntryData.project;
-    const newProject = updates.project !== undefined ? (updates.project === "" ? null : updates.project) : oldProject;
-    
+    const newProject =
+      updates.project !== undefined
+        ? updates.project === ""
+          ? null
+          : updates.project
+        : oldProject;
+
     // Check if project is changing to/from a shared project
-    const oldProjectDoc = oldProject ? await getProjectById(userName, oldProject) : null;
-    const newProjectDoc = newProject ? await getProjectById(userName, newProject) : null;
-    
+    const oldProjectDoc = oldProject
+      ? await getProjectById(userName, oldProject)
+      : null;
+    const newProjectDoc = newProject
+      ? await getProjectById(userName, newProject)
+      : null;
+
     const wasShared = oldProjectDoc && oldProjectDoc.is_shared;
     const willBeShared = newProjectDoc && newProjectDoc.is_shared;
-    
+
     // If moving from user entry to shared project entry, migrate it
     if (!wasShared && willBeShared && newProject) {
       // Verify user is a member of the shared project
@@ -514,9 +574,12 @@ export async function updateEntry(userName, entryId, updates) {
       if (!isMember) {
         throw new Error("User is not a member of this shared project");
       }
-      
+
       // Get member hourly rate if available
-      let finalHourlyRate = updates.hourly_rate !== undefined ? updateData.hourly_rate : userEntryData.hourly_rate;
+      let finalHourlyRate =
+        updates.hourly_rate !== undefined
+          ? updateData.hourly_rate
+          : userEntryData.hourly_rate;
       if (finalHourlyRate === null || finalHourlyRate === undefined) {
         const memberRate = await getMemberHourlyRate(newProject, userName);
         if (memberRate !== null && memberRate !== undefined) {
@@ -525,7 +588,7 @@ export async function updateEntry(userName, entryId, updates) {
           finalHourlyRate = newProjectDoc.hourly_rate;
         }
       }
-      
+
       // Create entry in shared project collection
       // Convert Firestore Timestamps to Date objects properly
       let startTime = updateData.start_time;
@@ -537,7 +600,7 @@ export async function updateEntry(userName, entryId, updates) {
           startTime = new Date(startTime);
         }
       }
-      
+
       let endTime = updateData.end_time;
       if (endTime === undefined) {
         endTime = userEntryData.end_time;
@@ -549,36 +612,38 @@ export async function updateEntry(userName, entryId, updates) {
           endTime = null;
         }
       }
-      
+
       const newEntry = await createProjectTimeEntry(
         newProject,
         userName,
         startTime,
         endTime,
-        updateData.duration_ms !== undefined ? updateData.duration_ms : userEntryData.duration_ms,
+        updateData.duration_ms !== undefined
+          ? updateData.duration_ms
+          : userEntryData.duration_ms,
         finalHourlyRate,
         userEntryData.creation_method ?? null,
         userEntryData.is_running ?? false
       );
-      
+
       // Delete old entry from user collection
       await userRef.doc(entryId).delete();
-      
+
       return newEntry;
     }
-    
+
     // If project is being removed or changed to non-shared, or if staying in user entries, just update
     await userRef.doc(entryId).update(updateData);
     const updated = await userRef.doc(entryId).get();
     return docToEntry(updated);
   }
-  
+
   // Entry not in user collection, check shared projects
   // First, find which shared project this entry currently belongs to
   const sharedProjects = await getAllSharedProjects(userName);
   let currentSharedProject = null;
   let currentEntryDoc = null;
-  
+
   for (const project of sharedProjects) {
     const entriesRef = getSharedProjectTimeEntriesCollection(project.id);
     const entryDoc = await entriesRef.doc(entryId).get();
@@ -588,16 +653,21 @@ export async function updateEntry(userName, entryId, updates) {
       break;
     }
   }
-  
+
   if (currentEntryDoc && currentSharedProject) {
     const entryData = currentEntryDoc.data();
     const oldProject = entryData.project;
-    const newProject = updates.project !== undefined ? (updates.project === "" ? null : updates.project) : oldProject;
-    
+    const newProject =
+      updates.project !== undefined
+        ? updates.project === ""
+          ? null
+          : updates.project
+        : oldProject;
+
     // If project is being removed or changed to non-shared project, migrate back to user entries
     if (newProject === null || newProject === "") {
       const userRef = getUserTimeEntriesCollection(userName);
-      
+
       // Convert Firestore Timestamps to Date objects properly
       let startTime = updateData.start_time;
       if (startTime === undefined) {
@@ -608,7 +678,7 @@ export async function updateEntry(userName, entryId, updates) {
           startTime = new Date(startTime);
         }
       }
-      
+
       let endTime = updateData.end_time;
       if (endTime === undefined) {
         endTime = entryData.end_time;
@@ -620,28 +690,36 @@ export async function updateEntry(userName, entryId, updates) {
           endTime = null;
         }
       }
-      
+
       let createdAt = entryData.created_at;
       if (createdAt && typeof createdAt.toDate === "function") {
         createdAt = createdAt.toDate();
       } else if (createdAt && !(createdAt instanceof Date)) {
         createdAt = new Date(createdAt);
       }
-      
+
       const newUserEntry = {
         user_name: userName,
         start_time: startTime,
         end_time: endTime,
-        duration_ms: updateData.duration_ms !== undefined ? updateData.duration_ms : entryData.duration_ms,
-        hourly_rate: updateData.hourly_rate !== undefined ? updateData.hourly_rate : entryData.hourly_rate,
+        duration_ms:
+          updateData.duration_ms !== undefined
+            ? updateData.duration_ms
+            : entryData.duration_ms,
+        hourly_rate:
+          updateData.hourly_rate !== undefined
+            ? updateData.hourly_rate
+            : entryData.hourly_rate,
         created_at: createdAt,
         modified_at: updateData.modified_at,
       };
       await userRef.doc(entryId).set(newUserEntry);
-      await getSharedProjectTimeEntriesCollection(currentSharedProject.id).doc(entryId).delete();
+      await getSharedProjectTimeEntriesCollection(currentSharedProject.id)
+        .doc(entryId)
+        .delete();
       return docToEntry(await userRef.doc(entryId).get());
     }
-    
+
     // If project is being changed to a different shared project
     if (newProject !== oldProject && newProject) {
       const newProjectDoc = await getProjectById(userName, newProject);
@@ -651,7 +729,7 @@ export async function updateEntry(userName, entryId, updates) {
         if (!isMember) {
           throw new Error("User is not a member of this shared project");
         }
-        
+
         // Get member rate for new project
         let finalHourlyRate = updateData.hourly_rate;
         if (finalHourlyRate === null || finalHourlyRate === undefined) {
@@ -664,7 +742,7 @@ export async function updateEntry(userName, entryId, updates) {
             finalHourlyRate = entryData.hourly_rate;
           }
         }
-        
+
         // Create entry in new shared project
         // Convert Firestore Timestamps to Date objects properly
         let startTime = updateData.start_time;
@@ -676,7 +754,7 @@ export async function updateEntry(userName, entryId, updates) {
             startTime = new Date(startTime);
           }
         }
-        
+
         let endTime = updateData.end_time;
         if (endTime === undefined) {
           endTime = entryData.end_time;
@@ -688,28 +766,36 @@ export async function updateEntry(userName, entryId, updates) {
             endTime = null;
           }
         }
-        
+
         const newEntry = await createProjectTimeEntry(
           newProject,
           userName,
           startTime,
           endTime,
-          updateData.duration_ms !== undefined ? updateData.duration_ms : entryData.duration_ms,
+          updateData.duration_ms !== undefined
+            ? updateData.duration_ms
+            : entryData.duration_ms,
           finalHourlyRate,
           entryData.creation_method ?? null,
           entryData.is_running ?? false
         );
-        
+
         // Delete from old shared project
-        await getSharedProjectTimeEntriesCollection(currentSharedProject.id).doc(entryId).delete();
+        await getSharedProjectTimeEntriesCollection(currentSharedProject.id)
+          .doc(entryId)
+          .delete();
         return newEntry;
       }
     }
-    
+
     // Same shared project, just update
-    return await updateProjectTimeEntry(currentSharedProject.id, entryId, updateData);
+    return await updateProjectTimeEntry(
+      currentSharedProject.id,
+      entryId,
+      updateData
+    );
   }
-  
+
   throw new Error(`Entry ${entryId} not found`);
 }
 
@@ -717,15 +803,15 @@ export async function deleteEntry(userName, entryId) {
   // Check if entry exists in user entries first
   const userRef = getUserTimeEntriesCollection(userName);
   const userDoc = await userRef.doc(entryId).get();
-  
+
   if (userDoc.exists) {
     await userRef.doc(entryId).delete();
     return;
   }
-  
+
   // Entry not in user collection, check shared projects
   const sharedProjects = await getAllSharedProjects(userName);
-  
+
   for (const project of sharedProjects) {
     const entriesRef = getSharedProjectTimeEntriesCollection(project.id);
     const entryDoc = await entriesRef.doc(entryId).get();
@@ -734,7 +820,7 @@ export async function deleteEntry(userName, entryId) {
       return;
     }
   }
-  
+
   throw new Error(`Entry ${entryId} not found`);
 }
 
@@ -806,7 +892,7 @@ export async function getAllSharedProjects(userName) {
   // Get all projects and filter by membership
   const allProjectsSnap = await projectsRef.get();
   const sharedProjects = [];
-  
+
   for (const projectDoc of allProjectsSnap.docs) {
     const membersRef = getSharedProjectMembersCollection(projectDoc.id);
     const memberDoc = await membersRef.doc(userName).get();
@@ -814,8 +900,10 @@ export async function getAllSharedProjects(userName) {
       sharedProjects.push(docToSharedProject(projectDoc));
     }
   }
-  
-  return sharedProjects.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  return sharedProjects.sort(
+    (a, b) => new Date(b.created_at) - new Date(a.created_at)
+  );
 }
 
 export async function createSharedProject(
@@ -826,7 +914,7 @@ export async function createSharedProject(
 ) {
   const ref = getSharedProjectsCollection();
   const now = new Date();
-  
+
   const projectData = {
     name,
     hourly_rate:
@@ -845,13 +933,13 @@ export async function createSharedProject(
     created_at: now,
     modified_at: now,
   };
-  
+
   const docRef = await ref.add(projectData);
   const projectId = docRef.id;
-  
+
   // Add owner as first member with role "owner"
   await addMemberToProject(projectId, userName, "owner");
-  
+
   const doc = await docRef.get();
   return docToSharedProject(doc);
 }
@@ -859,7 +947,7 @@ export async function createSharedProject(
 export async function updateSharedProject(projectId, updates) {
   const ref = getSharedProjectsCollection();
   const docRef = ref.doc(projectId);
-  
+
   const updateData = {};
   if (updates.name !== undefined) {
     updateData.name = updates.name;
@@ -880,10 +968,10 @@ export async function updateSharedProject(projectId, updates) {
         ? parseFloat(updates.budget_hours)
         : updates.budget_hours;
   }
-  
+
   // Always update modified_at timestamp
   updateData.modified_at = new Date();
-  
+
   await docRef.update(updateData);
   const updated = await docRef.get();
   return docToSharedProject(updated);
@@ -894,7 +982,12 @@ export async function deleteSharedProject(projectId) {
   await ref.doc(projectId).delete();
 }
 
-export async function addMemberToProject(projectId, userName, role = "member", hourlyRate = null) {
+export async function addMemberToProject(
+  projectId,
+  userName,
+  role = "member",
+  hourlyRate = null
+) {
   const membersRef = getSharedProjectMembersCollection(projectId);
   const now = new Date();
   const memberData = {
@@ -902,14 +995,12 @@ export async function addMemberToProject(projectId, userName, role = "member", h
     role: role,
     added_at: now,
   };
-  
+
   if (hourlyRate !== null && hourlyRate !== undefined) {
     memberData.hourly_rate =
-      typeof hourlyRate === "string"
-        ? parseFloat(hourlyRate)
-        : hourlyRate;
+      typeof hourlyRate === "string" ? parseFloat(hourlyRate) : hourlyRate;
   }
-  
+
   await membersRef.doc(userName).set(memberData);
 }
 
@@ -964,7 +1055,7 @@ export async function updateMemberHourlyRate(projectId, userName, hourlyRate) {
   if (!memberDoc.exists) {
     throw new Error("Member not found in project");
   }
-  
+
   const updateData = {
     hourly_rate:
       hourlyRate === null || hourlyRate === "" || hourlyRate === undefined
@@ -973,7 +1064,7 @@ export async function updateMemberHourlyRate(projectId, userName, hourlyRate) {
         ? parseFloat(hourlyRate)
         : hourlyRate,
   };
-  
+
   await membersRef.doc(userName).update(updateData);
 }
 
@@ -991,34 +1082,39 @@ export async function createProjectTimeEntry(
 ) {
   const ref = getSharedProjectTimeEntriesCollection(projectId);
   const now = new Date();
-  
+
   const entryData = {
     user_name: userName,
     project: projectId,
     start_time: startTime instanceof Date ? startTime : new Date(startTime),
-    end_time: endTime === null ? null : endTime instanceof Date ? endTime : new Date(endTime),
+    end_time:
+      endTime === null
+        ? null
+        : endTime instanceof Date
+        ? endTime
+        : new Date(endTime),
     created_at: now,
     modified_at: now,
   };
-  
+
   if (durationMs !== null && durationMs !== undefined) {
     entryData.duration_ms =
       typeof durationMs === "string" ? parseInt(durationMs, 10) : durationMs;
   }
-  
+
   if (hourlyRate !== null && hourlyRate !== undefined) {
     entryData.hourly_rate =
       typeof hourlyRate === "string" ? parseFloat(hourlyRate) : hourlyRate;
   }
-  
+
   if (creationMethod !== null && creationMethod !== undefined) {
     entryData.creation_method = creationMethod;
   }
-  
+
   if (isRunning !== null && isRunning !== undefined) {
     entryData.is_running = isRunning;
   }
-  
+
   const docRef = await ref.add(entryData);
   const doc = await docRef.get();
   return docToEntry(doc);
@@ -1027,11 +1123,11 @@ export async function createProjectTimeEntry(
 export async function getProjectTimeEntries(projectId, userName = null) {
   const ref = getSharedProjectTimeEntriesCollection(projectId);
   let query = ref;
-  
+
   if (userName) {
     query = query.where("user_name", "==", userName);
   }
-  
+
   const snap = await query.orderBy("start_time", "desc").get();
   return snap.docs.map(docToEntry);
 }
@@ -1045,7 +1141,7 @@ export async function getProjectTimeEntryById(projectId, entryId) {
 
 export async function getProjectActiveEntry(projectId, userName) {
   const ref = getSharedProjectTimeEntriesCollection(projectId);
-  
+
   // Query for timer entries with is_running === true
   const runningSnap = await ref
     .where("user_name", "==", userName)
@@ -1054,18 +1150,18 @@ export async function getProjectActiveEntry(projectId, userName) {
     .orderBy("start_time", "desc")
     .limit(1)
     .get();
-  
+
   if (!runningSnap.empty) {
     return docToEntry(runningSnap.docs[0]);
   }
-  
+
   return null;
 }
 
 export async function updateProjectTimeEntry(projectId, entryId, updates) {
   const ref = getSharedProjectTimeEntriesCollection(projectId);
   const docRef = ref.doc(entryId);
-  
+
   const updateData = {};
   if (updates.start_time !== undefined) {
     updateData.start_time =
@@ -1098,15 +1194,19 @@ export async function updateProjectTimeEntry(projectId, entryId, updates) {
         : updates.hourly_rate;
   }
   if (updates.creation_method !== undefined) {
-    updateData.creation_method = updates.creation_method === "" ? null : updates.creation_method;
+    updateData.creation_method =
+      updates.creation_method === "" ? null : updates.creation_method;
   }
   if (updates.is_running !== undefined) {
-    updateData.is_running = updates.is_running === null || updates.is_running === "" ? false : Boolean(updates.is_running);
+    updateData.is_running =
+      updates.is_running === null || updates.is_running === ""
+        ? false
+        : Boolean(updates.is_running);
   }
-  
+
   // Always update modified_at timestamp
   updateData.modified_at = new Date();
-  
+
   await docRef.update(updateData);
   const updated = await docRef.get();
   return docToEntry(updated);
@@ -1131,9 +1231,9 @@ export async function getAllProjects(userName) {
     .orderBy("created_at", "desc")
     .get();
   const userProjectsList = userProjects.docs.map(docToProject);
-  
+
   const sharedProjects = await getAllSharedProjects(userName);
-  
+
   return [...userProjectsList, ...sharedProjects];
 }
 
@@ -1276,20 +1376,22 @@ export async function getProjectStatistics(
 
   // Filter entries by date range if provided
   if (dateRange && dateRange.start && dateRange.end) {
-    const rangeStart = dateRange.start instanceof Date
-      ? dateRange.start
-      : new Date(dateRange.start);
-    const rangeEnd = dateRange.end instanceof Date
-      ? dateRange.end
-      : new Date(dateRange.end);
-    
+    const rangeStart =
+      dateRange.start instanceof Date
+        ? dateRange.start
+        : new Date(dateRange.start);
+    const rangeEnd =
+      dateRange.end instanceof Date ? dateRange.end : new Date(dateRange.end);
+
     entries = entries.filter((entry) => {
       const entryStart = new Date(entry.start_time);
       const entryEnd = entry.end_time ? new Date(entry.end_time) : null;
 
       // Entry must start before range ends AND
       // Entry must end after range starts (or be active/null)
-      return entryStart < rangeEnd && (entryEnd === null || entryEnd >= rangeStart);
+      return (
+        entryStart < rangeEnd && (entryEnd === null || entryEnd >= rangeStart)
+      );
     });
   }
 
@@ -1301,12 +1403,12 @@ export async function getProjectStatistics(
     // If date range is provided, clip duration to the range
     let durationMs;
     if (dateRange && dateRange.start && dateRange.end) {
-      const rangeStart = dateRange.start instanceof Date
-        ? dateRange.start
-        : new Date(dateRange.start);
-      const rangeEnd = dateRange.end instanceof Date
-        ? dateRange.end
-        : new Date(dateRange.end);
+      const rangeStart =
+        dateRange.start instanceof Date
+          ? dateRange.start
+          : new Date(dateRange.start);
+      const rangeEnd =
+        dateRange.end instanceof Date ? dateRange.end : new Date(dateRange.end);
       durationMs = computeEntryDurationMsClipped(
         entry.start_time,
         entry.end_time,
@@ -1351,16 +1453,17 @@ export async function getProjectStatistics(
 
   // Calculate profitability metrics based on hours efficiency
   // For contractors: using fewer hours than budgeted = more profitable
-  const hoursSaved = budgetHours !== null && budgetHours > 0
-    ? budgetHours - totalHours
-    : null;
-  const hoursSavedPercentage = budgetHours !== null && budgetHours > 0
-    ? (hoursSaved / budgetHours) * 100
-    : null;
-  const moneySaved = hoursSaved !== null && hoursSaved > 0 && project.hourly_rate
-    ? hoursSaved * project.hourly_rate
-    : null;
-  
+  const hoursSaved =
+    budgetHours !== null && budgetHours > 0 ? budgetHours - totalHours : null;
+  const hoursSavedPercentage =
+    budgetHours !== null && budgetHours > 0
+      ? (hoursSaved / budgetHours) * 100
+      : null;
+  const moneySaved =
+    hoursSaved !== null && hoursSaved > 0 && project.hourly_rate
+      ? hoursSaved * project.hourly_rate
+      : null;
+
   // Profitability status: under budget = good, over budget = bad
   const profitabilityStatus =
     budgetPercentage !== null
@@ -1385,11 +1488,15 @@ export async function getProjectStatistics(
     profitabilityStatus,
     // Keep old fields for backward compatibility if needed
     revenueVariance: moneySaved !== null ? moneySaved : null,
-    profitabilityRatio: hoursSavedPercentage !== null ? 100 - budgetPercentage : null,
+    profitabilityRatio:
+      hoursSavedPercentage !== null ? 100 - budgetPercentage : null,
   };
 }
 
-export async function getProjectStatisticsByMember(projectId, dateRange = null) {
+export async function getProjectStatisticsByMember(
+  projectId,
+  dateRange = null
+) {
   // Get all entries for the project
   const entries = await getProjectTimeEntries(projectId);
   const project = await getSharedProjectsCollection().doc(projectId).get();
@@ -1397,30 +1504,32 @@ export async function getProjectStatisticsByMember(projectId, dateRange = null) 
     return [];
   }
   const projectData = project.data();
-  
+
   // Filter entries by date range if provided
   let filteredEntries = entries;
   if (dateRange && dateRange.start && dateRange.end) {
-    const rangeStart = dateRange.start instanceof Date
-      ? dateRange.start
-      : new Date(dateRange.start);
-    const rangeEnd = dateRange.end instanceof Date
-      ? dateRange.end
-      : new Date(dateRange.end);
-    
+    const rangeStart =
+      dateRange.start instanceof Date
+        ? dateRange.start
+        : new Date(dateRange.start);
+    const rangeEnd =
+      dateRange.end instanceof Date ? dateRange.end : new Date(dateRange.end);
+
     filteredEntries = entries.filter((entry) => {
       const entryStart = new Date(entry.start_time);
       const entryEnd = entry.end_time ? new Date(entry.end_time) : null;
 
       // Entry must start before range ends AND
       // Entry must end after range starts (or be active/null)
-      return entryStart < rangeEnd && (entryEnd === null || entryEnd >= rangeStart);
+      return (
+        entryStart < rangeEnd && (entryEnd === null || entryEnd >= rangeStart)
+      );
     });
   }
-  
+
   // Group entries by user_name
   const byMember = new Map();
-  
+
   for (const entry of filteredEntries) {
     const userName = entry.user_name;
     if (!byMember.has(userName)) {
@@ -1430,17 +1539,17 @@ export async function getProjectStatisticsByMember(projectId, dateRange = null) 
         entryCount: 0,
       });
     }
-    
+
     const member = byMember.get(userName);
     // If date range is provided, clip duration to the range
     let durationMs;
     if (dateRange && dateRange.start && dateRange.end) {
-      const rangeStart = dateRange.start instanceof Date
-        ? dateRange.start
-        : new Date(dateRange.start);
-      const rangeEnd = dateRange.end instanceof Date
-        ? dateRange.end
-        : new Date(dateRange.end);
+      const rangeStart =
+        dateRange.start instanceof Date
+          ? dateRange.start
+          : new Date(dateRange.start);
+      const rangeEnd =
+        dateRange.end instanceof Date ? dateRange.end : new Date(dateRange.end);
       durationMs = computeEntryDurationMsClipped(
         entry.start_time,
         entry.end_time,
@@ -1455,19 +1564,19 @@ export async function getProjectStatisticsByMember(projectId, dateRange = null) 
         entry.duration_ms
       );
     }
-    
+
     if (durationMs > 0) {
       member.totalDurationMs += durationMs;
       member.entryCount++;
     }
   }
-  
+
   // Convert to array with hours and money
   const result = Array.from(byMember.values()).map((member) => {
     const totalHours = member.totalDurationMs / (1000 * 60 * 60);
     const rate = projectData.hourly_rate ?? null;
     const totalMoney = rate ? totalHours * rate : 0;
-    
+
     return {
       user_name: member.user_name,
       totalHours,
@@ -1475,19 +1584,21 @@ export async function getProjectStatisticsByMember(projectId, dateRange = null) 
       entryCount: member.entryCount,
     };
   });
-  
+
   return result.sort((a, b) => b.totalHours - a.totalHours);
 }
 
 export async function convertToSharedProject(userName, projectId) {
   // Get the user project
-  const userProject = await getUserProjectsCollection(userName).doc(projectId).get();
+  const userProject = await getUserProjectsCollection(userName)
+    .doc(projectId)
+    .get();
   if (!userProject.exists) {
     throw new Error(`Project ${projectId} not found`);
   }
-  
+
   const projectData = userProject.data();
-  
+
   // Create shared project
   const sharedProject = await createSharedProject(
     userName,
@@ -1495,16 +1606,20 @@ export async function convertToSharedProject(userName, projectId) {
     projectData.hourly_rate ?? null,
     projectData.budget_hours ?? null
   );
-  
+
   // Get all time entries for this project from user collection
   const userEntriesRef = getUserTimeEntriesCollection(userName);
-  const entriesSnap = await userEntriesRef.where("project", "==", projectId).get();
-  
+  const entriesSnap = await userEntriesRef
+    .where("project", "==", projectId)
+    .get();
+
   // Migrate entries to shared project
   const batch = getDb().batch();
   for (const entryDoc of entriesSnap.docs) {
     const entryData = entryDoc.data();
-    const newEntryRef = getSharedProjectTimeEntriesCollection(sharedProject.id).doc();
+    const newEntryRef = getSharedProjectTimeEntriesCollection(
+      sharedProject.id
+    ).doc();
     batch.set(newEntryRef, {
       user_name: entryData.user_name,
       project: sharedProject.id,
@@ -1520,12 +1635,12 @@ export async function convertToSharedProject(userName, projectId) {
     // Delete old entry
     batch.delete(entryDoc.ref);
   }
-  
+
   await batch.commit();
-  
+
   // Delete user project
   await getUserProjectsCollection(userName).doc(projectId).delete();
-  
+
   return sharedProject;
 }
 
@@ -1563,11 +1678,11 @@ export async function createExpense(
 ) {
   const ref = getExpensesCollection();
   const now = new Date();
-  
+
   // Set date to start of the selected day
   const expenseDate = new Date(dayDate);
   expenseDate.setHours(0, 0, 0, 0);
-  
+
   const expenseData = {
     user_name: userName,
     project: project,
@@ -1579,7 +1694,7 @@ export async function createExpense(
     created_at: now,
     modified_at: now,
   };
-  
+
   const docRef = await ref.add(expenseData);
   const doc = await docRef.get();
   return docToExpense(doc);
@@ -1587,29 +1702,29 @@ export async function createExpense(
 
 export async function getDayExpenses(userName, dayDate) {
   const ref = getExpensesCollection();
-  
+
   // Set date to start of the selected day
   const dayStart = new Date(dayDate);
   dayStart.setHours(0, 0, 0, 0);
-  
+
   // Set date to end of the selected day
   const dayEnd = new Date(dayDate);
   dayEnd.setHours(23, 59, 59, 999);
-  
+
   const snap = await ref
     .where("user_name", "==", userName)
     .where("date", ">=", dayStart)
     .where("date", "<=", dayEnd)
     .orderBy("date", "desc")
     .get();
-  
+
   return snap.docs.map(docToExpense);
 }
 
 export async function getExpenses(userName, weekStart, weekEnd) {
   const weekStartDate = new Date(weekStart);
   const weekEndDate = new Date(weekEnd);
-  
+
   const ref = getExpensesCollection();
   const snap = await ref
     .where("user_name", "==", userName)
@@ -1617,18 +1732,18 @@ export async function getExpenses(userName, weekStart, weekEnd) {
     .where("date", "<=", weekEndDate)
     .orderBy("date", "desc")
     .get();
-  
+
   return snap.docs.map(docToExpense);
 }
 
 export async function getProjectExpenses(projectId, userName = null) {
   const ref = getExpensesCollection();
   let query = ref.where("project", "==", projectId);
-  
+
   if (userName) {
     query = query.where("user_name", "==", userName);
   }
-  
+
   const snap = await query.orderBy("date", "desc").get();
   return snap.docs.map(docToExpense);
 }
@@ -1636,18 +1751,18 @@ export async function getProjectExpenses(projectId, userName = null) {
 export async function updateExpense(userName, expenseId, updates) {
   const ref = getExpensesCollection();
   const docRef = ref.doc(expenseId);
-  
+
   // First verify the expense exists and belongs to the user
   const doc = await docRef.get();
   if (!doc.exists) {
     throw new Error(`Expense ${expenseId} not found`);
   }
-  
+
   const expenseData = doc.data();
   if (expenseData.user_name !== userName) {
     throw new Error("Unauthorized: Expense does not belong to user");
   }
-  
+
   const updateData = {};
   if (updates.name !== undefined) {
     updateData.name = updates.name;
@@ -1671,14 +1786,12 @@ export async function updateExpense(userName, expenseId, updates) {
   }
   if (updates.date !== undefined) {
     updateData.date =
-      updates.date instanceof Date
-        ? updates.date
-        : new Date(updates.date);
+      updates.date instanceof Date ? updates.date : new Date(updates.date);
   }
-  
+
   // Always update modified_at timestamp
   updateData.modified_at = new Date();
-  
+
   await docRef.update(updateData);
   const updated = await docRef.get();
   return docToExpense(updated);
@@ -1687,17 +1800,17 @@ export async function updateExpense(userName, expenseId, updates) {
 export async function deleteExpense(userName, expenseId) {
   const ref = getExpensesCollection();
   const docRef = ref.doc(expenseId);
-  
+
   // First verify the expense exists and belongs to the user
   const doc = await docRef.get();
   if (!doc.exists) {
     throw new Error(`Expense ${expenseId} not found`);
   }
-  
+
   const expenseData = doc.data();
   if (expenseData.user_name !== userName) {
     throw new Error("Unauthorized: Expense does not belong to user");
   }
-  
+
   await docRef.delete();
 }

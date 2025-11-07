@@ -86,7 +86,10 @@ export default function MembersListClient({
       setMembers((prev) =>
         prev.map((m) =>
           m.user_name === memberName
-            ? { ...m, hourly_rate: editRateValue ? parseFloat(editRateValue) : null }
+            ? {
+                ...m,
+                hourly_rate: editRateValue ? parseFloat(editRateValue) : null,
+              }
             : m
         )
       );

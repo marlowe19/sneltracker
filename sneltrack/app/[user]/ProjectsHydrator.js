@@ -15,4 +15,3 @@ export default function ProjectsHydrator({ user, initialProjects }) {
 
   return null; // This component doesn't render anything
 }
-

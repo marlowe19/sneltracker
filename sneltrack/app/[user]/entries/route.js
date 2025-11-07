@@ -18,13 +18,17 @@ export async function POST(req, context) {
     const durationMs = body.duration_ms ?? null;
     const hourlyRate = body.hourly_rate ?? null;
     const project = body.project ?? null;
+    const startTime = body.start_time ? new Date(body.start_time) : null;
+    const endTime = body.end_time ? new Date(body.end_time) : null;
 
     const newEntry = await createEntry(
       user,
       dayDate,
       durationMs,
       hourlyRate,
-      project
+      project,
+      startTime,
+      endTime
     );
     return NextResponse.json({ entry: newEntry });
   } catch (error) {

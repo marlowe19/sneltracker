@@ -40,14 +40,45 @@ export const viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#ffffff",
+  themeColor: "#008eff",
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
+      <head>
+        {/* iOS Safari PWA Meta Tags for iPhone 15+ and iOS 16+ */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta
+          name="apple-mobile-web-app-status-bar-style"
+          content="black-translucent"
+        />
+        <meta name="apple-mobile-web-app-title" content="Snel tracker" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="format-detection" content="telephone=no" />
+        {/* Apple Touch Icons for iPhone 15+ and various iOS devices */}
+        <link
+          rel="apple-touch-icon"
+          sizes="180x180"
+          href="/appimages/ios/app-logo-180.png"
+        />
+        <link
+          rel="apple-touch-icon"
+          sizes="192x192"
+          href="/appimages/ios/192.png"
+        />
+        <link
+          rel="apple-touch-icon"
+          sizes="512x512"
+          href="/appimages/ios/app-logo-512.png"
+        />
+      </head>
       <body
         className={`${jakartaSans.variable} ${geistMono.variable} antialiased bg-white`}
+        style={{
+          paddingTop: "env(safe-area-inset-top)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
       >
         {children}
       </body>

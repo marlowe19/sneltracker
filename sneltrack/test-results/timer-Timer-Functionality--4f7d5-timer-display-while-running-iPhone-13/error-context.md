@@ -1,0 +1,102 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e6] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=e7]:
+      - img [ref=e8]
+    - generic [ref=e13]:
+      - button "Open issues overlay" [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]: "0"
+          - generic [ref=e17]: "1"
+        - generic [ref=e18]: Issue
+      - button "Collapse issues badge" [ref=e19]:
+        - img [ref=e20]
+  - main [ref=e22]:
+    - generic [ref=e23]:
+      - img "SO icon" [ref=e26]
+      - link "Projecten" [ref=e28]:
+        - /url: /testuser/projecten
+    - generic [ref=e29]:
+      - heading "Hi testuser," [level=2] [ref=e30]:
+        - text: Hi
+        - generic [ref=e31]: testuser,
+      - button "Timer toevoegen" [ref=e32]:
+        - img [ref=e33]
+        - generic [ref=e34]: Timer toevoegen
+    - generic [ref=e37]:
+      - generic [ref=e38]:
+        - generic [ref=e39]:
+          - button "Geen project" [ref=e41]:
+            - generic [ref=e43]: Geen project
+            - img [ref=e45]
+          - generic [ref=e49]:
+            - text: "00"
+            - generic [ref=e50]: ":"
+            - text: "00"
+        - button "Stop timer" [ref=e52]:
+          - img [ref=e53]
+      - generic [ref=e55]:
+        - generic [ref=e56]:
+          - button "Geen project" [ref=e58]:
+            - generic [ref=e60]: Geen project
+            - img [ref=e62]
+          - generic [ref=e66]:
+            - text: "00"
+            - generic [ref=e67]: ":"
+            - text: "00"
+        - button "Stop timer" [ref=e69]:
+          - img [ref=e70]
+    - generic [ref=e72]:
+      - generic [ref=e73]:
+        - link "Previous week" [ref=e74]:
+          - /url: /testuser?w=-1
+          - text: ‹
+        - link "Ga naar deze week" [ref=e75]:
+          - /url: /testuser?w=0
+          - text: "Vandaag: vrijdag 7 nov."
+        - link "Next week" [ref=e76]:
+          - /url: /testuser?w=1
+          - text: ›
+      - generic [ref=e78]:
+        - button "Edit entries for Maandag" [ref=e79] [cursor=pointer]:
+          - generic [ref=e80]: Ma
+          - generic [ref=e81]: "3"
+          - generic [ref=e82]: 0:00
+          - generic [ref=e83]: Ma
+        - button "Edit entries for Dinsdag" [ref=e84] [cursor=pointer]:
+          - generic [ref=e85]: Di
+          - generic [ref=e86]: "4"
+          - generic [ref=e87]: 0:00
+          - generic [ref=e88]: Di
+        - button "Edit entries for Woensdag" [ref=e89] [cursor=pointer]:
+          - generic [ref=e90]: Wo
+          - generic [ref=e91]: "5"
+          - generic [ref=e92]: 0:00
+          - generic [ref=e93]: Wo
+        - button "Edit entries for Donderdag" [ref=e94] [cursor=pointer]:
+          - generic [ref=e95]: Do
+          - generic [ref=e96]: "6"
+          - generic [ref=e97]: 0:00
+          - generic [ref=e98]: Do
+        - button "Edit entries for Vrijdag" [ref=e99] [cursor=pointer]:
+          - generic [ref=e100]: Vr
+          - generic [ref=e101]: "7"
+          - generic [ref=e102]: 0:00
+          - generic [ref=e103]: Vr
+        - button "Edit entries for Zaterdag" [ref=e104] [cursor=pointer]:
+          - generic [ref=e105]: Za
+          - generic [ref=e106]: "8"
+          - generic [ref=e107]: 0:00
+          - generic [ref=e108]: Za
+        - button "Edit entries for Zondag" [ref=e109] [cursor=pointer]:
+          - generic [ref=e110]: Zo
+          - generic [ref=e111]: "9"
+          - generic [ref=e112]: 0:00
+          - generic [ref=e113]: Zo
+      - generic [ref=e115]:
+        - generic [ref=e116]: Week Totaal
+        - generic [ref=e118]: "Tijd: 0:00"
+  - alert [ref=e119]
+```

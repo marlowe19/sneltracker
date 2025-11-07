@@ -269,19 +269,39 @@ export default function DayEntriesModalClient({
 
     // If start_time or end_time changed, recalculate duration (but don't overwrite duration_ms)
     if (field === "start_time_editable" || field === "end_time_editable") {
+      const entry = updated[index];
+      const isRunning = entry.is_running === true;
+
+      // For running timers, calculate duration from new start_time to current time
       if (
-        updated[index].start_time_editable &&
-        updated[index].end_time_editable &&
+        isRunning &&
+        field === "start_time_editable" &&
+        entry.start_time_editable &&
         dayDate
       ) {
+        const newStart = combineDayDateWithTime(
+          dayDate,
+          entry.start_time_editable
+        );
+        if (newStart) {
+          const now = new Date();
+          const durationMs = now - newStart;
+          if (durationMs > 0) {
+            updated[index].duration_editable = formatHoursMinutes(durationMs);
+          }
+        }
+      } else if (
+        entry.start_time_editable &&
+        entry.end_time_editable &&
+        dayDate &&
+        !isRunning
+      ) {
+        // For non-running timers, calculate from start to end
         const start = combineDayDateWithTime(
           dayDate,
-          updated[index].start_time_editable
+          entry.start_time_editable
         );
-        const end = combineDayDateWithTime(
-          dayDate,
-          updated[index].end_time_editable
-        );
+        const end = combineDayDateWithTime(dayDate, entry.end_time_editable);
         if (start && end) {
           const durationMs = end - start;
           if (durationMs > 0) {
@@ -383,10 +403,20 @@ export default function DayEntriesModalClient({
           const updates = {};
           let durationWasEdited = false;
 
-          // Check if duration was edited
+          // Check if start time is explicitly set by user
+          const hasStartTime =
+            entry.start_time_editable &&
+            entry.start_time_editable.trim() !== "";
+          const hasEndTime =
+            entry.end_time_editable && entry.end_time_editable.trim() !== "";
+          const hasBothTimes = hasStartTime && hasEndTime;
+
+          // Only treat duration as "edited" if user set duration but NOT start time
+          // (If start time is set, we should use it, even if duration was auto-calculated)
           if (
             entry.duration_editable !== undefined &&
-            entry.duration_editable !== ""
+            entry.duration_editable !== "" &&
+            !hasStartTime
           ) {
             const newDurationMs = parseDuration(entry.duration_editable);
             if (newDurationMs !== null) {
@@ -395,7 +425,7 @@ export default function DayEntriesModalClient({
             }
           }
 
-          // If duration was edited, calculate start_time and end_time from the day
+          // If duration was manually edited (and start time not set), calculate from day start
           if (durationWasEdited && dayDate && updates.duration_ms) {
             // Set start_time to start of the selected day using local date components
             const date = new Date(dayDate);
@@ -415,7 +445,7 @@ export default function DayEntriesModalClient({
             updates.start_time = dayStart.toISOString();
             updates.end_time = dayEnd.toISOString();
           } else {
-            // Use start_time and end_time if provided
+            // Use start_time and end_time if provided (prioritize these over auto-calculated duration)
             if (entry.start_time_editable && dayDate) {
               const newStart = combineDayDateWithTime(
                 dayDate,
@@ -433,6 +463,26 @@ export default function DayEntriesModalClient({
               );
               if (newEnd) {
                 updates.end_time = newEnd.toISOString();
+              }
+            }
+
+            // If both start and end times are set, calculate duration from them
+            if (hasBothTimes && updates.start_time && updates.end_time) {
+              const start = new Date(updates.start_time);
+              const end = new Date(updates.end_time);
+              const durationMs = end - start;
+              if (durationMs > 0) {
+                updates.duration_ms = durationMs;
+              }
+            } else if (
+              entry.duration_editable &&
+              entry.duration_editable !== "" &&
+              !hasStartTime
+            ) {
+              // If only duration is set (without start time), use it
+              const newDurationMs = parseDuration(entry.duration_editable);
+              if (newDurationMs !== null) {
+                updates.duration_ms = newDurationMs;
               }
             }
           }
@@ -485,10 +535,19 @@ export default function DayEntriesModalClient({
         const updates = {};
         let durationWasEdited = false;
 
-        // Check if duration was edited
+        // Check if start time is explicitly set by user
+        const hasStartTime =
+          entry.start_time_editable && entry.start_time_editable.trim() !== "";
+        const hasEndTime =
+          entry.end_time_editable && entry.end_time_editable.trim() !== "";
+        const hasBothTimes = hasStartTime && hasEndTime;
+
+        // Only treat duration as "edited" if user set duration but NOT start time
+        // (If start time is set, we should use it, even if duration was auto-calculated)
         if (
           entry.duration_editable !== undefined &&
-          entry.duration_editable !== ""
+          entry.duration_editable !== "" &&
+          !hasStartTime
         ) {
           const newDurationMs = parseDuration(entry.duration_editable);
           const currentDurationMs = entry.duration_ms;
@@ -499,7 +558,7 @@ export default function DayEntriesModalClient({
           }
         }
 
-        // If duration was edited, calculate start_time and end_time from the day
+        // If duration was manually edited (and start time not set), calculate from day start
         if (durationWasEdited && dayDate && updates.duration_ms) {
           // Set start_time to start of the selected day using local date components
           const date = new Date(dayDate);
@@ -519,7 +578,7 @@ export default function DayEntriesModalClient({
           updates.start_time = dayStart.toISOString();
           updates.end_time = dayEnd.toISOString();
         } else {
-          // Update start_time if changed (and duration wasn't edited)
+          // Update start_time if changed (and duration wasn't manually edited)
           if (entry.start_time_editable && !durationWasEdited && dayDate) {
             const newStart = combineDayDateWithTime(
               dayDate,
@@ -527,11 +586,26 @@ export default function DayEntriesModalClient({
             );
             if (newStart && newStart.toISOString() !== entry.start_time) {
               updates.start_time = newStart.toISOString();
+
+              // For running timers, calculate duration from new start_time to current time
+              if (entry.is_running === true) {
+                const now = new Date();
+                const durationMs = now - newStart;
+                if (durationMs > 0) {
+                  updates.duration_ms = durationMs;
+                }
+              }
             }
           }
 
-          // Update end_time if changed (and duration wasn't edited)
-          if (entry.end_time_editable && !durationWasEdited && dayDate) {
+          // Update end_time if changed (and duration wasn't manually edited)
+          // For running timers, don't allow end_time updates
+          if (
+            entry.end_time_editable &&
+            !durationWasEdited &&
+            dayDate &&
+            entry.is_running !== true
+          ) {
             const newEnd = combineDayDateWithTime(
               dayDate,
               entry.end_time_editable
@@ -545,10 +619,42 @@ export default function DayEntriesModalClient({
           } else if (
             !entry.end_time_editable &&
             entry.end_time &&
-            !durationWasEdited
+            !durationWasEdited &&
+            entry.is_running !== true
           ) {
             // Handle clearing end_time (shouldn't happen for closed entries, but handle it)
             updates.end_time = null;
+          }
+
+          // If both start and end times are set, calculate duration from them
+          // (Skip this for running timers as they don't have end_time)
+          if (
+            hasBothTimes &&
+            updates.start_time &&
+            updates.end_time &&
+            entry.is_running !== true
+          ) {
+            const start = new Date(updates.start_time);
+            const end = new Date(updates.end_time);
+            const durationMs = end - start;
+            if (durationMs > 0) {
+              updates.duration_ms = durationMs;
+            }
+          } else if (
+            entry.duration_editable &&
+            entry.duration_editable !== "" &&
+            !hasStartTime &&
+            !durationWasEdited &&
+            entry.is_running !== true
+          ) {
+            // If only duration is set (without start time), use it
+            const newDurationMs = parseDuration(entry.duration_editable);
+            if (newDurationMs !== null) {
+              const currentDurationMs = entry.duration_ms;
+              if (newDurationMs !== currentDurationMs) {
+                updates.duration_ms = newDurationMs;
+              }
+            }
           }
         }
 
@@ -1050,48 +1156,103 @@ export default function DayEntriesModalClient({
                     </div>
 
                     <div className="space-y-4">
-                      {entry.is_running === true ? (
-                        <div className="py-4 text-center">
-                          <p className="text-lg font-semibold text-[#008eff]">
-                            Timer actief
+                      {entry.is_running === true && (
+                        <div className="mb-2 px-3 py-2 bg-[#008eff]/10 border border-[#008eff]/20 rounded-md">
+                          <p className="text-sm font-medium text-[#008eff]">
+                            ⏱️ Timer actief
                           </p>
                         </div>
-                      ) : (
-                        <>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Projectnaam *
-                            </label>
-                            <select
-                              value={
-                                entry.project_editable !== undefined
-                                  ? entry.project_editable || ""
-                                  : entry.project || ""
-                              }
-                              onChange={(e) =>
-                                handleEntryChange(
-                                  index,
-                                  "project_editable",
-                                  e.target.value || null
-                                )
-                              }
-                              disabled={isSaving || isDeleting}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                              required
-                            >
-                              <option value="">Selecteer een project</option>
-                              {projects.map((project) => (
-                                <option key={project.id} value={project.id}>
-                                  {project.name}
-                                  {project.is_default && " (Standaard)"}
-                                  {project.is_shared && " (Gedeeld)"}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
+                      )}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Projectnaam *
+                        </label>
+                        <select
+                          value={
+                            entry.project_editable !== undefined
+                              ? entry.project_editable || ""
+                              : entry.project || ""
+                          }
+                          onChange={(e) =>
+                            handleEntryChange(
+                              index,
+                              "project_editable",
+                              e.target.value || null
+                            )
+                          }
+                          disabled={isSaving || isDeleting}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                          required
+                        >
+                          <option value="">Selecteer een project</option>
+                          {projects.map((project) => (
+                            <option key={project.id} value={project.id}>
+                              {project.name}
+                              {project.is_default && " (Standaard)"}
+                              {project.is_shared && " (Gedeeld)"}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                          {/* Only show other fields if project is selected */}
-                          {(entry.project_editable || entry.project) && (
+                      {/* Only show other fields if project is selected */}
+                      {(entry.project_editable || entry.project) && (
+                        <>
+                          {entry.is_running === true ? (
+                            // For running timers: only show start time and hourly rate
+                            <>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Starttijd
+                                  <span className="ml-2 text-xs text-[#008eff] font-normal">
+                                    (bewerkbaar)
+                                  </span>
+                                </label>
+                                <input
+                                  type="time"
+                                  value={entry.start_time_editable || ""}
+                                  onChange={(e) =>
+                                    handleEntryChange(
+                                      index,
+                                      "start_time_editable",
+                                      e.target.value
+                                    )
+                                  }
+                                  disabled={isSaving || isDeleting}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Uurtarief (€)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="0.00"
+                                  value={
+                                    entry.hourly_rate_editable !== undefined
+                                      ? entry.hourly_rate_editable
+                                      : entry.hourly_rate || ""
+                                  }
+                                  onChange={(e) =>
+                                    handleEntryChange(
+                                      index,
+                                      "hourly_rate_editable",
+                                      e.target.value === ""
+                                        ? ""
+                                        : e.target.value
+                                    )
+                                  }
+                                  disabled={isSaving || isDeleting}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                              </div>
+                            </>
+                          ) : (
+                            // For non-running timers: show all fields
                             <>
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
