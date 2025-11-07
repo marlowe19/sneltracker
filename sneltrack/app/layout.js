@@ -19,11 +19,6 @@ export const metadata = {
     icon: "/icon-SO.svg",
   },
   manifest: "/manifest.json",
-  themeColor: "#008eff",
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-  },
   twitter: {
     card: "summary_large_image",
     title: "Snel tracker",
@@ -37,6 +32,15 @@ export const metadata = {
     description: "Snel tracker voor klanten",
     images: ["/icon-SO.svg"],
   },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({ children }) {

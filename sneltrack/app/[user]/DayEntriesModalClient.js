@@ -904,9 +904,9 @@ export default function DayEntriesModalClient({
 
   const dayDateFormatted = dayDate
     ? dayDate.toLocaleDateString("nl-NL", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
+        weekday: "short",
+        year: "2-digit",
+        month: "short",
         day: "numeric",
       })
     : "";
@@ -919,7 +919,7 @@ export default function DayEntriesModalClient({
       onClick={handleCancel}
     >
       <div
-        className="fixed inset-x-0 bottom-0 bg-white rounded-t-xl shadow-2xl h-full flex flex-col transition-transform duration-300 ease-out translate-y-0"
+        className="fixed inset-x-0 bottom-0 bg-white rounded-t-xl shadow-2xl h-full flex flex-col transition-transform duration-300 ease-out translate-y-0 pb-[env(safe-area-inset-bottom)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="bg-white z-10 border-b border-gray-200 shrink-0">
@@ -1379,7 +1379,7 @@ export default function DayEntriesModalClient({
           </div>
         </div>
 
-        <div className="sticky bottom-0 bg-white z-10 border-t border-gray-200 px-4 sm:px-6 py-4 flex justify-end gap-3 shrink-0">
+        <div className="bg-white z-10 border-t border-gray-200 px-4 sm:px-6 py-4 flex justify-end gap-3 shrink-0">
           <button
             onClick={handleCancel}
             disabled={isSaving || isDeleting}

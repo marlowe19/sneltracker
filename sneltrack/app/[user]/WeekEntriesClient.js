@@ -148,14 +148,14 @@ export default function WeekEntriesClient({ user, weekOffset }) {
       <div className="flex items-center justify-between mb-1">
         <Link
           href={`/${encodeURIComponent(user)}?w=${weekOffset - 1}`}
-          className="px-6 py-5 sm:px-5 sm:py-4 rounded-full text-gray-600 hover:bg-gray-100 text-5xl sm:text-4xl min-w-[56px] min-h-[56px] sm:min-w-[48px] sm:min-h-[48px] flex items-center justify-center"
+          className=" rounded-full text-gray-600 hover:bg-gray-100 text-5xl sm:text-4xl min-w-[56px] min-h-[56px] sm:min-w-[48px] sm:min-h-[48px] flex items-center justify-center"
           aria-label="Previous week"
         >
           ‹
         </Link>
         <Link
           href={`/${encodeURIComponent(user)}?w=0`}
-          className="px-4 py-3 sm:px-3 sm:py-2 rounded-full border text-sm text-gray-700 hover:bg-gray-100 min-h-[44px] flex items-center justify-center"
+          className="px-2  sm:px-1 sm:py-1 rounded-full border text-sm text-gray-700 hover:bg-gray-100 min-h-[44px] flex items-center justify-center"
           aria-label="Ga naar deze week"
         >
           Vandaag:{" "}
@@ -167,7 +167,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
         </Link>
         <Link
           href={`/${encodeURIComponent(user)}?w=${weekOffset + 1}`}
-          className="px-6 py-5 sm:px-5 sm:py-4 rounded-full text-gray-600 hover:bg-gray-100 text-5xl sm:text-4xl min-w-[56px] min-h-[56px] sm:min-w-[48px] sm:min-h-[48px] flex items-center justify-center"
+          className="rounded-full text-gray-600 hover:bg-gray-100 text-5xl sm:text-4xl min-w-[56px] min-h-[56px] sm:min-w-[48px] sm:min-h-[48px] flex items-center justify-center"
           aria-label="Next week"
         >
           ›
@@ -246,7 +246,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
           })}
         </div>
       </div>
-      <div className="mt-4 pt-4 px-4 border-t border-gray-200">
+      <div className="pt-2 px-4 border-t border-gray-200">
         <div className="flex items-center justify-between">
           <div className="text-sm font-semibold text-gray-700">Week Totaal</div>
           <div className="flex items-center gap-4">
