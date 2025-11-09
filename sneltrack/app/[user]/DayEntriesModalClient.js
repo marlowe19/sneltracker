@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useStore } from "@/stores/useStore";
 import { getWeekBounds, toIso } from "@/lib/time";
 import { computeEntryDurationMs } from "@/lib/time";
+import NotificationBadge from "@/app/components/NotificationBadge";
 
 function formatTime(isoString) {
   if (!isoString) return "";
@@ -1116,13 +1117,16 @@ export default function DayEntriesModalClient({
             {notes.length > 0 && (
               <button
                 onClick={() => handleTabChange("notes")}
-                className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-colors flex items-center justify-center relative ${
                   activeTab === "notes"
                     ? "text-[#008eff] border-b-2 border-[#008eff]"
                     : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                Notities
+                <span className="relative">
+                  Notities
+                  <NotificationBadge user={user} />
+                </span>
               </button>
             )}
           </div>

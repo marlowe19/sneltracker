@@ -453,9 +453,7 @@ export default function TimerSectionClient({ user }) {
     <div className="p-2">
       {/* Active Timer list */}
       {allTimers.length === 0 && stoppedTimersList.length === 0 ? (
-        <div className="text-center text-gray-500 py-8">
-          Click the &ldquo;Time toevoegen&rdquo; button to create a timer
-        </div>
+        <div className="text-center text-gray-500 py-8"></div>
       ) : (
         <>
           {allTimers.length > 0 && (

@@ -9,6 +9,7 @@ import {
 } from "@/lib/time";
 import Link from "next/link";
 import DayClickableClient from "./DayClickableClient";
+import NotificationBadge from "@/app/components/NotificationBadge";
 
 function formatHoursHMM(ms) {
   const totalMinutes = Math.round(ms / 60000);
@@ -245,7 +246,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
         </Link>
         <Link
           href={`/${encodeURIComponent(user)}?w=0`}
-          className="px-2  sm:px-1 sm:py-1 rounded-full border text-sm text-gray-700 hover:bg-gray-100 min-h-[44px] flex items-center justify-center"
+          className="px-2  sm:px-1 sm:py-1 mt-[10px] rounded-full border text-sm text-gray-700 hover:bg-gray-100 min-h-[44px] flex items-center justify-center"
           aria-label="Ga naar deze week"
         >
           Vandaag:{" "}
@@ -306,21 +307,12 @@ export default function WeekEntriesClient({ user, weekOffset }) {
                 >
                   {dayDate.getDate()}
                   {notesWithDueDatePerDay[i] && (
-                    <div className="absolute -top-1 -right-1 z-10">
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="#ef4444"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-label="Notitie met due date"
-                      >
-                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                      </svg>
-                    </div>
+                    <NotificationBadge
+                      user={user}
+                      className="w-[30px] h-[30px]"
+                      iconSize={30}
+                      style={{ marginTop: "-13px", marginRight: "-7px" }}
+                    />
                   )}
                 </div>
                 <div className="day-hours text-xs font-bold mb-0.5 tabular-nums min-h-4 w-full text-center">

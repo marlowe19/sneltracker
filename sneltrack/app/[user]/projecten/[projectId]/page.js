@@ -27,6 +27,7 @@ export default async function ProjectDetailPage({ params }) {
           <h2 className="text-lg font-semibold mb-4">Project niet gevonden</h2>
           <Link
             href={`/${encodeURIComponent(user)}/projecten`}
+            prefetch={false}
             className="text-[#008eff] hover:underline"
           >
             ← Terug naar projecten

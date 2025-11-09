@@ -36,8 +36,20 @@ export default function TimerSectionWrapperClient({
   return (
     <>
       <HeaderSectionClient user={user} onAddTimer={handleAddTimer} />
-      <section className="bg-gray-100 flex-1 min-h-0 border-t border-gray-200 overflow-y-auto overscroll-contain">
-        <div className="pt-4">
+      <section className="bg-gray-100 flex-1 min-h-0 border-t border-gray-200 overflow-y-auto overscroll-contain relative">
+        {user === "julian" && (
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: "url('/icon-j.svg')",
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "center",
+              backgroundSize: "contain",
+              opacity: 0.15,
+            }}
+          />
+        )}
+        <div className="pt-4 relative z-10">
           <TimerSectionClient user={user} />
         </div>
       </section>

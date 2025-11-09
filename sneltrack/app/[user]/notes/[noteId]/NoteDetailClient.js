@@ -46,6 +46,7 @@ export default function NoteDetailClient({
       <div className="flex items-center justify-between p-4 relative">
         <Link
           href={`/${encodeURIComponent(user)}/notes`}
+          prefetch={false}
           className="text-[#008eff] hover:underline"
         >
           ← Terug

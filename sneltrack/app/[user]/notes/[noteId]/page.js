@@ -21,6 +21,7 @@ export default async function NoteDetailPage({ params }) {
         <div className="flex items-center justify-between p-4">
           <Link
             href={`/${encodeURIComponent(user)}/notes`}
+            prefetch={false}
             className="text-[#008eff] hover:underline"
           >
             ← Terug
@@ -44,6 +45,7 @@ export default async function NoteDetailPage({ params }) {
         <div className="flex items-center justify-between p-4">
           <Link
             href={`/${encodeURIComponent(user)}/notes`}
+            prefetch={false}
             className="text-[#008eff] hover:underline"
           >
             ← Terug
