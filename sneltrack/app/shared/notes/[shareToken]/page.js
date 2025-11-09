@@ -1,4 +1,3 @@
-import NoteClient from "../../[user]/notes/[noteId]/NoteClient";
 import { supabaseServer } from "@/lib/supabaseServer";
 import SharedNoteClient from "./SharedNoteClient";
 import { headers } from "next/headers";
