@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useStore } from "@/stores/useStore";
+import { supabase } from "@/lib/supabase";
 
 export default function NotesListClient({
   user,
@@ -22,32 +23,105 @@ export default function NotesListClient({
     }
   }, [projects.length, user, fetchProjects]);
 
+  // Real-time subscription for notes
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`notes:${user}${projectId ? `:${projectId}` : ""}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notes",
+          filter: projectId
+            ? `created_by=eq.${user}&project_id=eq.${projectId}`
+            : `created_by=eq.${user}`,
+        },
+        (payload) => {
+          console.log("📝 Notes list change received:", payload);
+          if (payload.eventType === "INSERT") {
+            setNotes((prev) => [payload.new, ...prev]);
+          } else if (payload.eventType === "UPDATE") {
+            setNotes((prev) =>
+              prev.map((note) =>
+                note.id === payload.new.id ? payload.new : note
+              )
+            );
+          } else if (payload.eventType === "DELETE") {
+            setNotes((prev) =>
+              prev.filter((note) => note.id !== payload.old.id)
+            );
+          }
+        }
+      )
+      .subscribe((status) => {
+        const channelName = `notes:${user}${projectId ? `:${projectId}` : ""}`;
+        console.log(`📡 Channel ${channelName} status:`, status);
+        if (status === "SUBSCRIBED") {
+          console.log("✅ Real-time subscription active for notes list");
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("❌ Subscription error for notes list");
+        } else if (status === "TIMED_OUT") {
+          console.warn("⏱️ Subscription timed out for notes list");
+        } else if (status === "CLOSED") {
+          console.warn("🔒 Subscription closed for notes list");
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, projectId]);
+
   async function handleCreateNote(e) {
     e.preventDefault();
     if (!newNoteName.trim()) return;
 
     setIsCreating(true);
-    // Simulate API call
-    setTimeout(() => {
-      const newNote = {
-        id: Date.now().toString(),
-        name: newNoteName.trim(),
-        project_id: projectId,
-        created_by: user,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      setNotes((prev) => [newNote, ...prev]);
+    try {
+      const { data, error } = await supabase
+        .from("notes")
+        .insert({
+          name: newNoteName.trim(),
+          project_id: projectId,
+          created_by: user,
+          due_date: new Date().toISOString().split("T")[0], // Default to today
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
       setNewNoteName("");
+      // Note will be added via real-time subscription
+    } catch (error) {
+      console.error("Error creating note:", error);
+      alert("Kon notitie niet aanmaken");
+    } finally {
       setIsCreating(false);
-    }, 200);
+    }
   }
 
-  function handleDeleteNote(noteId) {
+  async function handleDeleteNote(noteId) {
     if (!confirm("Weet je zeker dat je deze notitie wilt verwijderen?")) {
       return;
     }
-    setNotes((prev) => prev.filter((note) => note.id !== noteId));
+
+    try {
+      const { error } = await supabase
+        .from("notes")
+        .delete()
+        .eq("id", noteId)
+        .eq("created_by", user); // Extra security check
+
+      if (error) throw error;
+      // Note will be removed via real-time subscription
+    } catch (error) {
+      console.error("Error deleting note:", error);
+      alert("Kon notitie niet verwijderen");
+    }
   }
 
   return (
@@ -106,8 +180,38 @@ export default function NotesListClient({
                         ) : null;
                       })()}
                   </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {new Date(note.updated_at).toLocaleDateString("nl-NL")}
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {note.due_date &&
+                      (() => {
+                        const dueDate = new Date(note.due_date);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const dueDateOnly = new Date(dueDate);
+                        dueDateOnly.setHours(0, 0, 0, 0);
+                        const isOverdue = dueDateOnly < today;
+                        const isToday =
+                          dueDateOnly.getTime() === today.getTime();
+
+                        return (
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded ${
+                              isOverdue
+                                ? "bg-red-100 text-red-700"
+                                : isToday
+                                ? "bg-yellow-100 text-yellow-700"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {dueDate.toLocaleDateString("nl-NL", {
+                              day: "numeric",
+                              month: "short",
+                            })}
+                          </span>
+                        );
+                      })()}
+                    <span className="text-xs text-gray-500">
+                      {new Date(note.updated_at).toLocaleDateString("nl-NL")}
+                    </span>
                   </div>
                 </div>
               </Link>

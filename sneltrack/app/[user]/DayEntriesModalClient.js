@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useStore } from "@/stores/useStore";
 import { getWeekBounds, toIso } from "@/lib/time";
 import { computeEntryDurationMs } from "@/lib/time";
@@ -125,6 +126,9 @@ export default function DayEntriesModalClient({
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const [activeTab, setActiveTab] = useState("entries");
+  const [notes, setNotes] = useState([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+  const [notesError, setNotesError] = useState(null);
 
   // Extract dayDate string for dependency array
   const dayDateString = dayDate?.toISOString();
@@ -193,6 +197,50 @@ export default function DayEntriesModalClient({
       );
     }
   }, [isOpen, expenses, dayDate]);
+
+  // Fetch notes with due_date for the selected day
+  useEffect(() => {
+    async function fetchNotes() {
+      if (!isOpen || !dayDate || !user) {
+        setNotes([]);
+        return;
+      }
+
+      setLoadingNotes(true);
+      setNotesError(null);
+
+      try {
+        // Use local date components to avoid timezone issues
+        const year = dayDate.getFullYear();
+        const month = String(dayDate.getMonth() + 1).padStart(2, "0");
+        const day = String(dayDate.getDate()).padStart(2, "0");
+        const dueDate = `${year}-${month}-${day}`;
+
+        const url = new URL(
+          `/${encodeURIComponent(user)}/notes/api`,
+          window.location.origin
+        );
+        url.searchParams.set("dueDate", dueDate);
+
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error(`Failed to fetch notes: ${res.status}`);
+        }
+
+        const data = await res.json();
+        setNotes(data.notes || []);
+      } catch (err) {
+        console.error("Error fetching notes:", err);
+        setNotesError(err.message || "Kon notities niet ophalen");
+        setNotes([]);
+      } finally {
+        setLoadingNotes(false);
+      }
+    }
+
+    fetchNotes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, dayDateString, user]);
 
   const handleEntryChange = async (index, field, value) => {
     const updated = [...localEntries];
@@ -943,11 +991,13 @@ export default function DayEntriesModalClient({
   const handleCancel = () => {
     setLocalEntries([]);
     setLocalExpenses([]);
+    setNotes([]);
     setError(null);
     setSuccessMessage(null);
     setIsSaving(false);
     setIsDeleting(false);
     setActiveTab("entries");
+    setNotesError(null);
     onClose();
   };
 
@@ -1063,6 +1113,18 @@ export default function DayEntriesModalClient({
             >
               Uitgaven
             </button>
+            {notes.length > 0 && (
+              <button
+                onClick={() => handleTabChange("notes")}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+                  activeTab === "notes"
+                    ? "text-[#008eff] border-b-2 border-[#008eff]"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Notities
+              </button>
+            )}
           </div>
         </div>
 
@@ -1535,6 +1597,66 @@ export default function DayEntriesModalClient({
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Notes Tab */}
+          <div className={activeTab === "notes" ? "" : "hidden"}>
+            {loadingNotes ? (
+              <div className="bg-white rounded-lg p-8 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#008eff] mx-auto"></div>
+                <p className="mt-4 text-gray-600">Notities laden...</p>
+              </div>
+            ) : notesError ? (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                {notesError}
+              </div>
+            ) : notes.length === 0 ? (
+              <p className="text-gray-500 text-center py-8 bg-white rounded-lg">
+                Geen notities gevonden voor deze dag
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {notes.map((note) => {
+                  const project = note.project_id
+                    ? projects.find((p) => p.id === note.project_id)
+                    : null;
+
+                  return (
+                    <Link
+                      key={note.id}
+                      href={`/${encodeURIComponent(user)}/notes/${note.id}`}
+                      className="block bg-white rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm font-semibold text-gray-900 truncate">
+                            {note.name}
+                          </h3>
+                          {project && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {project.name}
+                            </p>
+                          )}
+                        </div>
+                        <svg
+                          className="w-5 h-5 text-gray-400 shrink-0 ml-2"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
             )}
           </div>

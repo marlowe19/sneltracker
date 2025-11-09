@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useStore } from "@/stores/useStore";
 import {
   getWeekBounds,
@@ -36,6 +36,12 @@ export default function WeekEntriesClient({ user, weekOffset }) {
   const setWeekOffset = useStore((state) => state.setWeekOffset);
   const projects = useStore((state) => state.projects);
 
+  // State for notes with due dates
+  const [notesWithDueDatePerDay, setNotesWithDueDatePerDay] = useState(
+    Array(7).fill(false)
+  );
+  const [isLoadingNotes, setIsLoadingNotes] = useState(false);
+
   // Sync weekOffset with store
   useEffect(() => {
     if (storeWeekOffset !== weekOffset) {
@@ -63,6 +69,90 @@ export default function WeekEntriesClient({ user, weekOffset }) {
     new Date().getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000
   );
   const { start: weekStart, end: weekEnd } = getWeekBounds(referenceDate);
+
+  // Memoize date strings to prevent infinite loops
+  // Calculate dates inside useMemo to avoid Date object dependencies
+  const weekStartIso = useMemo(() => {
+    const refDate = new Date(
+      new Date().getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000
+    );
+    const { start } = getWeekBounds(refDate);
+    return start.toISOString().split("T")[0];
+  }, [weekOffset]);
+
+  const weekEndIso = useMemo(() => {
+    const refDate = new Date(
+      new Date().getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000
+    );
+    const { end } = getWeekBounds(refDate);
+    return end.toISOString().split("T")[0];
+  }, [weekOffset]);
+
+  // Fetch notes with due dates in the week
+  useEffect(() => {
+    async function fetchNotesWithDueDates() {
+      if (!user || isLoadingNotes) return;
+
+      setIsLoadingNotes(true);
+      try {
+        const url = new URL(
+          `/${encodeURIComponent(user)}/notes/api`,
+          window.location.origin
+        );
+        url.searchParams.set("startDate", weekStartIso);
+        url.searchParams.set("endDate", weekEndIso);
+
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error(`Failed to fetch notes: ${res.status}`);
+        }
+
+        const data = await res.json();
+        const notes = data.notes || [];
+
+        // Calculate which days have notes with due dates
+        const hasNotePerDay = Array(7).fill(false);
+        for (const note of notes) {
+          if (note.due_date) {
+            const dueDate = new Date(note.due_date);
+            // Reset time to start of day for comparison
+            dueDate.setHours(0, 0, 0, 0);
+            const weekStartOnly = new Date(weekStart);
+            weekStartOnly.setHours(0, 0, 0, 0);
+            const weekEndOnly = new Date(weekEnd);
+            weekEndOnly.setHours(23, 59, 59, 999);
+
+            // Check if due date falls within the week
+            if (dueDate >= weekStartOnly && dueDate <= weekEndOnly) {
+              // Find which day of the week (0 = Monday, 6 = Sunday)
+              const dayOfWeek = dueDate.getDay();
+              const dayIndex = (dayOfWeek + 6) % 7; // Convert to Monday=0
+              if (dayIndex >= 0 && dayIndex < 7) {
+                hasNotePerDay[dayIndex] = true;
+              }
+            }
+          }
+        }
+
+        // Only update state if data actually changed
+        setNotesWithDueDatePerDay((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(hasNotePerDay)) {
+            return prev;
+          }
+          return hasNotePerDay;
+        });
+      } catch (err) {
+        console.error("Error fetching notes with due dates:", err);
+        // On error, set all to false
+        setNotesWithDueDatePerDay(Array(7).fill(false));
+      } finally {
+        setIsLoadingNotes(false);
+      }
+    }
+
+    fetchNotesWithDueDates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, weekStartIso, weekEndIso]);
 
   // Calculate perDay, perDayMoney, and perDayExpenses
   const perDay = Array(7).fill(0);
@@ -208,13 +298,30 @@ export default function WeekEntriesClient({ user, weekOffset }) {
                   <span className="hidden sm:inline">{d.slice(0, 3)}</span>
                 </div>
                 <div
-                  className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-semibold mb-1 mx-auto ${
+                  className={`relative flex items-center justify-center w-8 h-8 rounded-full text-sm font-semibold mb-1 mx-auto ${
                     isToday
                       ? "bg-[#008eff] text-white"
                       : "bg-gray-100 text-gray-900"
                   }`}
                 >
                   {dayDate.getDate()}
+                  {notesWithDueDatePerDay[i] && (
+                    <div className="absolute -top-1 -right-1 z-10">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="#ef4444"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-label="Notitie met due date"
+                      >
+                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                      </svg>
+                    </div>
+                  )}
                 </div>
                 <div className="day-hours text-xs font-bold mb-0.5 tabular-nums min-h-4 w-full text-center">
                   {perDay[i] ? formatHoursHMM(perDay[i]) : "0:00"}

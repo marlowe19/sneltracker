@@ -1,30 +1,22 @@
 import Link from "next/link";
 import NotesListClient from "./NotesListClient";
+import { supabaseServer } from "@/lib/supabaseServer";
 
 export const dynamic = "force-dynamic";
 
 export default async function NotesPage({ params }) {
   const { user } = await params;
 
-  // Mock data for Phase 1 - will be replaced with Supabase queries in Phase 2
-  const mockNotes = [
-    {
-      id: "1",
-      name: "Shopping List",
-      project_id: null,
-      created_by: user,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: "2",
-      name: "Meeting Notes",
-      project_id: "mock-project-id", // Mock project ID - will show project name if project exists in store
-      created_by: user,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ];
+  // Fetch notes from Supabase
+  const { data: notes, error } = await supabaseServer
+    .from("notes")
+    .select("*")
+    .eq("created_by", user)
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching notes:", error);
+  }
 
   return (
     <main className="flex flex-col">
@@ -39,7 +31,7 @@ export default async function NotesPage({ params }) {
         <div className="w-16"></div> {/* Spacer for centering */}
       </div>
       <section className="bg-white rounded-xl p-4">
-        <NotesListClient user={user} initialNotes={mockNotes} />
+        <NotesListClient user={user} initialNotes={notes || []} />
       </section>
     </main>
   );
