@@ -43,6 +43,28 @@ export default function NotificationBadge({
         <circle cx="75" cy="50" r="6" fill="white" />
       </svg>
     );
+  } else if (user === "dire") {
+    // Show D-icon for dire
+    content = (
+      <svg
+        width={iconSize}
+        height={iconSize}
+        viewBox="0 0 120 100"
+        fill="white"
+        aria-hidden="true"
+      >
+        <text
+          x="30"
+          y="70"
+          fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          fontSize="60"
+          fill="white"
+        >
+          D
+        </text>
+        <circle cx="85" cy="50" r="6" fill="white" />
+      </svg>
+    );
   } else {
     // Show pencil icon for other users (smaller than J-icon)
     const pencilSize = Math.round(iconSize * 0.5);
