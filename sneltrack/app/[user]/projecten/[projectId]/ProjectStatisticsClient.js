@@ -14,7 +14,6 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts";
-import { getWeekBounds, getMonthBounds, getQuarterBounds } from "@/lib/time";
 import { HOURLY_RATE_BREAKDOWN } from "@/lib/hourlyRateBreakdown";
 
 function formatMoney(amount) {
@@ -47,13 +46,7 @@ const COLORS = [
   "#84cc16", // Lime
 ];
 
-export default function ProjectStatisticsClient({
-  user,
-  projectId,
-  project,
-  rangeType,
-  referenceDate,
-}) {
+export default function ProjectStatisticsClient({ user, projectId, project }) {
   const [statistics, setStatistics] = useState(null);
   const [memberStatistics, setMemberStatistics] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -67,39 +60,17 @@ export default function ProjectStatisticsClient({
   const touchEndX = useRef(null);
   const touchStartY = useRef(null);
 
-  // Extract date string for dependency array
-  const referenceDateString = referenceDate
-    ? referenceDate.toISOString()
-    : null;
-
   useEffect(() => {
     async function fetchStatistics() {
       setLoading(true);
       setError(null);
 
       try {
-        // Calculate date bounds
-        let bounds;
-        if (rangeType === "week") {
-          bounds = getWeekBounds(referenceDate);
-        } else if (rangeType === "month") {
-          bounds = getMonthBounds(referenceDate);
-        } else if (rangeType === "quarter") {
-          bounds = getQuarterBounds(referenceDate);
-        } else {
-          bounds = getWeekBounds(referenceDate);
-        }
-
-        // Fetch statistics from API
+        // Fetch statistics from API without date range parameters
         const url = new URL(
           `/${encodeURIComponent(user)}/projecten/${projectId}/api`,
           window.location.origin
         );
-        url.searchParams.set("rangeType", rangeType);
-        url.searchParams.set("referenceDate", bounds.start.toISOString());
-        // Send both start and end to avoid timezone recalculation issues
-        url.searchParams.set("startDate", bounds.start.toISOString());
-        url.searchParams.set("endDate", bounds.end.toISOString());
 
         const res = await fetch(url);
         if (!res.ok) {
@@ -126,11 +97,8 @@ export default function ProjectStatisticsClient({
       }
     }
 
-    if (rangeType && referenceDate) {
-      fetchStatistics();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, projectId, rangeType, referenceDateString]);
+    fetchStatistics();
+  }, [user, projectId]);
 
   if (loading) {
     return (
@@ -228,16 +196,265 @@ export default function ProjectStatisticsClient({
               </div>
             ))}
           </div>
+          {/* Budget Progress Bar */}
+          {statistics.budgetHours && (
+            <div className="mt-6">
+              <div className="w-full bg-gray-200 rounded-full h-3">
+                <div
+                  className={`h-3 rounded-full ${
+                    statistics.isOverBudget
+                      ? "bg-red-500"
+                      : statistics.budgetPercentage > 80
+                      ? "bg-yellow-500"
+                      : "bg-green-500"
+                  }`}
+                  style={{
+                    width: `${
+                      statistics.budgetPercentage !== null
+                        ? Math.min(statistics.budgetPercentage, 100)
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-gray-600 mt-2">
+                <span>
+                  {statistics.totalHours.toFixed(1)} / {statistics.budgetHours}{" "}
+                  uren
+                </span>
+                <span>
+                  {statistics.budgetPercentage !== null
+                    ? `${statistics.budgetPercentage.toFixed(1)}%`
+                    : "-"}
+                </span>
+              </div>
+            </div>
+          )}
+          {/* User Hours Breakdown Pie Chart */}
+          {memberStatistics && memberStatistics.length > 0 && (
+            <div className="mt-6">
+              <div className="text-xs font-medium text-gray-700 mb-3">
+                Verdeling per gebruiker
+              </div>
+              <div style={{ height: "200px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart
+                    margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                  >
+                    <Pie
+                      data={memberStatistics.map((member) => ({
+                        name: member.user_name,
+                        value: parseFloat(member.totalHours.toFixed(2)),
+                        hours: member.totalHours,
+                      }))}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => {
+                        if (percent > 0.1) {
+                          return `${(percent * 100).toFixed(0)}%`;
+                        }
+                        return "";
+                      }}
+                      outerRadius={60}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {memberStatistics.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value, name, props) => [
+                        `${formatHours(props.payload.hours)} (${value.toFixed(
+                          2
+                        )}u)`,
+                        props.payload.name,
+                      ]}
+                      contentStyle={{
+                        backgroundColor: "white",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "0.5rem",
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 flex flex-col gap-2">
+                {memberStatistics.map((member, index) => (
+                  <div
+                    key={member.user_name}
+                    className="flex items-center gap-2"
+                  >
+                    <div
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{
+                        backgroundColor: COLORS[index % COLORS.length],
+                      }}
+                    />
+                    <div className="flex flex-col text-xs text-gray-700">
+                      <div className="font-medium">{member.user_name}</div>
+                      <div className="text-gray-600">
+                        {formatHours(member.totalHours)}
+                        {project.hourly_rate && (
+                          <> · {formatMoney(project.hourly_rate)}/uur</>
+                        )}
+                        {member.totalMoney > 0 && (
+                          <> · {formatMoney(member.totalMoney)}</>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ),
     });
   } else {
     cards.push({
       id: "total-value",
-      title: "Totaal waarde",
+      title: "",
       content: (
-        <div className="text-xl font-bold text-gray-900">
-          {formatMoney(statistics.totalMoney)}
+        <div>
+          <div className="mb-4">
+            <div className="flex justify-between items-baseline mb-2">
+              <div className="text-sm font-medium text-gray-600">
+                Totaal waarde
+              </div>
+              <div className="text-sm font-medium text-gray-600">
+                Totaal uren
+              </div>
+            </div>
+            <div className="flex justify-between items-baseline">
+              <div className="text-xl font-bold text-gray-900">
+                {formatMoney(statistics.totalMoney)}
+              </div>
+              <div className="text-lg font-semibold text-gray-700">
+                {formatHours(statistics.totalHours)}
+              </div>
+            </div>
+          </div>
+          {/* Budget Progress Bar */}
+          {statistics.budgetHours && (
+            <div className="mb-6">
+              <div className="w-full bg-gray-200 rounded-full h-3">
+                <div
+                  className={`h-3 rounded-full ${
+                    statistics.isOverBudget
+                      ? "bg-red-500"
+                      : statistics.budgetPercentage > 80
+                      ? "bg-yellow-500"
+                      : "bg-green-500"
+                  }`}
+                  style={{
+                    width: `${
+                      statistics.budgetPercentage !== null
+                        ? Math.min(statistics.budgetPercentage, 100)
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-gray-600 mt-2">
+                <span>
+                  {statistics.totalHours.toFixed(1)} / {statistics.budgetHours}{" "}
+                  uren
+                </span>
+                <span>
+                  {statistics.budgetPercentage !== null
+                    ? `${statistics.budgetPercentage.toFixed(1)}%`
+                    : "-"}
+                </span>
+              </div>
+            </div>
+          )}
+          {/* User Hours Breakdown Pie Chart */}
+          {memberStatistics && memberStatistics.length > 0 && (
+            <div>
+              <div className="text-xs font-medium text-gray-700 mb-3">
+                Verdeling per gebruiker
+              </div>
+              <div style={{ height: "200px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart
+                    margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                  >
+                    <Pie
+                      data={memberStatistics.map((member) => ({
+                        name: member.user_name,
+                        value: parseFloat(member.totalHours.toFixed(2)),
+                        hours: member.totalHours,
+                      }))}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => {
+                        if (percent > 0.1) {
+                          return `${(percent * 100).toFixed(0)}%`;
+                        }
+                        return "";
+                      }}
+                      outerRadius={60}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {memberStatistics.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value, name, props) => [
+                        `${formatHours(props.payload.hours)} (${value.toFixed(
+                          2
+                        )}u)`,
+                        props.payload.name,
+                      ]}
+                      contentStyle={{
+                        backgroundColor: "white",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "0.5rem",
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 flex flex-col gap-2">
+                {memberStatistics.map((member, index) => (
+                  <div
+                    key={member.user_name}
+                    className="flex items-center gap-2"
+                  >
+                    <div
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{
+                        backgroundColor: COLORS[index % COLORS.length],
+                      }}
+                    />
+                    <div className="flex flex-col text-xs text-gray-700">
+                      <div className="font-medium">{member.user_name}</div>
+                      <div className="text-gray-600">
+                        {formatHours(member.totalHours)}
+                        {project.hourly_rate && (
+                          <> · {formatMoney(project.hourly_rate)}/uur</>
+                        )}
+                        {member.totalMoney > 0 && (
+                          <> · {formatMoney(member.totalMoney)}</>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ),
     });
@@ -247,10 +464,27 @@ export default function ProjectStatisticsClient({
   if (memberStatistics && memberStatistics.length > 1) {
     cards.push({
       id: "total-value-members",
-      title: "Totaal waarde",
+      title: "",
       content: (
-        <div className="text-xl font-bold text-gray-900">
-          {formatMoney(statistics.totalMoney)}
+        <div>
+          <div className="mb-2">
+            <div className="flex justify-between items-baseline mb-2">
+              <div className="text-sm font-medium text-gray-600">
+                Totaal waarde
+              </div>
+              <div className="text-sm font-medium text-gray-600">
+                Totaal uren
+              </div>
+            </div>
+            <div className="flex justify-between items-baseline">
+              <div className="text-xl font-bold text-gray-900">
+                {formatMoney(statistics.totalMoney)}
+              </div>
+              <div className="text-lg font-semibold text-gray-700">
+                {formatHours(statistics.totalHours)}
+              </div>
+            </div>
+          </div>
         </div>
       ),
     });

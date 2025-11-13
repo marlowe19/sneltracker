@@ -8,7 +8,7 @@ export default function BackButtonClient() {
       onClick={() => router.back()}
       className="text-base sm:text-sm py-2 px-3 sm:py-0 sm:px-0 text-gray-600 hover:text-gray-900"
     >
-      ← Terug naar projecten
+      ← Terug
     </button>
   );
 }

@@ -1,5 +1,7 @@
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import NavigationWrapper from "./components/NavigationWrapper";
+import { ToastProvider } from "./components/Toast";
 
 const jakartaSans = Plus_Jakarta_Sans({
   variable: "--font-sans",
@@ -80,7 +82,10 @@ export default function RootLayout({ children }) {
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
-        {children}
+        <ToastProvider>
+          {children}
+          <NavigationWrapper />
+        </ToastProvider>
       </body>
     </html>
   );

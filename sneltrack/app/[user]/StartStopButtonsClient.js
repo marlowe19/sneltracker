@@ -73,7 +73,7 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
                 }}
                 className="w-full px-3 py-2 text-sm text-left hover:bg-gray-100 text-gray-700"
               >
-                Geen project
+                Kies project
               </button>
               {projects.map((project) => (
                 <button

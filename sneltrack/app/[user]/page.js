@@ -8,6 +8,7 @@ import Link from "next/link";
 import TimerSectionWrapperClient from "./TimerSectionWrapperClient";
 import WeekEntriesClient from "./WeekEntriesClient";
 import ProjectsHydrator from "./ProjectsHydrator";
+import { useStore } from "@/stores/useStore";
 
 export const dynamic = "force-dynamic";
 
@@ -69,45 +70,13 @@ async function UserPageContent({ user, weekOffset }) {
     <>
       <ProjectsHydrator user={user} initialProjects={projects} />
       <main className=" mx-auto max-w-md sm:max-w-xl md:max-w-2xl flex flex-col h-dvh overflow-hidden">
-        <div className="flex relative w-full p-4">
-          <div className="">
-            <header className=" top-3 left-3 z-50">
-              <img
-                src="/icon-SO.svg"
-                alt="SO icon"
-                width="28"
-                height="22"
-                className="opacity-60"
-              />
-            </header>
-          </div>
-
-          <div className="ml-auto flex gap-2">
-            <Link
-              href={`/${encodeURIComponent(user)}/notes`}
-              prefetch={false}
-              className="text-base text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50"
-            >
-              Notities (test)
-            </Link>
-            <Link
-              href={`/${encodeURIComponent(user)}/projecten`}
-              prefetch={false}
-              className="text-base text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50"
-            >
-              Projecten
-            </Link>
-          </div>
-        </div>
-
+        {/* Week entries section - client component with spinner */}
+        <WeekEntriesClient user={user} weekOffset={weekOffset} />
         <TimerSectionWrapperClient
           user={user}
           activeEntries={activeEntries}
           stoppedTimers={stoppedTimers}
         />
-
-        {/* Week entries section - client component with spinner */}
-        <WeekEntriesClient user={user} weekOffset={weekOffset} />
       </main>
     </>
   );

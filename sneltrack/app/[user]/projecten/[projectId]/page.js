@@ -7,11 +7,7 @@ import {
 import Link from "next/link";
 import MemberHoursChart from "../MemberHoursChart";
 import ProjectDetailClient from "./ProjectDetailClient";
-import {
-  DateRangeProvider,
-  DateRangeSelector,
-  ProjectStatistics,
-} from "./ProjectStatisticsContainer";
+import { ProjectStatistics } from "./ProjectStatisticsContainer";
 import BackButtonClient from "./BackButtonClient";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +18,7 @@ export default async function ProjectDetailPage({ params }) {
   const project = await getProjectById(user, projectId);
   if (!project) {
     return (
-      <main className="container mx-auto max-w-md sm:max-w-xl md:max-w-2xl p-4 sm:p-2">
+      <main className="container mx-auto max-w-md sm:max-w-xl md:max-w-2xl pt-4 sm:p-2">
         <div className="bg-white rounded-xl shadow p-6">
           <h2 className="text-lg font-semibold mb-4">Project niet gevonden</h2>
           <Link
@@ -49,69 +45,44 @@ export default async function ProjectDetailPage({ params }) {
 
   return (
     <main className="flex flex-col ">
-      <div className=" flex items-center justify-between p-4">
+      {/* Header with back button and centered project name */}
+      <div className="relative flex items-center justify-between p-4">
         <BackButtonClient />
+        <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center gap-2">
+          <h1 className="text-lg font-bold text-gray-900">{project.name}</h1>
+          <div className="flex items-center gap-2">
+            {project.is_shared && (
+              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                {isOwner ? "Eigenaar" : "Gedeeld"}
+              </span>
+            )}
+            {project.is_default && (
+              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                Standaard
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="w-16"></div> {/* Spacer for centering */}
       </div>
       <section className="bg-white rounded-xl">
-        <div className="">
-          {/* Date Range Provider wraps only the components that need it */}
-          <DateRangeProvider>
-            {/* Date Range Selector - at the top, above project name */}
-            <div className="mb-6">
-              <DateRangeSelector />
-            </div>
-            <div className="p-4">
-              {/* Statistics - below project name */}
+        <div className="p-4">
+          {/* Tabs Section - moved to top */}
+          <ProjectDetailClient
+            user={user}
+            projectId={projectId}
+            project={project}
+            isOwner={isOwner}
+            initialMembers={members}
+            isShared={project.is_shared}
+            statisticsComponent={
               <ProjectStatistics
                 user={user}
                 projectId={projectId}
                 project={project}
               />
-            </div>
-            <div className="p-4">
-              <div className="mb-6">
-                <h1 className="text-lg font-bold text-gray-900 ">
-                  {project.name}
-                  {project.is_shared && (
-                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
-                      {isOwner ? "Eigenaar" : "Gedeeld"}
-                    </span>
-                  )}
-                </h1>
-                <div className="flex flex-wrap mb-2">
-                  {project.is_default && (
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                      Standaard
-                    </span>
-                  )}
-                </div>
-
-                {/* {project.hourly_rate && (
-                <div className="text-sm text-gray-600 mb-2">
-                  Tarief: {formatMoney(project.hourly_rate)}/uur
-                </div>
-              )} */}
-
-                {project.budget_hours && (
-                  <div className="text-sm text-gray-600">
-                    Begroting: {project.budget_hours} uren
-                  </div>
-                )}
-              </div>
-
-              {/* Tabs Section */}
-              <div className="mb-6">
-                <ProjectDetailClient
-                  user={user}
-                  projectId={projectId}
-                  project={project}
-                  isOwner={isOwner}
-                  initialMembers={members}
-                  isShared={project.is_shared}
-                />
-              </div>
-            </div>
-          </DateRangeProvider>
+            }
+          />
         </div>
       </section>
     </main>

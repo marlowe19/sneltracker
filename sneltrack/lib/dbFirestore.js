@@ -897,7 +897,10 @@ export async function getAllSharedProjects(userName) {
     const membersRef = getSharedProjectMembersCollection(projectDoc.id);
     const memberDoc = await membersRef.doc(userName).get();
     if (memberDoc.exists) {
-      sharedProjects.push(docToSharedProject(projectDoc));
+      const project = docToSharedProject(projectDoc);
+      const memberData = memberDoc.data();
+      project.member_hourly_rate = memberData?.hourly_rate ?? null;
+      sharedProjects.push(project);
     }
   }
 
@@ -1230,7 +1233,11 @@ export async function getAllProjects(userName) {
   const userProjects = await getUserProjectsCollection(userName)
     .orderBy("created_at", "desc")
     .get();
-  const userProjectsList = userProjects.docs.map(docToProject);
+  const userProjectsList = userProjects.docs.map((doc) => {
+    const project = docToProject(doc);
+    project.member_hourly_rate = null;
+    return project;
+  });
 
   const sharedProjects = await getAllSharedProjects(userName);
 

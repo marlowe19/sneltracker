@@ -19,7 +19,8 @@ export async function GET(req, context) {
     const endDateParam = url.searchParams.get("endDate");
 
     // Prefer startDate/endDate if provided (avoids timezone recalculation issues)
-    let dateRange;
+    // If no date range parameters are provided, dateRange will be null (all-time stats)
+    let dateRange = null;
     if (startDateParam && endDateParam) {
       const start = new Date(startDateParam);
       const end = new Date(endDateParam);
@@ -56,17 +57,10 @@ export async function GET(req, context) {
           { status: 400 }
         );
       }
-    } else {
-      return NextResponse.json(
-        {
-          error:
-            "rangeType and referenceDate are required, or startDate and endDate",
-        },
-        { status: 400 }
-      );
     }
+    // If no date range parameters are provided, dateRange remains null for all-time stats
 
-    // Get filtered statistics
+    // Get statistics (all-time if dateRange is null)
     const statistics = await getProjectStatistics(user, projectId, dateRange);
 
     // Get member statistics if this is a shared project and user is owner
@@ -84,7 +78,7 @@ export async function GET(req, context) {
 
     return NextResponse.json({ statistics, memberStatistics });
   } catch (error) {
-    console.error("Error fetching filtered statistics:", error);
+    console.error("Error fetching statistics:", error);
     return NextResponse.json(
       { error: "Failed to fetch statistics", message: error.message },
       { status: 500 }

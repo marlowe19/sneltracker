@@ -167,12 +167,94 @@ export default function DayEntriesModalClient({
             duration_editable: durationMs ? formatHoursMinutes(durationMs) : "",
             hourly_rate_editable: entry.hourly_rate ?? "",
             project_editable: entry.project ?? "",
+            isProjectMember: false, // Will be determined when project is selected
           };
         })
       );
       setError(null);
     }
   }, [isOpen, entries, dayDate]);
+
+  // Check membership status for entries with existing projects
+  useEffect(() => {
+    if (isOpen && localEntries.length > 0 && projects.length > 0) {
+      const checkMembership = async () => {
+        const updated = [...localEntries];
+        let needsUpdate = false;
+
+        for (let i = 0; i < updated.length; i++) {
+          const entry = updated[i];
+          const projectId = entry.project_editable || entry.project;
+
+          if (projectId) {
+            const selectedProject = projects.find((p) => p.id === projectId);
+            if (selectedProject && selectedProject.is_shared) {
+              // Check cache first
+              if (membersCache[projectId]) {
+                const members = membersCache[projectId];
+                const currentUserMember = members.find(
+                  (m) => m.user_name === user
+                );
+                if (entry.isProjectMember !== !!currentUserMember) {
+                  updated[i].isProjectMember = !!currentUserMember;
+                  needsUpdate = true;
+                }
+              } else {
+                // Fetch project members to check membership
+                try {
+                  const res = await fetch(
+                    `/${encodeURIComponent(
+                      user
+                    )}/projecten/api?action=members&projectId=${projectId}`
+                  );
+                  const data = await res.json();
+                  const members = data.members || [];
+                  // Cache the members
+                  setMembersCache((prev) => ({
+                    ...prev,
+                    [projectId]: members,
+                  }));
+                  const currentUserMember = members.find(
+                    (m) => m.user_name === user
+                  );
+                  if (entry.isProjectMember !== !!currentUserMember) {
+                    updated[i].isProjectMember = !!currentUserMember;
+                    needsUpdate = true;
+                  }
+                } catch (error) {
+                  console.error("Error fetching member status:", error);
+                  // If fetch fails, assume not a member
+                  if (entry.isProjectMember !== false) {
+                    updated[i].isProjectMember = false;
+                    needsUpdate = true;
+                  }
+                }
+              }
+            } else {
+              // Not a shared project
+              if (entry.isProjectMember !== false) {
+                updated[i].isProjectMember = false;
+                needsUpdate = true;
+              }
+            }
+          } else {
+            // No project
+            if (entry.isProjectMember !== false) {
+              updated[i].isProjectMember = false;
+              needsUpdate = true;
+            }
+          }
+        }
+
+        if (needsUpdate) {
+          setLocalEntries(updated);
+        }
+      };
+
+      checkMembership();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, localEntries.length, projects.length, user]); // membersCache removed to prevent infinite loop
 
   useEffect(() => {
     if (isOpen && expenses && dayDate) {
@@ -248,39 +330,16 @@ export default function DayEntriesModalClient({
     updated[index] = { ...updated[index], [field]: value };
 
     // If project changed, check if it's a shared project and auto-populate member rate
-    if (field === "project_editable" && value) {
-      const selectedProject = projects.find((p) => p.id === value);
-      if (selectedProject && selectedProject.is_shared) {
-        // Check cache first
-        if (membersCache[value]) {
-          const members = membersCache[value];
-          const currentUserMember = members.find((m) => m.user_name === user);
-          if (
-            currentUserMember &&
-            currentUserMember.hourly_rate !== null &&
-            currentUserMember.hourly_rate !== undefined
-          ) {
-            updated[index].hourly_rate_editable = String(
-              currentUserMember.hourly_rate
-            );
-          } else if (selectedProject.hourly_rate) {
-            updated[index].hourly_rate_editable = String(
-              selectedProject.hourly_rate
-            );
-          }
-        } else {
-          // Fetch project members to get the current user's hourly rate
-          try {
-            const res = await fetch(
-              `/${encodeURIComponent(
-                user
-              )}/projecten/api?action=members&projectId=${value}`
-            );
-            const data = await res.json();
-            const members = data.members || [];
-            // Cache the members
-            setMembersCache((prev) => ({ ...prev, [value]: members }));
+    if (field === "project_editable") {
+      if (value) {
+        const selectedProject = projects.find((p) => p.id === value);
+        if (selectedProject && selectedProject.is_shared) {
+          // Check cache first
+          if (membersCache[value]) {
+            const members = membersCache[value];
             const currentUserMember = members.find((m) => m.user_name === user);
+            // Set membership status
+            updated[index].isProjectMember = !!currentUserMember;
             if (
               currentUserMember &&
               currentUserMember.hourly_rate !== null &&
@@ -290,26 +349,66 @@ export default function DayEntriesModalClient({
                 currentUserMember.hourly_rate
               );
             } else if (selectedProject.hourly_rate) {
-              // Fall back to project rate if member rate not set
               updated[index].hourly_rate_editable = String(
                 selectedProject.hourly_rate
               );
             }
-          } catch (error) {
-            console.error("Error fetching member rate:", error);
-            // If fetch fails, try project rate
-            if (selectedProject.hourly_rate) {
-              updated[index].hourly_rate_editable = String(
-                selectedProject.hourly_rate
+          } else {
+            // Fetch project members to get the current user's hourly rate
+            try {
+              const res = await fetch(
+                `/${encodeURIComponent(
+                  user
+                )}/projecten/api?action=members&projectId=${value}`
               );
+              const data = await res.json();
+              const members = data.members || [];
+              // Cache the members
+              setMembersCache((prev) => ({ ...prev, [value]: members }));
+              const currentUserMember = members.find(
+                (m) => m.user_name === user
+              );
+              // Set membership status
+              updated[index].isProjectMember = !!currentUserMember;
+              if (
+                currentUserMember &&
+                currentUserMember.hourly_rate !== null &&
+                currentUserMember.hourly_rate !== undefined
+              ) {
+                updated[index].hourly_rate_editable = String(
+                  currentUserMember.hourly_rate
+                );
+              } else if (selectedProject.hourly_rate) {
+                // Fall back to project rate if member rate not set
+                updated[index].hourly_rate_editable = String(
+                  selectedProject.hourly_rate
+                );
+              }
+            } catch (error) {
+              console.error("Error fetching member rate:", error);
+              // If fetch fails, assume not a member
+              updated[index].isProjectMember = false;
+              // If fetch fails, try project rate
+              if (selectedProject.hourly_rate) {
+                updated[index].hourly_rate_editable = String(
+                  selectedProject.hourly_rate
+                );
+              }
             }
           }
+        } else {
+          // Not a shared project or project not found
+          updated[index].isProjectMember = false;
+          if (selectedProject && selectedProject.hourly_rate) {
+            // For non-shared projects, use project rate
+            updated[index].hourly_rate_editable = String(
+              selectedProject.hourly_rate
+            );
+          }
         }
-      } else if (selectedProject && selectedProject.hourly_rate) {
-        // For non-shared projects, use project rate
-        updated[index].hourly_rate_editable = String(
-          selectedProject.hourly_rate
-        );
+      } else {
+        // Project cleared
+        updated[index].isProjectMember = false;
       }
     }
 
@@ -394,6 +493,7 @@ export default function DayEntriesModalClient({
       duration_editable: "",
       hourly_rate_editable: "",
       project_editable: "",
+      isProjectMember: false,
     };
 
     // Add new entry at the beginning (newest first)
@@ -1072,7 +1172,7 @@ export default function DayEntriesModalClient({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-50 transition-opacity duration-300"
+      className="fixed inset-0 bg-black/50 z-60 transition-opacity duration-300"
       onClick={handleCancel}
     >
       <div
@@ -1312,7 +1412,11 @@ export default function DayEntriesModalClient({
                                         : e.target.value
                                     )
                                   }
-                                  disabled={isSaving || isDeleting}
+                                  disabled={
+                                    isSaving ||
+                                    isDeleting ||
+                                    entry.isProjectMember
+                                  }
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                               </div>
@@ -1406,7 +1510,11 @@ export default function DayEntriesModalClient({
                                           : e.target.value
                                       )
                                     }
-                                    disabled={isSaving || isDeleting}
+                                    disabled={
+                                      isSaving ||
+                                      isDeleting ||
+                                      entry.isProjectMember
+                                    }
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
                                   />
                                 </div>

@@ -45,33 +45,9 @@ export default function TimerSectionWrapperClient({
 
   return (
     <>
-      <HeaderSectionClient user={user} onAddTimer={handleAddTimer} />
-      <section className="bg-gray-100 flex-1 min-h-0 border-t border-gray-200 overflow-y-auto overscroll-contain relative">
-        {user === "julian" && (
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              backgroundImage: "url('/icon-j.svg')",
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "center",
-              backgroundSize: "contain",
-              opacity: 0.15,
-            }}
-          />
-        )}
-        {user === "dire" && (
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              backgroundImage: "url('/icon-dire.svg')",
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "center",
-              backgroundSize: "50%",
-              opacity: 0.15,
-            }}
-          />
-        )}
-        {todaysQuote && (
+      {/* <HeaderSectionClient user={user} onAddTimer={handleAddTimer} /> */}
+      <section className="flex-1 min-h-0 border-t pb-4 border-gray-200 overflow-y-auto overscroll-contain relative flex flex-col justify-between">
+        {/* {todaysQuote && (
           <div className="absolute bottom-0 left-0 right-0 pointer-events-none flex items-end justify-center pb-4">
             <div className="text-center px-4 max-w-md mx-auto">
               <p className="text-gray-700 text-sm italic mb-1">
@@ -80,9 +56,19 @@ export default function TimerSectionWrapperClient({
               <p className="text-gray-600 text-xs">— {todaysQuote.author}</p>
             </div>
           </div>
-        )}
+        )} */}
         <div className="pt-4 relative z-10">
           <TimerSectionClient user={user} />
+        </div>
+        <div className="px-4 pb-15">
+          <button
+            type="button"
+            onClick={handleAddTimer}
+            className="btn px-4 text-base rounded-lg w-full flex items-center gap-2 min-h-[24px] "
+            aria-label="Timer toevoegen"
+          >
+            <span>Timer toevoegen</span>
+          </button>
         </div>
       </section>
     </>

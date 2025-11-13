@@ -141,7 +141,7 @@ export default function TimerSectionClient({ user }) {
     return (
       <div
         key={timerId}
-        className="timer-box flex flex-row items-center pl-4 pr-4 pt-2 pb-2 rounded-lg mb-4 bg-white"
+        className="timer-box flex flex-row items-center pl-4 pr-4 pt-2 pb-2 rounded-lg mb-4 bg-white border border-snelgray"
       >
         {/* Left column: Project selector and counter */}
         <div className="flex flex-col flex-1">
@@ -318,7 +318,7 @@ export default function TimerSectionClient({ user }) {
             <button
               type="button"
               onClick={() => handleStart(pending)}
-              className="w-12 h-12 rounded-full bg-green-800 hover:bg-green-600 active:bg-green-700 flex items-center justify-center transition-colors shrink-0"
+              className="w-12 h-12 rounded-full bg-[#E5F5F4] hover:bg-green-600 active:bg-green-700 flex items-center justify-center transition-colors shrink-0"
               aria-label="Start timer"
             >
               <svg
@@ -327,7 +327,7 @@ export default function TimerSectionClient({ user }) {
                 viewBox="0 0 24 24"
                 fill="none"
                 aria-hidden="true"
-                className="text-white"
+                style={{ color: "#40A69F" }}
               >
                 <path d="M8 5v14l11-7-11-7z" fill="currentColor" />
               </svg>

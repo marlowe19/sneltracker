@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import ProjectFormClient from "./ProjectFormClient";
 import { useStore } from "@/stores/useStore";
+import { useToast } from "@/app/components/Toast";
 
 function formatMoney(amount) {
   return new Intl.NumberFormat("nl-NL", {
@@ -23,6 +24,7 @@ export default function ProjectsListClient({ user, initialProjects }) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [copiedProjectId, setCopiedProjectId] = useState(null);
   const [activeTab, setActiveTab] = useState("user"); // "user" or "shared"
+  const toast = useToast();
 
   // Use projects from store, fallback to initialProjects if store is empty
   const displayProjects =
@@ -34,7 +36,12 @@ export default function ProjectsListClient({ user, initialProjects }) {
   }
 
   function handleProjectClick(project) {
-    // Navigate to detail page instead of opening modal
+    // Check if shared project and user is not owner
+    if (project.is_shared && project.owner !== user) {
+      toast.show("alleen de eigenaar heeft toegang tot het project");
+      return;
+    }
+    // Navigate to detail page
     router.push(`/${encodeURIComponent(user)}/projecten/${project.id}`);
   }
 
@@ -152,76 +159,6 @@ export default function ProjectsListClient({ user, initialProjects }) {
                 onClick={() => handleProjectClick(project)}
                 className="border border-[#ffa540] bg-[#fff9e5] rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors overflow-hidden"
               >
-                <div className="flex justify-end gap-1 mb-2">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingProject(project);
-                      setIsFormOpen(true);
-                    }}
-                    className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
-                    title="Bewerken"
-                    aria-label="Bewerk project"
-                  >
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCopyLink(e, project.id);
-                    }}
-                    className="p-2 text-gray-500 hover:text-[#008eff] hover:bg-gray-100 rounded-lg transition-colors shrink-0"
-                    title={
-                      copiedProjectId === project.id
-                        ? "Gekopieerd!"
-                        : "Kopieer link"
-                    }
-                    aria-label="Kopieer project link"
-                  >
-                    {copiedProjectId === project.id ? (
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="text-green-600"
-                      >
-                        <path d="M20 6L9 17l-5-5" />
-                      </svg>
-                    ) : (
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
                 <div className="flex-1 min-w-0">
                   <div className="mb-2">
                     <div className="flex items-center gap-2 mb-1">
@@ -243,11 +180,28 @@ export default function ProjectsListClient({ user, initialProjects }) {
                     )}
                   </div>
 
-                  {project.hourly_rate && (
-                    <div className="text-sm text-gray-600 mb-2">
-                      Tarief: {formatMoney(project.hourly_rate)}/uur
-                    </div>
-                  )}
+                  {(() => {
+                    let rate = null;
+                    if (project.is_shared) {
+                      const isOwner = project.owner === user;
+                      if (isOwner) {
+                        // Owner can see project rate or member rate
+                        rate =
+                          project.member_hourly_rate ?? project.hourly_rate;
+                      } else {
+                        // Non-owner: only show their member rate, never project rate
+                        rate = project.member_hourly_rate ?? 0;
+                      }
+                    } else {
+                      // User project: show project rate
+                      rate = project.hourly_rate;
+                    }
+                    return rate !== null && rate !== undefined && rate !== 0 ? (
+                      <div className="text-sm text-gray-600 mb-2">
+                        Mijn Tarief: {formatMoney(rate)}/uur
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               </div>
             );

@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import MembersListClient from "../MembersListClient";
 import ProjectNotesClient from "./ProjectNotesClient";
-import { useDateRangeContext } from "./ProjectStatisticsContainer";
-import { getWeekBounds, getMonthBounds, getQuarterBounds } from "@/lib/time";
+import CalendarViewClient from "@/app/[user]/components/CalendarViewClient";
 
 function formatMoney(amount) {
   if (!amount && amount !== 0) return "";
@@ -34,10 +33,11 @@ export default function ProjectDetailClient({
   isOwner,
   initialMembers = [],
   isShared,
+  statisticsComponent,
 }) {
   const router = useRouter();
   const [members, setMembers] = useState(initialMembers);
-  const [activeTab, setActiveTab] = useState("notes");
+  const [activeTab, setActiveTab] = useState("statistieken");
 
   // Settings form state
   const [name, setName] = useState(project?.name || "");
@@ -63,14 +63,6 @@ export default function ProjectDetailClient({
 
   const canEdit = isShared ? isOwner : true;
 
-  // Get date range context (should be available since we're within DateRangeProvider)
-  const dateRangeContext = useDateRangeContext();
-
-  // Extract date string for dependency array
-  const referenceDateString = dateRangeContext?.referenceDate
-    ? dateRangeContext.referenceDate.toISOString()
-    : null;
-
   // Update form state when project prop changes
   useEffect(() => {
     if (project) {
@@ -92,56 +84,24 @@ export default function ProjectDetailClient({
     }
   }, [activeTab, isShared]);
 
-  // Fetch member statistics when on members tab and date range is available
+  // Fetch member statistics when on members tab
   useEffect(() => {
-    if (
-      activeTab === "members" &&
-      isShared &&
-      isOwner &&
-      dateRangeContext &&
-      !loadingStats
-    ) {
+    if (activeTab === "members" && isShared && isOwner && !loadingStats) {
       fetchMemberStatistics();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    activeTab,
-    isShared,
-    isOwner,
-    dateRangeContext?.rangeType,
-    referenceDateString,
-    // loadingStats removed - it's only a guard, not a trigger
-  ]);
+  }, [activeTab, isShared, isOwner]);
 
   async function fetchMemberStatistics() {
-    if (!dateRangeContext || loadingStats) return; // Prevent concurrent calls
+    if (loadingStats) return; // Prevent concurrent calls
 
     setLoadingStats(true);
     try {
-      const { rangeType, referenceDate } = dateRangeContext;
-
-      // Calculate date bounds
-      let bounds;
-      if (rangeType === "week") {
-        bounds = getWeekBounds(referenceDate);
-      } else if (rangeType === "month") {
-        bounds = getMonthBounds(referenceDate);
-      } else if (rangeType === "quarter") {
-        bounds = getQuarterBounds(referenceDate);
-      } else {
-        bounds = getWeekBounds(referenceDate);
-      }
-
-      // Fetch statistics from API
+      // Fetch all-time statistics from API (no date range parameters)
       const url = new URL(
         `/${encodeURIComponent(user)}/projecten/${projectId}/api`,
         window.location.origin
       );
-      url.searchParams.set("rangeType", rangeType);
-      url.searchParams.set("referenceDate", bounds.start.toISOString());
-      // Send both start and end to avoid timezone recalculation issues
-      url.searchParams.set("startDate", bounds.start.toISOString());
-      url.searchParams.set("endDate", bounds.end.toISOString());
 
       const res = await fetch(url);
       if (!res.ok) {
@@ -287,7 +247,19 @@ export default function ProjectDetailClient({
   return (
     <div>
       {/* Tabs Navigation */}
+      <CalendarViewClient user={user} projectId={projectId} />
       <div className="flex border-b border-gray-200 mb-6">
+        <button
+          type="button"
+          onClick={() => setActiveTab("statistieken")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "statistieken"
+              ? "border-[#008eff] text-[#008eff]"
+              : "border-transparent text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          Statistieken
+        </button>
         <button
           type="button"
           onClick={() => setActiveTab("notes")}
@@ -326,6 +298,8 @@ export default function ProjectDetailClient({
       </div>
 
       {/* Tab Content */}
+      {activeTab === "statistieken" && <div>{statisticsComponent}</div>}
+
       {activeTab === "notes" && (
         <div>
           <ProjectNotesClient

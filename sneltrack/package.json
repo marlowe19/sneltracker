@@ -10,9 +10,11 @@
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:mobile": "playwright test --grep @mobile",
-    "test:debug": "playwright test --debug"
+    "test:debug": "playwright test --debug",
+    "backup:firebase": "node scripts/backup-firebase.js"
   },
   "dependencies": {
+    "@carbon/icons-react": "^11.70.0",
     "@supabase/supabase-js": "^2.80.0",
     "@vercel/postgres": "^0.9.0",
     "date-fns": "^4.1.0",

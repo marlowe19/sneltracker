@@ -265,7 +265,10 @@ export default function WeekEntriesClient({ user, weekOffset }) {
         </Link>
       </div>
       <div className="w-full min-w-0 overflow-x-auto">
-        <div className="week grid grid-cols-7 gap-1 items-start">
+        <div
+          className="week grid gap-1 items-start"
+          style={{ gridTemplateColumns: "repeat(7, minmax(75px, 1fr))" }}
+        >
           {[
             "Maandag",
             "Dinsdag",
@@ -292,7 +295,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
                 expenses={perDayExpenses[i]}
                 user={user}
               >
-                <div className="day-label text-[10px] tracking-wide text-gray-500 uppercase whitespace-nowrap w-full text-center mb-1">
+                <div className="day-label text-sm tracking-wide text-gray-500 uppercase whitespace-nowrap w-full text-center mb-1">
                   <span className="sm:hidden">
                     {["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"][i]}
                   </span>
@@ -345,32 +348,33 @@ export default function WeekEntriesClient({ user, weekOffset }) {
           })}
         </div>
       </div>
-      <div className="pt-2 px-4 border-t border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold text-gray-700">Week Totaal</div>
-          <div className="flex items-center gap-4">
-            <div className="text-sm tabular-nums">
-              <span className="text-gray-600">Tijd: </span>
-              <span className="font-medium">
-                {formatHoursHMM(weekTotalTime)}
-              </span>
-            </div>
-            {weekTotalMoney > 0 && (
-              <div className="text-sm tabular-nums">
-                <span className="text-gray-600">Peso&apos;s: </span>
-                <span className="font-medium">
-                  {formatMoney(weekTotalMoney)}
-                </span>
-              </div>
-            )}
-            {weekTotalExpenses > 0 && (
-              <div className="text-sm tabular-nums">
-                <span className="text-gray-600">Uitgaven: </span>
-                <span className="font-medium text-green-600">
-                  {formatMoney(weekTotalExpenses)}
-                </span>
-              </div>
-            )}
+      <div className="w-full px-3 py-2 bg-white shadow-[inset_0px_1px_0px_0px_rgba(240,240,240,1.00)] flex justify-between items-center">
+        <div className="flex flex-col justify-center items-start gap-0.5">
+          <div className="text-gray-900 text-xs font-bold font-sans">Week</div>
+          <div className="text-gray-900 text-xs font-bold font-sans">
+            totaal
+          </div>
+        </div>
+        <div className="flex flex-col justify-center items-start gap-0.5">
+          <div className="text-[#808080] text-xs font-bold font-sans">Tijd</div>
+          <div className="text-gray-900 text-xs font-bold font-sans tabular-nums">
+            {formatHoursHMM(weekTotalTime)}
+          </div>
+        </div>
+        <div className="flex flex-col justify-center items-start gap-0.5">
+          <div className="text-[#808080] text-xs font-bold font-sans">
+            Euro&apos;s
+          </div>
+          <div className="text-teal-500 text-xs font-bold font-sans tabular-nums">
+            {formatMoney(weekTotalMoney)}
+          </div>
+        </div>
+        <div className="flex flex-col justify-center items-start gap-0.5">
+          <div className="text-[#808080] text-xs font-bold font-sans">
+            Uitgaven
+          </div>
+          <div className="text-red-500 text-xs font-bold font-sans tabular-nums">
+            {formatMoney(weekTotalExpenses)}
           </div>
         </div>
       </div>
