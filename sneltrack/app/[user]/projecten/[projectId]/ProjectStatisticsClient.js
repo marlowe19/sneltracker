@@ -230,60 +230,13 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
               </div>
             </div>
           )}
-          {/* User Hours Breakdown Pie Chart */}
+          {/* User Hours Breakdown - Labels only */}
           {memberStatistics && memberStatistics.length > 0 && (
             <div className="mt-6">
               <div className="text-xs font-medium text-gray-700 mb-3">
                 Verdeling per gebruiker
               </div>
-              <div style={{ height: "200px" }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart
-                    margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
-                  >
-                    <Pie
-                      data={memberStatistics.map((member) => ({
-                        name: member.user_name,
-                        value: parseFloat(member.totalHours.toFixed(2)),
-                        hours: member.totalHours,
-                      }))}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => {
-                        if (percent > 0.1) {
-                          return `${(percent * 100).toFixed(0)}%`;
-                        }
-                        return "";
-                      }}
-                      outerRadius={60}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {memberStatistics.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value, name, props) => [
-                        `${formatHours(props.payload.hours)} (${value.toFixed(
-                          2
-                        )}u)`,
-                        props.payload.name,
-                      ]}
-                      contentStyle={{
-                        backgroundColor: "white",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "0.5rem",
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="mt-4 flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
                 {memberStatistics.map((member, index) => (
                   <div
                     key={member.user_name}
@@ -373,60 +326,13 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
               </div>
             </div>
           )}
-          {/* User Hours Breakdown Pie Chart */}
+          {/* User Hours Breakdown - Labels only */}
           {memberStatistics && memberStatistics.length > 0 && (
             <div>
               <div className="text-xs font-medium text-gray-700 mb-3">
                 Verdeling per gebruiker
               </div>
-              <div style={{ height: "200px" }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart
-                    margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
-                  >
-                    <Pie
-                      data={memberStatistics.map((member) => ({
-                        name: member.user_name,
-                        value: parseFloat(member.totalHours.toFixed(2)),
-                        hours: member.totalHours,
-                      }))}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => {
-                        if (percent > 0.1) {
-                          return `${(percent * 100).toFixed(0)}%`;
-                        }
-                        return "";
-                      }}
-                      outerRadius={60}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {memberStatistics.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value, name, props) => [
-                        `${formatHours(props.payload.hours)} (${value.toFixed(
-                          2
-                        )}u)`,
-                        props.payload.name,
-                      ]}
-                      contentStyle={{
-                        backgroundColor: "white",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "0.5rem",
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="mt-4 flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
                 {memberStatistics.map((member, index) => (
                   <div
                     key={member.user_name}

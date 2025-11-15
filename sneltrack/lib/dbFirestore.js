@@ -1,5 +1,6 @@
 import { getDb } from "./firebaseAdmin";
 import { computeEntryDurationMs, computeEntryDurationMsClipped } from "./time";
+import { timeEntriesService, projectsService } from "./supabase/services";
 
 function toIso(ts) {
   if (!ts) return null;
@@ -231,7 +232,10 @@ export async function startEntry(userName, hourlyRate = null, project = null) {
     }
     const docRef = await ref.add(entryData);
     const doc = await docRef.get();
-    return docToEntry(doc);
+    const entry = docToEntry(doc);
+    // Fire-and-forget sync to Supabase
+    timeEntriesService.create(entry);
+    return entry;
   }
 }
 
@@ -267,10 +271,12 @@ export async function stopEntry(userName, entryId = null) {
       if (projectDoc && projectDoc.is_shared) {
         // Update in shared project time entries
         const end = new Date();
-        return await updateProjectTimeEntry(active.project, active.id, {
+        const entry = await updateProjectTimeEntry(active.project, active.id, {
           end_time: end,
           is_running: false,
         });
+        // Fire-and-forget sync to Supabase (already handled in updateProjectTimeEntry)
+        return entry;
       }
     }
 
@@ -280,7 +286,10 @@ export async function stopEntry(userName, entryId = null) {
     const end = new Date();
     await docRef.update({ end_time: end, is_running: false });
     const updated = await docRef.get();
-    return docToEntry(updated);
+    const entry = docToEntry(updated);
+    // Fire-and-forget sync to Supabase
+    timeEntriesService.update(entry);
+    return entry;
   } else {
     // Stop all active entries
     const activeEntries = await getActiveEntries(userName);
@@ -310,7 +319,10 @@ export async function stopEntry(userName, entryId = null) {
       const docRef = ref.doc(active.id);
       await docRef.update({ end_time: end, is_running: false });
       const updated = await docRef.get();
-      stoppedEntries.push(docToEntry(updated));
+      const entry = docToEntry(updated);
+      // Fire-and-forget sync to Supabase
+      timeEntriesService.update(entry);
+      stoppedEntries.push(entry);
     }
 
     return stoppedEntries;
@@ -338,7 +350,14 @@ export async function getWeekEntries(userName, weekStartIso, weekEndIso) {
   const sharedEntries = [];
 
   for (const project of sharedProjects) {
-    const projectEntries = await getProjectTimeEntries(project.id, userName);
+    // Check if user is the owner of this project
+    const isOwner = await isProjectOwner(userName, project.id);
+
+    // If owner, fetch all team entries; otherwise, fetch only user's entries
+    const projectEntries = isOwner
+      ? await getProjectTimeEntries(project.id)
+      : await getProjectTimeEntries(project.id, userName);
+
     // Filter entries by week bounds
     const weekEntries = projectEntries.filter((entry) => {
       const entryStart = new Date(entry.start_time);
@@ -488,7 +507,10 @@ export async function createEntry(
 
     const docRef = await ref.add(entryData);
     const doc = await docRef.get();
-    return docToEntry(doc);
+    const entry = docToEntry(doc);
+    // Fire-and-forget sync to Supabase
+    timeEntriesService.create(entry);
+    return entry;
   }
 }
 
@@ -629,13 +651,18 @@ export async function updateEntry(userName, entryId, updates) {
       // Delete old entry from user collection
       await userRef.doc(entryId).delete();
 
+      // Fire-and-forget sync to Supabase
+      timeEntriesService.create(newEntry);
       return newEntry;
     }
 
     // If project is being removed or changed to non-shared, or if staying in user entries, just update
     await userRef.doc(entryId).update(updateData);
     const updated = await userRef.doc(entryId).get();
-    return docToEntry(updated);
+    const entry = docToEntry(updated);
+    // Fire-and-forget sync to Supabase
+    timeEntriesService.update(entry);
+    return entry;
   }
 
   // Entry not in user collection, check shared projects
@@ -717,7 +744,10 @@ export async function updateEntry(userName, entryId, updates) {
       await getSharedProjectTimeEntriesCollection(currentSharedProject.id)
         .doc(entryId)
         .delete();
-      return docToEntry(await userRef.doc(entryId).get());
+      const entry = docToEntry(await userRef.doc(entryId).get());
+      // Fire-and-forget sync to Supabase
+      timeEntriesService.update(entry);
+      return entry;
     }
 
     // If project is being changed to a different shared project
@@ -784,16 +814,20 @@ export async function updateEntry(userName, entryId, updates) {
         await getSharedProjectTimeEntriesCollection(currentSharedProject.id)
           .doc(entryId)
           .delete();
+        // Fire-and-forget sync to Supabase
+        timeEntriesService.create(newEntry);
         return newEntry;
       }
     }
 
     // Same shared project, just update
-    return await updateProjectTimeEntry(
+    const entry = await updateProjectTimeEntry(
       currentSharedProject.id,
       entryId,
       updateData
     );
+    // Fire-and-forget sync to Supabase (already handled in updateProjectTimeEntry)
+    return entry;
   }
 
   throw new Error(`Entry ${entryId} not found`);
@@ -944,7 +978,10 @@ export async function createSharedProject(
   await addMemberToProject(projectId, userName, "owner");
 
   const doc = await docRef.get();
-  return docToSharedProject(doc);
+  const project = docToSharedProject(doc);
+  // Fire-and-forget sync to Supabase
+  projectsService.create(project, userName);
+  return project;
 }
 
 export async function updateSharedProject(projectId, updates) {
@@ -977,7 +1014,10 @@ export async function updateSharedProject(projectId, updates) {
 
   await docRef.update(updateData);
   const updated = await docRef.get();
-  return docToSharedProject(updated);
+  const project = docToSharedProject(updated);
+  // Fire-and-forget sync to Supabase
+  projectsService.update(project, project.owner);
+  return project;
 }
 
 export async function deleteSharedProject(projectId) {
@@ -1120,7 +1160,10 @@ export async function createProjectTimeEntry(
 
   const docRef = await ref.add(entryData);
   const doc = await docRef.get();
-  return docToEntry(doc);
+  const entry = docToEntry(doc);
+  // Fire-and-forget sync to Supabase
+  timeEntriesService.create(entry);
+  return entry;
 }
 
 export async function getProjectTimeEntries(projectId, userName = null) {
@@ -1212,7 +1255,10 @@ export async function updateProjectTimeEntry(projectId, entryId, updates) {
 
   await docRef.update(updateData);
   const updated = await docRef.get();
-  return docToEntry(updated);
+  const entry = docToEntry(updated);
+  // Fire-and-forget sync to Supabase
+  timeEntriesService.update(entry);
+  return entry;
 }
 
 function docToProject(doc) {
@@ -1300,7 +1346,10 @@ export async function createProject(
 
   const docRef = await ref.add(projectData);
   const doc = await docRef.get();
-  return docToProject(doc);
+  const project = docToProject(doc);
+  // Fire-and-forget sync to Supabase
+  projectsService.create(project, userName);
+  return project;
 }
 
 export async function updateProject(userName, projectId, updates) {
@@ -1343,7 +1392,10 @@ export async function updateProject(userName, projectId, updates) {
 
   await docRef.update(updateData);
   const updated = await docRef.get();
-  return docToProject(updated);
+  const project = docToProject(updated);
+  // Fire-and-forget sync to Supabase
+  projectsService.update(project, userName);
+  return project;
 }
 
 export async function deleteProject(userName, projectId) {

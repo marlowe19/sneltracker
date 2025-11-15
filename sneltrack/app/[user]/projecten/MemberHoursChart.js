@@ -122,3 +122,4 @@ export default function MemberHoursChart({ memberStats }) {
     </div>
   );
 }
+

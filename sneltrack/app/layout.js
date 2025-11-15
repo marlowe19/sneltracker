@@ -47,7 +47,7 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="nl">
       <head>
         {/* iOS Safari PWA Meta Tags for iPhone 15+ and iOS 16+ */}
         <meta name="apple-mobile-web-app-capable" content="yes" />

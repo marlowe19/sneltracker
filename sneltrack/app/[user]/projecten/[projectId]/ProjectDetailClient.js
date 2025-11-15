@@ -38,6 +38,7 @@ export default function ProjectDetailClient({
   const router = useRouter();
   const [members, setMembers] = useState(initialMembers);
   const [activeTab, setActiveTab] = useState("statistieken");
+  const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
 
   // Settings form state
   const [name, setName] = useState(project?.name || "");
@@ -247,7 +248,18 @@ export default function ProjectDetailClient({
   return (
     <div>
       {/* Tabs Navigation */}
-      <CalendarViewClient user={user} projectId={projectId} />
+
+      {/* <button className="btn" onClick={() => setIsCalendarExpanded(true)}>
+        Calendar
+      </button> */}
+      {isCalendarExpanded && (
+        <CalendarViewClient
+          user={user}
+          projectId={projectId}
+          isExpanded={true}
+          onClose={() => setIsCalendarExpanded(false)}
+        />
+      )}
       <div className="flex border-b border-gray-200 mb-6">
         <button
           type="button"

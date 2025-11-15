@@ -109,11 +109,14 @@ export default function CalendarViewClient({
   viewType: initialViewType = "week",
   initialDate = new Date(),
   onDateSelect,
+  isExpanded: initialIsExpanded = false,
+  onClose,
+  projectId,
 }) {
   const [viewType, setViewType] = useState(initialViewType);
   const [referenceDate, setReferenceDate] = useState(initialDate);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(initialIsExpanded);
 
   const entries = useStore((state) => state.entries);
   const loadingEntries = useStore((state) => state.loadingEntries);
@@ -122,6 +125,7 @@ export default function CalendarViewClient({
   const fetchWeekExpenses = useStore((state) => state.fetchWeekExpenses);
   const activeEntries = useStore((state) => state.activeEntries);
   const projects = useStore((state) => state.projects);
+  const fetchProjects = useStore((state) => state.fetchProjects);
 
   // State for notes with due dates
   const [notesWithDueDatePerDay, setNotesWithDueDatePerDay] = useState({});
@@ -146,6 +150,14 @@ export default function CalendarViewClient({
     fetchWeekExpenses(user, startIso, endIso);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, viewType, referenceDate, dateRange]);
+
+  // Fetch projects if not already loaded
+  useEffect(() => {
+    if (projects.length === 0) {
+      fetchProjects(user);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // Fetch notes with due dates for the visible range
   useEffect(() => {
@@ -310,8 +322,51 @@ export default function CalendarViewClient({
     return data;
   }, [allEntries, weekExpenses, dateRange, viewType, referenceDate]);
 
-  const handleDateClick = (dayDate) => {
+  // Calculate totals based on current view
+  const viewTotals = useMemo(() => {
+    let totalTime = 0;
+    let totalMoney = 0;
+    let totalExpenses = 0;
+
+    if (viewType === "week") {
+      // Sum totals for the 7 days in the week
+      const { start: weekStart } = getWeekBounds(referenceDate);
+      for (let i = 0; i < 7; i++) {
+        const dayDate = new Date(weekStart.getTime() + i * 24 * 60 * 60 * 1000);
+        const dateKey = dayDate.toISOString().split("T")[0];
+        const dayData = perDayData[dateKey];
+        if (dayData) {
+          totalTime += dayData.hours || 0;
+          totalMoney += dayData.money || 0;
+          totalExpenses += dayData.expenses || 0;
+        }
+      }
+    } else {
+      // Sum totals for all days in the current month (excluding padding days)
+      const { days, monthStart } = generateMonthDays(referenceDate);
+      days.forEach((dayDate) => {
+        // Only include days that are in the current month
+        if (dayDate.getMonth() === monthStart.getMonth()) {
+          const dateKey = dayDate.toISOString().split("T")[0];
+          const dayData = perDayData[dateKey];
+          if (dayData) {
+            totalTime += dayData.hours || 0;
+            totalMoney += dayData.money || 0;
+            totalExpenses += dayData.expenses || 0;
+          }
+        }
+      });
+    }
+
+    return { totalTime, totalMoney, totalExpenses };
+  }, [perDayData, viewType, referenceDate]);
+
+  const handleDateClick = (dayDate, e) => {
+    if (e) {
+      e.stopPropagation(); // Prevent bubbling to section's onClick
+    }
     setSelectedDate(dayDate);
+    setIsExpanded(true); // Immediately expand when a date is clicked
     if (onDateSelect) {
       onDateSelect(dayDate);
     }
@@ -352,6 +407,9 @@ export default function CalendarViewClient({
   const handleCloseExpanded = (e) => {
     e.stopPropagation();
     setIsExpanded(false);
+    if (onClose) {
+      onClose();
+    }
   };
 
   // Get selected date entries
@@ -412,13 +470,13 @@ export default function CalendarViewClient({
                 className={`day relative flex flex-col items-center w-full cursor-pointer hover:bg-gray-50 rounded-lg p-1 transition-colors ${
                   isSelected ? "bg-blue-100" : ""
                 }`}
-                onClick={() => handleDateClick(dayDate)}
+                onClick={(e) => handleDateClick(dayDate, e)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    handleDateClick(dayDate);
+                    handleDateClick(dayDate, e);
                   }
                 }}
                 aria-label={`Select ${d}`}
@@ -512,13 +570,13 @@ export default function CalendarViewClient({
                 className={`day relative flex flex-col items-center min-h-[60px] cursor-pointer hover:bg-gray-50 rounded-lg p-1 transition-colors ${
                   !isCurrentMonth ? "opacity-40" : ""
                 } ${isSelected ? "bg-blue-100" : ""}`}
-                onClick={() => handleDateClick(dayDate)}
+                onClick={(e) => handleDateClick(dayDate, e)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    handleDateClick(dayDate);
+                    handleDateClick(dayDate, e);
                   }
                 }}
                 aria-label={`Select ${dayDate.toLocaleDateString()}`}
@@ -616,7 +674,7 @@ export default function CalendarViewClient({
 
         {/* Navigation and controls */}
         <div
-          className={`flex items-center justify-between mb-4 ${
+          className={`flex items-center justify-between pt-4 mb-4 ${
             isExpanded ? "shrink-0" : ""
           }`}
           onClick={(e) => e.stopPropagation()}
@@ -665,10 +723,44 @@ export default function CalendarViewClient({
           {viewType === "week" ? renderWeekView() : renderMonthView()}
         </div>
 
+        <div className="w-full px-3 py-2 bg-white shadow-[inset_0px_1px_0px_0px_rgba(240,240,240,1.00)] flex justify-between items-center">
+          <div className="flex flex-col justify-center items-start gap-0.5">
+            <div className="text-gray-900 text-xs font-bold font-sans">
+              {viewType === "week" ? "Week" : "Maand"}
+            </div>
+            <div className="text-gray-900 text-xs font-bold font-sans">
+              totaal
+            </div>
+          </div>
+          <div className="flex flex-col justify-center items-start gap-0.5">
+            <div className="text-[#808080] text-xs font-bold font-sans">
+              Tijd
+            </div>
+            <div className="text-gray-900 text-xs font-bold font-sans tabular-nums">
+              {formatHoursHMM(viewTotals.totalTime)}
+            </div>
+          </div>
+          <div className="flex flex-col justify-center items-start gap-0.5">
+            <div className="text-[#808080] text-xs font-bold font-sans">
+              Euro&apos;s
+            </div>
+            <div className="text-teal-500 text-xs font-bold font-sans tabular-nums">
+              {formatMoney(viewTotals.totalMoney)}
+            </div>
+          </div>
+          <div className="flex flex-col justify-center items-start gap-0.5">
+            <div className="text-[#808080] text-xs font-bold font-sans">
+              Uitgaven
+            </div>
+            <div className="text-red-500 text-xs font-bold font-sans tabular-nums">
+              {formatMoney(viewTotals.totalExpenses)}
+            </div>
+          </div>
+        </div>
         {/* Selected date entries list - only show when expanded */}
         {selectedDate && isExpanded && (
           <div
-            className="border-t border-gray-200 bg-amber-100 flex-1 overflow-y-auto min-h-0"
+            className="border-t border-gray-200  flex-1 overflow-y-auto min-h-0"
             onClick={(e) => e.stopPropagation()}
           >
             <DayEntriesListClient

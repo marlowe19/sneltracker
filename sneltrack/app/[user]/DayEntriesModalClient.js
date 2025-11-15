@@ -7,6 +7,7 @@ import { useStore } from "@/stores/useStore";
 import { getWeekBounds, toIso } from "@/lib/time";
 import { computeEntryDurationMs } from "@/lib/time";
 import NotificationBadge from "@/app/components/NotificationBadge";
+import DayEntriesListClient from "./components/DayEntriesListClient";
 
 function formatTime(isoString) {
   if (!isoString) return "";
@@ -1175,6 +1176,12 @@ export default function DayEntriesModalClient({
       className="fixed inset-0 bg-black/50 z-60 transition-opacity duration-300"
       onClick={handleCancel}
     >
+      <DayEntriesListClient
+        dayDate={dayDate}
+        entries={localEntries}
+        expenses={localExpenses}
+        user={user}
+      />
       <div
         className="fixed inset-x-0 bottom-0 bg-white rounded-t-xl shadow-2xl h-full flex flex-col transition-transform duration-300 ease-out translate-y-0 pb-[env(safe-area-inset-bottom)]"
         onClick={(e) => e.stopPropagation()}

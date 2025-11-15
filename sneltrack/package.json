@@ -11,13 +11,16 @@
     "test:ui": "playwright test --ui",
     "test:mobile": "playwright test --grep @mobile",
     "test:debug": "playwright test --debug",
-    "backup:firebase": "node scripts/backup-firebase.js"
+    "backup:firebase": "node scripts/backup-firebase.mjs",
+    "backup:firebase:dev": "ENV_FILE=.env.development node scripts/backup-firebase.mjs",
+    "backup:firebase:local": "ENV_FILE=.env.local node scripts/backup-firebase.mjs"
   },
   "dependencies": {
     "@carbon/icons-react": "^11.70.0",
     "@supabase/supabase-js": "^2.80.0",
     "@vercel/postgres": "^0.9.0",
     "date-fns": "^4.1.0",
+    "dotenv": "^17.2.3",
     "firebase-admin": "^12.6.0",
     "next": "16.0.1",
     "react": "19.2.0",

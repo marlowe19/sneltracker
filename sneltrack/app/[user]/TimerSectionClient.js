@@ -236,7 +236,7 @@ export default function TimerSectionClient({ user }) {
                   }}
                   className="w-full px-3 py-2 text-base text-left hover:bg-gray-100 text-gray-700 flex items-center"
                 >
-                  Geen project
+                  Kies een project
                 </button>
                 {projects.map((project, index) => (
                   <div key={project.id}>

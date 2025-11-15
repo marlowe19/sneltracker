@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useStore } from "@/stores/useStore";
 import { computeEntryDurationMs } from "@/lib/time";
+import { useToast } from "@/app/components/Toast";
 import NotificationBadge from "@/app/components/NotificationBadge";
 
 function formatTime(isoString) {
@@ -120,7 +121,9 @@ export default function DayEntriesListClient({
   const [notes, setNotes] = useState([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [notesError, setNotesError] = useState(null);
-
+  const [expandedEntries, setExpandedEntries] = useState(new Set());
+  const [savingEntryId, setSavingEntryId] = useState(null);
+  const toast = useToast();
   const dayDateString = selectedDate?.toISOString();
 
   // Fetch day expenses
@@ -140,27 +143,35 @@ export default function DayEntriesListClient({
         return dateB - dateA;
       });
 
-      setLocalEntries(
-        sortedEntries.map((entry) => {
-          const durationMs =
-            entry.duration_ms ??
-            (entry.end_time
-              ? computeEntryDurationMs(entry.start_time, entry.end_time, null)
-              : null);
+      const mappedEntries = sortedEntries.map((entry) => {
+        const durationMs =
+          entry.duration_ms ??
+          (entry.end_time
+            ? computeEntryDurationMs(entry.start_time, entry.end_time, null)
+            : null);
 
-          return {
-            ...entry,
-            start_time_editable: formatTime(entry.start_time),
-            end_time_editable: formatTime(entry.end_time),
-            duration_editable: durationMs ? formatHoursMinutes(durationMs) : "",
-            hourly_rate_editable: entry.hourly_rate ?? "",
-            project_editable: entry.project ?? "",
-            isProjectMember: false,
-          };
-        })
-      );
+        return {
+          ...entry,
+          start_time_editable: formatTime(entry.start_time),
+          end_time_editable: formatTime(entry.end_time),
+          duration_editable: durationMs ? formatHoursMinutes(durationMs) : "",
+          hourly_rate_editable: entry.hourly_rate ?? "",
+          project_editable: entry.project ?? "",
+          isProjectMember: false,
+        };
+      });
+
+      setLocalEntries(mappedEntries);
+
+      // Automatically expand temp entries
+      const tempEntryIds = mappedEntries
+        .filter((entry) => entry.id && entry.id.startsWith("temp-"))
+        .map((entry) => entry.id);
+      if (tempEntryIds.length > 0) {
+        setExpandedEntries((prev) => new Set([...prev, ...tempEntryIds]));
+      }
     }
-  }, [initialEntries, selectedDate]);
+  }, [selectedDate]);
 
   // Initialize expenses
   useEffect(() => {
@@ -226,7 +237,6 @@ export default function DayEntriesListClient({
     }
 
     fetchNotes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, user]);
 
   const handleEntryChange = async (index, field, value) => {
@@ -361,6 +371,39 @@ export default function DayEntriesListClient({
     }
   };
 
+  const handleToggleExpand = (entryId) => {
+    setExpandedEntries((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(entryId)) {
+        newSet.delete(entryId);
+      } else {
+        newSet.add(entryId);
+      }
+      return newSet;
+    });
+  };
+
+  const calculateEntryTotal = (entry) => {
+    const durationMs =
+      entry.duration_ms ??
+      (entry.end_time
+        ? computeEntryDurationMs(entry.start_time, entry.end_time, null)
+        : 0);
+
+    if (!durationMs) return 0;
+
+    const hourlyRate =
+      entry.hourly_rate_editable !== undefined &&
+      entry.hourly_rate_editable !== ""
+        ? parseFloat(entry.hourly_rate_editable)
+        : entry.hourly_rate;
+
+    if (!hourlyRate) return 0;
+
+    const hours = durationMs / (1000 * 60 * 60);
+    return hours * hourlyRate;
+  };
+
   const handleAddEntry = () => {
     if (!selectedDate) return;
 
@@ -384,6 +427,8 @@ export default function DayEntriesListClient({
     };
 
     setLocalEntries([newEntry, ...localEntries]);
+    // Automatically expand new entries for immediate editing
+    setExpandedEntries((prev) => new Set([...prev, tempId]));
   };
 
   const handleExpenseChange = (index, field, value) => {
@@ -805,20 +850,357 @@ export default function DayEntriesListClient({
       setSuccessMessage("Wijzigingen opgeslagen");
       setIsSaving(false);
 
-      // Call update callback
-      if (onEntryUpdate) {
-        onEntryUpdate();
-      }
-
-      // Refresh router
-      router.refresh();
-
-      setTimeout(() => {
-        setSuccessMessage(null);
-      }, 3000);
+      //   // Call update callback
+      //   if (onEntryUpdate) {
+      //     onEntryUpdate();
+      //   }
+      toast.success("Wijzigingen opgeslagen");
     } catch (err) {
       setError(err.message || "Failed to save changes");
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveEntry = async (index) => {
+    const entry = localEntries[index];
+    if (!entry) return;
+
+    const originalEntryId = entry.id; // Store original ID for collapsing
+    setSavingEntryId(entry.id);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const isNewEntry = entry.id && entry.id.startsWith("temp-");
+
+      if (isNewEntry) {
+        if (!selectedDate) {
+          throw new Error("Day date is required");
+        }
+
+        const updates = {};
+        let durationWasEdited = false;
+
+        const hasStartTime =
+          entry.start_time_editable && entry.start_time_editable.trim() !== "";
+        const hasEndTime =
+          entry.end_time_editable && entry.end_time_editable.trim() !== "";
+
+        if (
+          entry.duration_editable !== undefined &&
+          entry.duration_editable !== "" &&
+          !hasStartTime
+        ) {
+          const newDurationMs = parseDuration(entry.duration_editable);
+          if (newDurationMs !== null) {
+            updates.duration_ms = newDurationMs;
+            durationWasEdited = true;
+          }
+        }
+
+        if (durationWasEdited && selectedDate && updates.duration_ms) {
+          const date = new Date(selectedDate);
+          const dayStart = new Date(
+            date.getFullYear(),
+            date.getMonth(),
+            date.getDate(),
+            0,
+            0,
+            0,
+            0
+          );
+          const dayEnd = new Date(dayStart.getTime() + updates.duration_ms);
+          updates.start_time = dayStart.toISOString();
+          updates.end_time = dayEnd.toISOString();
+        } else {
+          if (entry.start_time_editable && selectedDate) {
+            const newStart = combineDayDateWithTime(
+              selectedDate,
+              entry.start_time_editable
+            );
+            if (newStart) {
+              updates.start_time = newStart.toISOString();
+            }
+          }
+
+          if (entry.end_time_editable && selectedDate) {
+            const newEnd = combineDayDateWithTime(
+              selectedDate,
+              entry.end_time_editable
+            );
+            if (newEnd) {
+              updates.end_time = newEnd.toISOString();
+            }
+          }
+
+          if (updates.start_time && updates.end_time) {
+            const start = new Date(updates.start_time);
+            const end = new Date(updates.end_time);
+            const durationMs = end - start;
+            if (durationMs > 0) {
+              updates.duration_ms = durationMs;
+            }
+          } else if (
+            entry.duration_editable &&
+            entry.duration_editable !== "" &&
+            !hasStartTime
+          ) {
+            const newDurationMs = parseDuration(entry.duration_editable);
+            if (newDurationMs !== null) {
+              updates.duration_ms = newDurationMs;
+            }
+          }
+        }
+
+        if (
+          entry.hourly_rate_editable !== undefined &&
+          entry.hourly_rate_editable !== ""
+        ) {
+          updates.hourly_rate = parseFloat(entry.hourly_rate_editable);
+        }
+
+        if (
+          entry.project_editable !== undefined &&
+          entry.project_editable !== ""
+        ) {
+          updates.project = entry.project_editable;
+        }
+
+        const response = await fetch(`/${encodeURIComponent(user)}/entries`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dayDate: selectedDate.toISOString(),
+            duration_ms: updates.duration_ms ?? null,
+            hourly_rate: updates.hourly_rate ?? null,
+            project: updates.project ?? null,
+            start_time: updates.start_time ?? null,
+            end_time: updates.end_time ?? null,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to create entry");
+        }
+
+        const responseData = await response.json();
+        if (responseData.entry) {
+          replaceTempEntry(entry.id, responseData.entry);
+          // Update local entries with the new entry data
+          const updated = [...localEntries];
+          updated[index] = {
+            ...responseData.entry,
+            start_time_editable: formatTime(responseData.entry.start_time),
+            end_time_editable: formatTime(responseData.entry.end_time),
+            duration_editable: responseData.entry.duration_ms
+              ? formatHoursMinutes(responseData.entry.duration_ms)
+              : "",
+            hourly_rate_editable: responseData.entry.hourly_rate ?? "",
+            project_editable: responseData.entry.project ?? "",
+            isProjectMember: updated[index].isProjectMember,
+          };
+          setLocalEntries(updated);
+
+          // Collapse the entry after saving
+          setExpandedEntries((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(originalEntryId);
+            newSet.delete(responseData.entry.id); // Also remove new ID in case it was added
+            return newSet;
+          });
+        }
+
+        setSuccessMessage("Entry opgeslagen");
+        setSavingEntryId(null);
+
+        // Call update callback (for parent components to refresh their data)
+        // if (onEntryUpdate) {
+        //   onEntryUpdate();
+        // }
+
+        setTimeout(() => {
+          setSuccessMessage(null);
+        }, 3000);
+      } else {
+        // Existing entry - update it
+        const updates = {};
+        let durationWasEdited = false;
+
+        const hasStartTime =
+          entry.start_time_editable && entry.start_time_editable.trim() !== "";
+        const hasEndTime =
+          entry.end_time_editable && entry.end_time_editable.trim() !== "";
+
+        if (
+          entry.duration_editable !== undefined &&
+          entry.duration_editable !== "" &&
+          !hasStartTime
+        ) {
+          const newDurationMs = parseDuration(entry.duration_editable);
+          const currentDurationMs = entry.duration_ms;
+
+          if (newDurationMs !== null && newDurationMs !== currentDurationMs) {
+            updates.duration_ms = newDurationMs;
+            durationWasEdited = true;
+          }
+        }
+
+        if (durationWasEdited && selectedDate && updates.duration_ms) {
+          const date = new Date(selectedDate);
+          const dayStart = new Date(
+            date.getFullYear(),
+            date.getMonth(),
+            date.getDate(),
+            0,
+            0,
+            0,
+            0
+          );
+          const dayEnd = new Date(dayStart.getTime() + updates.duration_ms);
+          updates.start_time = dayStart.toISOString();
+          updates.end_time = dayEnd.toISOString();
+        } else {
+          if (entry.start_time_editable && !durationWasEdited && selectedDate) {
+            const newStart = combineDayDateWithTime(
+              selectedDate,
+              entry.start_time_editable
+            );
+            if (newStart && newStart.toISOString() !== entry.start_time) {
+              updates.start_time = newStart.toISOString();
+
+              if (entry.is_running === true) {
+                const now = new Date();
+                const durationMs = now - newStart;
+                if (durationMs > 0) {
+                  updates.duration_ms = durationMs;
+                }
+              }
+            }
+          }
+
+          if (
+            entry.end_time_editable &&
+            !durationWasEdited &&
+            selectedDate &&
+            entry.is_running !== true
+          ) {
+            const newEnd = combineDayDateWithTime(
+              selectedDate,
+              entry.end_time_editable
+            );
+            const currentEnd = entry.end_time
+              ? new Date(entry.end_time).toISOString()
+              : null;
+            if (newEnd && newEnd.toISOString() !== currentEnd) {
+              updates.end_time = newEnd.toISOString();
+            }
+          }
+
+          if (
+            hasStartTime &&
+            hasEndTime &&
+            updates.start_time &&
+            updates.end_time &&
+            entry.is_running !== true
+          ) {
+            const start = new Date(updates.start_time);
+            const end = new Date(updates.end_time);
+            const durationMs = end - start;
+            if (durationMs > 0) {
+              updates.duration_ms = durationMs;
+            }
+          }
+        }
+
+        if (entry.hourly_rate_editable !== undefined) {
+          const newRate =
+            entry.hourly_rate_editable === "" ||
+            entry.hourly_rate_editable === null
+              ? null
+              : parseFloat(entry.hourly_rate_editable);
+          const currentRate = entry.hourly_rate;
+          if (newRate !== currentRate) {
+            updates.hourly_rate = newRate;
+          }
+        }
+
+        if (entry.project_editable !== undefined) {
+          const newProject =
+            entry.project_editable === "" || entry.project_editable === null
+              ? null
+              : entry.project_editable;
+          const currentProject = entry.project;
+          if (newProject !== currentProject) {
+            updates.project = newProject;
+          }
+        }
+
+        if (Object.keys(updates).length > 0) {
+          const response = await fetch(
+            `/${encodeURIComponent(user)}/entries/${entry.id}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(updates),
+            }
+          );
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Failed to update entry");
+          }
+
+          const responseData = await response.json();
+          if (responseData.entry) {
+            updateEntry(entry.id, responseData.entry);
+            // Update local entry with the updated data
+            const updated = [...localEntries];
+            updated[index] = {
+              ...responseData.entry,
+              start_time_editable: formatTime(responseData.entry.start_time),
+              end_time_editable: formatTime(responseData.entry.end_time),
+              duration_editable: responseData.entry.duration_ms
+                ? formatHoursMinutes(responseData.entry.duration_ms)
+                : "",
+              hourly_rate_editable: responseData.entry.hourly_rate ?? "",
+              project_editable: responseData.entry.project ?? "",
+              isProjectMember: updated[index].isProjectMember,
+            };
+            setLocalEntries(updated);
+
+            // Collapse the entry after saving
+            setExpandedEntries((prev) => {
+              const newSet = new Set(prev);
+              newSet.delete(entry.id);
+              return newSet;
+            });
+          }
+
+          setSuccessMessage("Entry opgeslagen");
+          setSavingEntryId(null);
+
+          //   // Call update callback (for parent components to refresh their data)
+          //   if (onEntryUpdate) {
+          //     onEntryUpdate();
+          //   }
+
+          setTimeout(() => {
+            setSuccessMessage(null);
+          }, 3000);
+        } else {
+          // No changes to save, just collapse
+          setExpandedEntries((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(entry.id);
+            return newSet;
+          });
+          setSavingEntryId(null);
+        }
+      }
+    } catch (err) {
+      setError(err.message || "Failed to save entry");
+      setSavingEntryId(null);
     }
   };
 
@@ -1007,7 +1389,7 @@ export default function DayEntriesListClient({
         </div>
       </div>
 
-      <div className="p-4 sm:p-6 bg-[#f2f2f2]">
+      <div className="p-4 sm:p-6 ">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
             {error}
@@ -1072,225 +1454,364 @@ export default function DayEntriesListClient({
             </p>
           ) : (
             <div className="space-y-4">
-              {localEntries.map((entry, index) => (
-                <div
-                  key={entry.id}
-                  className="rounded-lg p-4 space-y-4 bg-white"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-medium text-gray-700">
-                      Entry {index + 1}
-                    </div>
-                    {entry.id &&
-                      !entry.id.startsWith("temp-") &&
-                      entry.is_running !== true && (
-                        <button
-                          onClick={() => handleDeleteEntry(entry.id, index)}
-                          disabled={isSaving || isDeleting}
-                          className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              {localEntries.map((entry, index) => {
+                const isExpanded = expandedEntries.has(entry.id);
+
+                const project =
+                  entry.project_editable || entry.project
+                    ? projects.find(
+                        (p) =>
+                          p.id === (entry.project_editable || entry.project)
+                      )
+                    : null;
+
+                console.log(
+                  "Found project:",
+                  project ? { id: project.id, name: project.name } : null
+                );
+
+                const entryTotal = calculateEntryTotal(entry);
+                const startTimeDisplay =
+                  entry.start_time_editable ||
+                  formatTime(entry.start_time) ||
+                  "-";
+                const endTimeDisplay =
+                  entry.end_time_editable || formatTime(entry.end_time) || "-";
+                const durationDisplay =
+                  entry.duration_editable ||
+                  (entry.duration_ms
+                    ? formatHoursMinutes(entry.duration_ms)
+                    : "-");
+                const hourlyRateDisplay =
+                  entry.hourly_rate_editable !== undefined &&
+                  entry.hourly_rate_editable !== ""
+                    ? parseFloat(entry.hourly_rate_editable).toFixed(2)
+                    : entry.hourly_rate
+                    ? entry.hourly_rate.toFixed(2)
+                    : "-";
+
+                return (
+                  <div
+                    key={entry.id}
+                    className="rounded-lg border border-gray-200 p-4 space-y-4 bg-white transition-all duration-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700">
+                          {project ? project.name : "-"}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                            entry.user_name === user
+                              ? "bg-gray-100 text-gray-700"
+                              : "bg-blue-100 text-blue-700"
+                          }`}
                         >
-                          Verwijderen
-                        </button>
-                      )}
-                  </div>
-
-                  <div className="space-y-4">
-                    {entry.is_running === true && (
-                      <div className="mb-2 px-3 py-2 bg-[#008eff]/10 border border-[#008eff]/20 rounded-md">
-                        <p className="text-sm font-medium text-[#008eff]">
-                          ⏱️ Timer actief
-                        </p>
+                          {entry.user_name || user}
+                        </span>
                       </div>
-                    )}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Projectnaam *
-                      </label>
-                      <select
-                        value={
-                          entry.project_editable !== undefined
-                            ? entry.project_editable || ""
-                            : entry.project || ""
-                        }
-                        onChange={(e) =>
-                          handleEntryChange(
-                            index,
-                            "project_editable",
-                            e.target.value || null
-                          )
-                        }
-                        disabled={isSaving || isDeleting}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                        required
+                      <button
+                        onClick={() => handleToggleExpand(entry.id)}
+                        className="px-3 py-1.5 text-sm font-medium text-[#008eff] hover:bg-[#008eff]/10 rounded-md transition-colors"
                       >
-                        <option value="">Selecteer een project</option>
-                        {projects.map((project) => (
-                          <option key={project.id} value={project.id}>
-                            {project.name}
-                            {project.is_default && " (Standaard)"}
-                            {project.is_shared && " (Gedeeld)"}
-                          </option>
-                        ))}
-                      </select>
+                        {isExpanded ? "Sluiten" : "Bewerken"}
+                      </button>
                     </div>
 
-                    {(entry.project_editable || entry.project) && (
-                      <>
-                        {entry.is_running === true ? (
+                    {!isExpanded ? (
+                      // Collapsed View
+                      <div className="space-y-2">
+                        {entry.is_running === true && (
+                          <div className="px-3 py-2 bg-[#008eff]/10 border border-[#008eff]/20 rounded-md">
+                            <p className="text-sm font-medium text-[#008eff]">
+                              ⏱️ Timer actief
+                            </p>
+                          </div>
+                        )}
+                        {/* First line: Times */}
+                        <div className="flex items-center gap-4 text-sm flex-wrap">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-gray-500 uppercase tracking-wide">
+                              Start:
+                            </span>
+                            <span className="text-gray-900 font-medium">
+                              {startTimeDisplay}
+                            </span>
+                          </div>
+                          {entry.is_running !== true && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-gray-500 uppercase tracking-wide">
+                                Eind:
+                              </span>
+                              <span className="text-gray-900 font-medium">
+                                {endTimeDisplay}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-gray-500 uppercase tracking-wide">
+                              Duur:
+                            </span>
+                            <span className="text-gray-900 font-medium">
+                              {durationDisplay}
+                            </span>
+                          </div>
+                        </div>
+                        {/* Second line: Rates and total
+                        <div className="flex items-center gap-4 text-sm flex-wrap">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-gray-500 uppercase tracking-wide">
+                              Uurtarief:
+                            </span>
+                            <span className="text-gray-900 font-medium">
+                              €{hourlyRateDisplay}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-gray-500 uppercase tracking-wide">
+                              Totaal:
+                            </span>
+                            <span className="text-gray-900 font-semibold">
+                              {formatMoney(entryTotal)}
+                            </span>
+                          </div>
+                        </div> */}
+                      </div>
+                    ) : (
+                      // Expanded View
+                      <div className="space-y-4">
+                        {entry.is_running === true && (
+                          <div className="mb-2 px-3 py-2 bg-[#008eff]/10 border border-[#008eff]/20 rounded-md">
+                            <p className="text-sm font-medium text-[#008eff]">
+                              ⏱️ Timer actief
+                            </p>
+                          </div>
+                        )}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Projectnaam *
+                          </label>
+                          <select
+                            value={
+                              entry.project_editable !== undefined
+                                ? entry.project_editable || ""
+                                : entry.project || ""
+                            }
+                            onChange={(e) =>
+                              handleEntryChange(
+                                index,
+                                "project_editable",
+                                e.target.value || null
+                              )
+                            }
+                            disabled={isSaving || isDeleting}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                            required
+                          >
+                            <option value="">Selecteer een project</option>
+                            {projects.map((project) => (
+                              <option key={project.id} value={project.id}>
+                                {project.name}
+                                {project.is_default && " (Standaard)"}
+                                {project.is_shared && " (Gedeeld)"}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {(entry.project_editable || entry.project) && (
                           <>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Starttijd
-                              </label>
-                              <input
-                                type="time"
-                                value={entry.start_time_editable || ""}
-                                onChange={(e) =>
-                                  handleEntryChange(
-                                    index,
-                                    "start_time_editable",
-                                    e.target.value
-                                  )
-                                }
-                                disabled={isSaving || isDeleting}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                              />
-                            </div>
+                            {entry.is_running === true ? (
+                              <>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Starttijd
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={entry.start_time_editable || ""}
+                                    onChange={(e) =>
+                                      handleEntryChange(
+                                        index,
+                                        "start_time_editable",
+                                        e.target.value
+                                      )
+                                    }
+                                    disabled={isSaving || isDeleting}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                </div>
 
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Uurtarief (€)
-                              </label>
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                placeholder="0.00"
-                                value={
-                                  entry.hourly_rate_editable !== undefined
-                                    ? entry.hourly_rate_editable
-                                    : entry.hourly_rate || ""
-                                }
-                                onChange={(e) =>
-                                  handleEntryChange(
-                                    index,
-                                    "hourly_rate_editable",
-                                    e.target.value === "" ? "" : e.target.value
-                                  )
-                                }
-                                disabled={
-                                  isSaving ||
-                                  isDeleting ||
-                                  entry.isProjectMember
-                                }
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                              />
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                  Starttijd
-                                </label>
-                                <input
-                                  type="time"
-                                  value={entry.start_time_editable || ""}
-                                  onChange={(e) =>
-                                    handleEntryChange(
-                                      index,
-                                      "start_time_editable",
-                                      e.target.value
-                                    )
-                                  }
-                                  disabled={isSaving || isDeleting}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                                />
-                              </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Uurtarief (€)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="0.00"
+                                    value={
+                                      entry.hourly_rate_editable !== undefined
+                                        ? entry.hourly_rate_editable
+                                        : entry.hourly_rate || ""
+                                    }
+                                    onChange={(e) =>
+                                      handleEntryChange(
+                                        index,
+                                        "hourly_rate_editable",
+                                        e.target.value === ""
+                                          ? ""
+                                          : e.target.value
+                                      )
+                                    }
+                                    disabled={
+                                      isSaving ||
+                                      isDeleting ||
+                                      entry.isProjectMember
+                                    }
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="flex flex-col sm:flex-row sm:grid sm:grid-cols-2 gap-4">
+                                  <div className="flex-1 min-w-0">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Starttijd
+                                    </label>
+                                    <input
+                                      type="time"
+                                      value={entry.start_time_editable || ""}
+                                      onChange={(e) =>
+                                        handleEntryChange(
+                                          index,
+                                          "start_time_editable",
+                                          e.target.value
+                                        )
+                                      }
+                                      disabled={isSaving || isDeleting}
+                                      className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                    />
+                                  </div>
 
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                  Eindtijd
-                                </label>
-                                <input
-                                  type="time"
-                                  value={entry.end_time_editable || ""}
-                                  onChange={(e) =>
-                                    handleEntryChange(
-                                      index,
-                                      "end_time_editable",
-                                      e.target.value
-                                    )
-                                  }
-                                  disabled={isSaving || isDeleting}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                                />
-                              </div>
-                            </div>
+                                  <div className="flex-1 min-w-0">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Eindtijd
+                                    </label>
+                                    <input
+                                      type="time"
+                                      value={entry.end_time_editable || ""}
+                                      onChange={(e) =>
+                                        handleEntryChange(
+                                          index,
+                                          "end_time_editable",
+                                          e.target.value
+                                        )
+                                      }
+                                      disabled={isSaving || isDeleting}
+                                      className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                    />
+                                  </div>
+                                </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                  Duur (U:MM)
-                                </label>
-                                <input
-                                  type="text"
-                                  placeholder="0:00"
-                                  value={entry.duration_editable || ""}
-                                  onChange={(e) =>
-                                    handleEntryChange(
-                                      index,
-                                      "duration_editable",
-                                      e.target.value
-                                    )
-                                  }
-                                  onBlur={() => handleDurationBlur(index)}
-                                  pattern="[0-9]+:[0-5][0-9]"
-                                  disabled={isSaving || isDeleting}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                                />
-                              </div>
+                                <div className="flex flex-col sm:flex-row sm:grid sm:grid-cols-2 gap-4">
+                                  <div className="flex-1 min-w-0">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Duur (U:MM)
+                                    </label>
+                                    <input
+                                      type="text"
+                                      placeholder="0:00"
+                                      value={entry.duration_editable || ""}
+                                      onChange={(e) =>
+                                        handleEntryChange(
+                                          index,
+                                          "duration_editable",
+                                          e.target.value
+                                        )
+                                      }
+                                      onBlur={() => handleDurationBlur(index)}
+                                      pattern="[0-9]+:[0-5][0-9]"
+                                      disabled={isSaving || isDeleting}
+                                      className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                    />
+                                  </div>
 
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                  Uurtarief (€)
-                                </label>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  placeholder="0.00"
-                                  value={
-                                    entry.hourly_rate_editable !== undefined
-                                      ? entry.hourly_rate_editable
-                                      : entry.hourly_rate || ""
-                                  }
-                                  onChange={(e) =>
-                                    handleEntryChange(
-                                      index,
-                                      "hourly_rate_editable",
-                                      e.target.value === ""
-                                        ? ""
-                                        : e.target.value
-                                    )
-                                  }
-                                  disabled={
-                                    isSaving ||
-                                    isDeleting ||
-                                    entry.isProjectMember
-                                  }
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                                />
-                              </div>
-                            </div>
+                                  <div className="flex-1 min-w-0">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Uurtarief (€)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      placeholder="0.00"
+                                      value={
+                                        entry.hourly_rate_editable !== undefined
+                                          ? entry.hourly_rate_editable
+                                          : entry.hourly_rate || ""
+                                      }
+                                      onChange={(e) =>
+                                        handleEntryChange(
+                                          index,
+                                          "hourly_rate_editable",
+                                          e.target.value === ""
+                                            ? ""
+                                            : e.target.value
+                                        )
+                                      }
+                                      disabled={
+                                        isSaving ||
+                                        isDeleting ||
+                                        entry.isProjectMember
+                                      }
+                                      className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                    />
+                                  </div>
+                                </div>
+                              </>
+                            )}
                           </>
                         )}
-                      </>
+                        {/* Save button */}
+                        <div className="pt-2 border-t border-gray-200 flex justify-end">
+                          <button
+                            onClick={() => handleSaveEntry(index)}
+                            disabled={
+                              isSaving ||
+                              isDeleting ||
+                              savingEntryId === entry.id ||
+                              !entry.project_editable
+                            }
+                            className="px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                          >
+                            {savingEntryId === entry.id
+                              ? "Opslaan..."
+                              : "Opslaan"}
+                          </button>
+                        </div>
+                        {entry.id &&
+                          !entry.id.startsWith("temp-") &&
+                          entry.is_running !== true && (
+                            <div className="pt-2 border-t border-gray-200">
+                              <button
+                                onClick={() =>
+                                  handleDeleteEntry(entry.id, index)
+                                }
+                                disabled={isSaving || isDeleting}
+                                className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                              >
+                                Verwijderen
+                              </button>
+                            </div>
+                          )}
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -1416,8 +1937,8 @@ export default function DayEntriesListClient({
                           />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
+                        <div className="flex flex-col sm:flex-row sm:grid sm:grid-cols-2 gap-4">
+                          <div className="flex-1 min-w-0">
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               Prijs (€) *
                             </label>
@@ -1435,13 +1956,13 @@ export default function DayEntriesListClient({
                                 )
                               }
                               disabled={isSaving || isDeleting}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
                               required
                             />
                           </div>
 
-                          <div className="flex items-end">
-                            <label className="flex items-center space-x-2 cursor-pointer">
+                          <div className="flex items-end sm:flex-1 min-w-0">
+                            <label className="flex items-center space-x-2 cursor-pointer w-full">
                               <input
                                 type="checkbox"
                                 checked={expense.includes_vat_editable || false}
@@ -1529,21 +2050,6 @@ export default function DayEntriesListClient({
             </div>
           )}
         </div>
-      </div>
-
-      {/* Save Button */}
-      <div className="bg-white border-t border-gray-200 px-4 sm:px-6 py-4 flex justify-end gap-3">
-        <button
-          onClick={handleSave}
-          disabled={
-            isSaving ||
-            isDeleting ||
-            (localEntries.length === 0 && localExpenses.length === 0)
-          }
-          className="px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isSaving ? "Opslaan..." : "Wijzigingen opslaan"}
-        </button>
       </div>
     </div>
   );

@@ -14,3 +14,4 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: false, // We don't use Supabase auth, we use username-based auth
   },
 });
+

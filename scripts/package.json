@@ -1,0 +1,16 @@
+{
+  "name": "tijdregistratie-scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Standalone scripts for tijdregistratie project",
+  "scripts": {
+    "backup:firebase": "node backup/backup-firebase.mjs",
+    "backup:firebase:dev": "ENV_FILE=.env.development node backup/backup-firebase.mjs",
+    "backup:firebase:local": "ENV_FILE=.env.local node backup/backup-firebase.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "firebase-admin": "^12.6.0"
+  }
+}

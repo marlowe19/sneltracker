@@ -1,0 +1,14 @@
+/* TEAM */
+Your name: Snel tracker team
+Contact: [Your contact information]
+
+/* THANKS */
+Name: Next.js
+URL: https://nextjs.org/
+
+/* SITE */
+Last update: 2024/01/01
+Standards: HTML5, CSS3
+Components: React, Next.js
+Software: Visual Studio Code
+
