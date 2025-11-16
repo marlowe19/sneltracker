@@ -1564,11 +1564,14 @@ export default function DayEntriesListClient({
   if (!selectedDate) return <div>Geen dag geselecteerd</div>;
 
   return (
-    <div className="w-full p-4 flex flex-col h-full">
-      <div
-        className="bg-white border-b border-gray-200 flex-shrink-0"
-        style={{ paddingTop: "env(safe-area-inset-top)" }}
-      >
+    <div
+      className="w-full flex flex-col h-full"
+      style={{
+        padding: "1rem",
+        paddingTop: "calc(1rem + env(safe-area-inset-top))",
+      }}
+    >
+      <div className="bg-white border-b border-gray-200 flex-shrink-0">
         {/* Header */}
         <div className="px-4 sm:px-6 py-3  rounded-xl bg-gray-100 justify-between">
           <div className="flex items-center">
