@@ -1958,7 +1958,7 @@ export default function DayEntriesListClient({
                                       value={entry.end_time_editable || ""}
                                       onChange={(e) =>
                                         handleEntryChange(
-                                          index,  
+                                          index,
                                           "end_time_editable",
                                           e.target.value
                                         )
@@ -2342,7 +2342,11 @@ export default function DayEntriesListClient({
         </div>
 
         {/* Notes Tab */}
-        <div className={`h-full overflow-y-auto ${activeTab === "notes" ? "" : "hidden"}`}>
+        <div
+          className={`h-full overflow-y-auto ${
+            activeTab === "notes" ? "" : "hidden"
+          }`}
+        >
           {loadingNotes ? (
             <div className="bg-white rounded-lg p-8 text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#008eff] mx-auto"></div>
