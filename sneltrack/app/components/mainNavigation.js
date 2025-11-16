@@ -23,7 +23,7 @@ export default function MainNavigation() {
   const encodedUser = encodeURIComponent(user);
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <div
         data-type="SnelTracker"
         className="w-full bg-neutral-100 border-t border-[#E2E2E2] inline-flex flex-col justify-start items-start overflow-hidden"

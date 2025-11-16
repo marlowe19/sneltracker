@@ -60,7 +60,7 @@ export default function TimerSectionWrapperClient({
         <div className="pt-4 relative z-10">
           <TimerSectionClient user={user} />
         </div>
-        <div className="px-4 pb-15">
+        <div className="px-4" style={{ paddingBottom: 'calc(3.75rem + 4rem + env(safe-area-inset-bottom))' }}>
           <button
             type="button"
             onClick={handleAddTimer}
