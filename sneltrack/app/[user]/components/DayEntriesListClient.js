@@ -1565,7 +1565,10 @@ export default function DayEntriesListClient({
 
   return (
     <div className="w-full p-4 flex flex-col h-full">
-      <div className="bg-white border-b border-gray-200 flex-shrink-0">
+      <div
+        className="bg-white border-b border-gray-200 flex-shrink-0"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
         {/* Header */}
         <div className="px-4 sm:px-6 py-3  rounded-xl bg-gray-100 justify-between">
           <div className="flex items-center">
