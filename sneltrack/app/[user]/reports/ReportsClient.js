@@ -10,6 +10,8 @@ import {
   useDateRangeContext,
 } from "../components/DateRangeProvider";
 import { getWeekBounds, getMonthBounds, getQuarterBounds } from "@/lib/time";
+import { HOURLY_RATE_BREAKDOWN } from "@/lib/hourlyRateBreakdown";
+import PieChartCarousel from "./PieChartCarousel";
 
 function formatMoney(amount) {
   return new Intl.NumberFormat("nl-NL", {
@@ -32,6 +34,18 @@ function formatHours(totalHours) {
 // Color palette for pie chart
 const BILLABLE_COLOR = "#10b981"; // Green
 const UNBILLABLE_COLOR = "#ef4444"; // Red
+
+// Color palette for category breakdown pie chart
+const COLORS = [
+  "#008eff", // Primary blue
+  "#10b981", // Green
+  "#f59e0b", // Amber
+  "#ef4444", // Red
+  "#8b5cf6", // Purple
+  "#ec4899", // Pink
+  "#06b6d4", // Cyan
+  "#84cc16", // Lime
+];
 
 function OverallPieChart({ totals }) {
   const pieData = [
@@ -58,10 +72,7 @@ function OverallPieChart({ totals }) {
   }
 
   return (
-    <div className="bg-white rounded-xl p-4 mx-4 mb-6 border border-gray-200">
-      <h2 className="text-base font-semibold text-gray-900 mb-4 text-center">
-        Overzicht: Factureerbaar vs Niet Factureerbaar
-      </h2>
+    <div className="w-full">
       <div style={{ height: "250px" }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -122,6 +133,79 @@ function OverallPieChart({ totals }) {
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+function CategoryBreakdownPieChart({ totals }) {
+  if (!totals.totalBillableAmount || totals.totalBillableAmount <= 0) {
+    return null;
+  }
+
+  const breakdownData = HOURLY_RATE_BREAKDOWN.map((item) => ({
+    name: item.category,
+    percentage: item.percentage,
+    amount: totals.totalBillableAmount * (item.percentage / 100),
+  }));
+
+  return (
+    <div className="w-full">
+      <div style={{ height: "250px" }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart margin={{ top: 30, right: 30, bottom: 20, left: 30 }}>
+            <Pie
+              data={breakdownData}
+              cx="50%"
+              cy="50%"
+              labelLine={true}
+              label={({ percentage, amount }) => {
+                // Only show label if slice is large enough (e.g., > 5%)
+                if (percentage > 5) {
+                  return `€${amount.toFixed(1)}`;
+                }
+                return "";
+              }}
+              outerRadius={70}
+              innerRadius={40}
+              fill="#8884d8"
+              dataKey="percentage"
+            >
+              {breakdownData.map((entry, index) => (
+                <Cell
+                  key={`cell-${index}`}
+                  fill={COLORS[index % COLORS.length]}
+                />
+              ))}
+            </Pie>
+            <Tooltip
+              formatter={(value, name, props) => [
+                `${formatMoney(props.payload.amount)} (${value}%)`,
+                props.payload.name,
+              ]}
+              contentStyle={{
+                backgroundColor: "white",
+                border: "1px solid #e5e7eb",
+                borderRadius: "0.5rem",
+              }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="mt-6 flex flex-col gap-2">
+        {breakdownData.map((item, index) => (
+          <div key={item.name} className="flex items-center gap-2">
+            <div
+              className="w-3 h-3 rounded-full"
+              style={{
+                backgroundColor: COLORS[index % COLORS.length],
+              }}
+            />
+            <span className="text-xs text-gray-700">
+              {item.name}: {formatMoney(item.amount)} ({item.percentage}%)
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -272,6 +356,31 @@ function ReportsContent() {
     fetchReports();
   }, [userName, rangeType, referenceDate]);
 
+  // Build cards array for carousel
+  const cards = [];
+  const hasOverallData =
+    totals.totalBillableHours > 0 || totals.totalUnbillableHours > 0;
+  const hasCategoryData =
+    totals.totalBillableAmount && totals.totalBillableAmount > 0;
+
+  if (hasOverallData) {
+    cards.push({
+      id: "overall-pie-chart",
+      title: "Overzicht: Factureerbaar vs Niet Factureerbaar",
+      content: <OverallPieChart totals={totals} />,
+    });
+  }
+
+  if (hasCategoryData) {
+    cards.push({
+      id: "category-breakdown",
+      title: `Verdeling van totale opbrengst van ${formatMoney(
+        totals.totalBillableAmount
+      )}`,
+      content: <CategoryBreakdownPieChart totals={totals} />,
+    });
+  }
+
   if (!userName) {
     return null;
   }
@@ -296,8 +405,8 @@ function ReportsContent() {
         </div>
       ) : (
         <>
-          {/* Overall Pie Chart */}
-          <OverallPieChart totals={totals} />
+          {/* Carousel with Pie Chart Cards */}
+          {cards.length > 0 && <PieChartCarousel cards={cards} />}
 
           {/* Project List */}
           <div className="px-4 space-y-3">

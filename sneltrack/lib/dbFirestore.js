@@ -395,6 +395,77 @@ export async function getWeekEntries(userName, weekStartIso, weekEndIso) {
   return filtered;
 }
 
+export async function getTimeEntries(userName, dayDate) {
+  // Set date to start of the selected day
+  const dayStart = new Date(dayDate);
+  dayStart.setHours(0, 0, 0, 0);
+
+  // Set date to end of the selected day
+  const dayEnd = new Date(dayDate);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  // Get user entries
+  const userRef = getUserTimeEntriesCollection(userName);
+  const [q1Snap, q2Snap] = await Promise.all([
+    userRef.where("start_time", "<", dayEnd).get(),
+    userRef.where("end_time", ">=", dayStart).get(),
+  ]);
+
+  const byId = new Map();
+  for (const d of q1Snap.docs) byId.set(d.id, d);
+  for (const d of q2Snap.docs) byId.set(d.id, d);
+  const userEntries = Array.from(byId.values()).map(docToEntry);
+
+  // Get shared project entries
+  const sharedProjects = await getAllSharedProjects(userName);
+  const sharedEntries = [];
+
+  for (const project of sharedProjects) {
+    // Check if user is the owner of this project
+    const isOwner = await isProjectOwner(userName, project.id);
+
+    // If owner, fetch all team entries; otherwise, fetch only user's entries
+    const projectEntries = isOwner
+      ? await getProjectTimeEntries(project.id)
+      : await getProjectTimeEntries(project.id, userName);
+
+    // Filter entries by day bounds
+    const dayEntries = projectEntries.filter((entry) => {
+      const entryStart = new Date(entry.start_time);
+      const entryEnd = entry.end_time ? new Date(entry.end_time) : null;
+
+      // Must start before day ends
+      if (entryStart >= dayEnd) return false;
+
+      // Must end on or after day starts (or be active/null)
+      if (entryEnd !== null && entryEnd < dayStart) return false;
+
+      return true;
+    });
+    sharedEntries.push(...dayEntries);
+  }
+
+  // Merge all entries
+  const allEntries = [...userEntries, ...sharedEntries];
+
+  // Filter to ensure entries actually overlap the day
+  const filtered = allEntries.filter((entry) => {
+    const entryStart = new Date(entry.start_time);
+    const entryEnd = entry.end_time ? new Date(entry.end_time) : null;
+
+    // Must start before day ends
+    if (entryStart >= dayEnd) return false;
+
+    // Must end on or after day starts (or be active/null)
+    if (entryEnd !== null && entryEnd < dayStart) return false;
+
+    return true;
+  });
+
+  filtered.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+  return filtered;
+}
+
 export async function createEntry(
   userName,
   dayDate,

@@ -160,3 +160,8 @@ body {
   font-size: 12px;
   opacity: 0.8;
 }
+
+/* React Slick Carousel Dots Spacing */
+.slick-dots {
+  bottom: -2.1rem !important;
+}

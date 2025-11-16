@@ -1,6 +1,15 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 
+// Format date as YYYY-MM-DD in local timezone (not UTC)
+// This ensures the correct day is used regardless of timezone
+function formatLocalDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export const useStore = create(
   devtools(
     (set, get) => ({
@@ -60,6 +69,33 @@ export const useStore = create(
 
       // Update week offset
       setWeekOffset: (offset) => set({ weekOffset: offset }),
+
+      // Fetch day entries client-side
+      fetchDayEntries: async (user, dayDate) => {
+        // Don't block on loadingEntries - day entries can fetch independently
+        // This allows the modal to open even if week entries are still loading
+        try {
+          const dateStr = formatLocalDate(dayDate);
+          const res = await fetch(
+            `/${encodeURIComponent(user)}/api/day-entries?dayDate=${dateStr}`
+          );
+          if (!res.ok) throw new Error("Failed to fetch day entries");
+          const data = await res.json();
+          // Merge with existing entries, avoiding duplicates
+          set((state) => {
+            const existingIds = new Set(state.entries.map((e) => e.id));
+            const newEntries = data.entries.filter(
+              (e) => !existingIds.has(e.id)
+            );
+            return {
+              entries: [...state.entries, ...newEntries],
+            };
+          });
+        } catch (error) {
+          // Silently handle errors - don't block the modal from opening
+          console.error("Error fetching day entries:", error);
+        }
+      },
 
       // Optimistic updates for entries
       addEntry: (newEntry) => {
@@ -182,10 +218,9 @@ export const useStore = create(
 
         set({ loadingExpenses: true, expensesError: null });
         try {
+          const dateStr = formatLocalDate(dayDate);
           const res = await fetch(
-            `/${encodeURIComponent(
-              user
-            )}/api/day-expenses?dayDate=${dayDate.toISOString()}`
+            `/${encodeURIComponent(user)}/api/day-expenses?dayDate=${dateStr}`
           );
           if (!res.ok) throw new Error("Failed to fetch day expenses");
           const data = await res.json();

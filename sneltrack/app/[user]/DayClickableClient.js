@@ -88,7 +88,9 @@ export default function DayClickableClient({
   return (
     <>
       <div
-        className="day relative flex flex-col items-center w-full cursor-pointer hover:bg-gray-50 rounded-lg p-1 transition-colors"
+        className={`day relative flex flex-col items-center w-full cursor-pointer rounded-lg p-1 transition-colors ${
+          isToday ? "bg-[#cce7ff]" : ""
+        } hover:bg-gray-50`}
         onClick={handleDayClick}
         role="button"
         tabIndex={0}

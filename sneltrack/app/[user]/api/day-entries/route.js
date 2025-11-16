@@ -1,4 +1,4 @@
-import { getDayExpenses } from "@/lib/dbFirestore";
+import { getTimeEntries } from "@/lib/dbFirestore";
 import { NextResponse } from "next/server";
 
 export async function GET(request, { params }) {
@@ -19,15 +19,14 @@ export async function GET(request, { params }) {
     const date = new Date(year, month - 1, day);
     date.setHours(0, 0, 0, 0);
 
-    const expenses = await getDayExpenses(user, date);
-    return NextResponse.json({ expenses });
+    const entries = await getTimeEntries(user, date);
+    return NextResponse.json({ entries });
   } catch (error) {
-    console.error("Error fetching day expenses:", error);
+    console.error("Error fetching day entries:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to fetch day expenses" },
+      { error: error.message || "Failed to fetch day entries" },
       { status: 500 }
     );
   }
 }
-
 

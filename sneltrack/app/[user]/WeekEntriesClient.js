@@ -235,7 +235,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
   }
 
   return (
-    <section className="w-full mt-auto pb-4 border-t border-gray-200">
+    <section className="w-full mt-auto px-4 border-t border-gray-200">
       <div className="flex items-center justify-between mb-1">
         <Link
           href={`/${encodeURIComponent(user)}?w=${weekOffset - 1}`}
@@ -246,7 +246,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
         </Link>
         <Link
           href={`/${encodeURIComponent(user)}?w=0`}
-          className="px-2  sm:px-1 sm:py-1 mt-[10px] rounded-full border text-sm text-gray-700 hover:bg-gray-100 min-h-[44px] flex items-center justify-center"
+          className="px-2  sm:px-1 p-1 sm:py-1 mt-[10px] rounded-full border text-sm text-gray-700 hover:bg-gray-100  flex items-center justify-center"
           aria-label="Ga naar deze week"
         >
           Vandaag:{" "}
@@ -321,6 +321,14 @@ export default function WeekEntriesClient({ user, weekOffset }) {
                 <div className="day-hours text-xs font-bold mb-0.5 tabular-nums min-h-4 w-full text-center">
                   {perDay[i] ? formatHoursHMM(perDay[i]) : "0:00"}
                 </div>
+
+                <div
+                  className={`day-money text-[10px] font-medium text-gray-600 tabular-nums min-h-3.5 w-full text-center ${
+                    perDayMoney[i] > 0 ? "" : "invisible"
+                  }`}
+                >
+                  {perDayMoney[i] > 0 ? formatMoney(perDayMoney[i]) : "\u200B"}
+                </div>
                 <div
                   className={`day-expenses text-[10px] font-medium text-green-600 tabular-nums min-h-3.5 w-full text-center ${
                     perDayExpenses[i] > 0 ? "" : "invisible"
@@ -329,13 +337,6 @@ export default function WeekEntriesClient({ user, weekOffset }) {
                   {perDayExpenses[i] > 0
                     ? formatMoney(perDayExpenses[i])
                     : "\u200B"}
-                </div>
-                <div
-                  className={`day-money text-[10px] font-medium text-gray-600 tabular-nums min-h-3.5 w-full text-center ${
-                    perDayMoney[i] > 0 ? "" : "invisible"
-                  }`}
-                >
-                  {perDayMoney[i] > 0 ? formatMoney(perDayMoney[i]) : "\u200B"}
                 </div>
                 <div className="sr-only">
                   <span className="sm:hidden">
@@ -348,11 +349,11 @@ export default function WeekEntriesClient({ user, weekOffset }) {
           })}
         </div>
       </div>
-      <div className="w-full px-3 py-2 bg-white shadow-[inset_0px_1px_0px_0px_rgba(240,240,240,1.00)] flex justify-between items-center">
+      <div className="w-full px-3 py-2 mt-2 bg-white shadow-[inset_0px_1px_0px_0px_rgba(240,240,240,1.00)] flex justify-between items-center">
         <div className="flex flex-col justify-center items-start gap-0.5">
           <div className="text-gray-900 text-xs font-bold font-sans">Week</div>
           <div className="text-gray-900 text-xs font-bold font-sans">
-            totaal
+            Totaal
           </div>
         </div>
         <div className="flex flex-col justify-center items-start gap-0.5">

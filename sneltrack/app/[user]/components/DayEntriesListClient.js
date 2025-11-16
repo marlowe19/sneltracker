@@ -7,7 +7,12 @@ import { useStore } from "@/stores/useStore";
 import { computeEntryDurationMs } from "@/lib/time";
 import { useToast } from "@/app/components/Toast";
 import NotificationBadge from "@/app/components/NotificationBadge";
-
+import {
+  Alarm,
+  ChevronLeft,
+  ChevronLeft24,
+  ToolBox,
+} from "@carbon/icons-react";
 function formatTime(isoString) {
   if (!isoString) return "";
   const date = new Date(isoString);
@@ -96,6 +101,7 @@ export default function DayEntriesListClient({
   entries: initialEntries,
   expenses: initialExpenses,
   onEntryUpdate,
+  onClose, // Add this prop
 }) {
   const router = useRouter();
   const projects = useStore((state) => state.projects);
@@ -104,6 +110,7 @@ export default function DayEntriesListClient({
   const replaceTempEntry = useStore((state) => state.replaceTempEntry);
   const deleteEntry = useStore((state) => state.deleteEntry);
   const fetchDayExpenses = useStore((state) => state.fetchDayExpenses);
+  const fetchDayEntries = useStore((state) => state.fetchDayEntries);
   const addExpense = useStore((state) => state.addExpense);
   const updateExpense = useStore((state) => state.updateExpense);
   const replaceTempExpense = useStore((state) => state.replaceTempExpense);
@@ -123,6 +130,8 @@ export default function DayEntriesListClient({
   const [notesError, setNotesError] = useState(null);
   const [expandedEntries, setExpandedEntries] = useState(new Set());
   const [savingEntryId, setSavingEntryId] = useState(null);
+  const [expandedExpenses, setExpandedExpenses] = useState(new Set());
+  const [savingExpenseId, setSavingExpenseId] = useState(null);
   const toast = useToast();
   const dayDateString = selectedDate?.toISOString();
 
@@ -132,7 +141,15 @@ export default function DayEntriesListClient({
       fetchDayExpenses(user, selectedDate);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, user]);
+  }, [dayDateString, user]);
+
+  // Fetch day entries
+  useEffect(() => {
+    if (selectedDate && fetchDayEntries) {
+      fetchDayEntries(user, selectedDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayDateString, user]);
 
   // Initialize entries
   useEffect(() => {
@@ -171,7 +188,7 @@ export default function DayEntriesListClient({
         setExpandedEntries((prev) => new Set([...prev, ...tempEntryIds]));
       }
     }
-  }, [selectedDate]);
+  }, [dayDateString, initialEntries]);
 
   // Initialize expenses
   useEffect(() => {
@@ -182,20 +199,30 @@ export default function DayEntriesListClient({
         return dateB - dateA;
       });
 
-      setLocalExpenses(
-        sortedExpenses.map((expense) => ({
-          ...expense,
-          name_editable: expense.name ?? "",
-          price_editable:
-            expense.price !== null && expense.price !== undefined
-              ? String(expense.price)
-              : "",
-          project_editable: expense.project ?? "",
-          includes_vat_editable: expense.includes_vat ?? false,
-        }))
-      );
+      const mappedExpenses = sortedExpenses.map((expense) => ({
+        ...expense,
+        name_editable: expense.name ?? "",
+        price_editable:
+          expense.price !== null && expense.price !== undefined
+            ? String(expense.price)
+            : "",
+        project_editable: expense.project ?? "",
+        includes_vat_editable: expense.includes_vat ?? false,
+      }));
+
+      setLocalExpenses(mappedExpenses);
+
+      // Automatically expand temp expenses
+      const tempExpenseIds = mappedExpenses
+        .filter(
+          (expense) => expense.id && expense.id.startsWith("temp-expense-")
+        )
+        .map((expense) => expense.id);
+      if (tempExpenseIds.length > 0) {
+        setExpandedExpenses((prev) => new Set([...prev, ...tempExpenseIds]));
+      }
     }
-  }, [expenses, selectedDate]);
+  }, [expenses, dayDateString]);
 
   // Fetch notes
   useEffect(() => {
@@ -237,7 +264,7 @@ export default function DayEntriesListClient({
     }
 
     fetchNotes();
-  }, [selectedDate, user]);
+  }, [dayDateString, user]);
 
   const handleEntryChange = async (index, field, value) => {
     const updated = [...localEntries];
@@ -383,6 +410,18 @@ export default function DayEntriesListClient({
     });
   };
 
+  const handleToggleExpandExpense = (expenseId) => {
+    setExpandedExpenses((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(expenseId)) {
+        newSet.delete(expenseId);
+      } else {
+        newSet.add(expenseId);
+      }
+      return newSet;
+    });
+  };
+
   const calculateEntryTotal = (entry) => {
     const durationMs =
       entry.duration_ms ??
@@ -459,6 +498,8 @@ export default function DayEntriesListClient({
     };
 
     setLocalExpenses([newExpense, ...localExpenses]);
+    // Automatically expand new expenses for immediate editing
+    setExpandedExpenses((prev) => new Set([...prev, tempId]));
   };
 
   const handleSave = async () => {
@@ -1204,6 +1245,187 @@ export default function DayEntriesListClient({
     }
   };
 
+  const handleSaveExpense = async (index) => {
+    const expense = localExpenses[index];
+    if (!expense) return;
+
+    const originalExpenseId = expense.id; // Store original ID for collapsing
+    setSavingExpenseId(expense.id);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const isNewExpense = expense.id && expense.id.startsWith("temp-expense-");
+
+      if (isNewExpense) {
+        if (!selectedDate) {
+          throw new Error("Day date is required");
+        }
+        if (!expense.project_editable || expense.project_editable === "") {
+          throw new Error("Project is required for expense");
+        }
+        if (!expense.name_editable || expense.name_editable.trim() === "") {
+          throw new Error("Name is required for expense");
+        }
+        if (!expense.price_editable || expense.price_editable === "") {
+          throw new Error("Price is required for expense");
+        }
+
+        const response = await fetch(`/${encodeURIComponent(user)}/expenses`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dayDate: selectedDate.toISOString(),
+            project: expense.project_editable,
+            name: expense.name_editable.trim(),
+            price: parseFloat(expense.price_editable),
+            includes_vat: expense.includes_vat_editable ?? false,
+            expense_type: "materials",
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to create expense");
+        }
+
+        const responseData = await response.json();
+        if (responseData.expense) {
+          replaceTempExpense(expense.id, responseData.expense);
+          // Update local expenses with the new expense data
+          const updated = [...localExpenses];
+          updated[index] = {
+            ...responseData.expense,
+            name_editable: responseData.expense.name ?? "",
+            price_editable:
+              responseData.expense.price !== null &&
+              responseData.expense.price !== undefined
+                ? String(responseData.expense.price)
+                : "",
+            project_editable: responseData.expense.project ?? "",
+            includes_vat_editable: responseData.expense.includes_vat ?? false,
+          };
+          setLocalExpenses(updated);
+
+          // Collapse the expense after saving
+          setExpandedExpenses((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(originalExpenseId);
+            newSet.delete(responseData.expense.id); // Also remove new ID in case it was added
+            return newSet;
+          });
+        }
+
+        setSuccessMessage("Uitgave opgeslagen");
+        setSavingExpenseId(null);
+
+        setTimeout(() => {
+          setSuccessMessage(null);
+        }, 3000);
+      } else {
+        // Existing expense - update it
+        const updates = {};
+
+        if (expense.name_editable !== undefined) {
+          const newName = expense.name_editable.trim();
+          if (newName !== expense.name) {
+            updates.name = newName;
+          }
+        }
+
+        if (expense.price_editable !== undefined) {
+          const newPrice =
+            expense.price_editable === "" || expense.price_editable === null
+              ? null
+              : parseFloat(expense.price_editable);
+          const currentPrice = expense.price;
+          if (newPrice !== currentPrice) {
+            updates.price = newPrice;
+          }
+        }
+
+        if (expense.includes_vat_editable !== undefined) {
+          const newIncludesVat = Boolean(expense.includes_vat_editable);
+          const currentIncludesVat = expense.includes_vat ?? false;
+          if (newIncludesVat !== currentIncludesVat) {
+            updates.includes_vat = newIncludesVat;
+          }
+        }
+
+        if (expense.project_editable !== undefined) {
+          const newProject =
+            expense.project_editable === "" || expense.project_editable === null
+              ? null
+              : expense.project_editable;
+          const currentProject = expense.project;
+          if (newProject !== currentProject) {
+            updates.project = newProject;
+          }
+        }
+
+        if (Object.keys(updates).length > 0) {
+          const response = await fetch(
+            `/${encodeURIComponent(user)}/expenses/${expense.id}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(updates),
+            }
+          );
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Failed to update expense");
+          }
+
+          const responseData = await response.json();
+          if (responseData.expense) {
+            updateExpense(expense.id, responseData.expense);
+            // Update local expense with the updated data
+            const updated = [...localExpenses];
+            updated[index] = {
+              ...responseData.expense,
+              name_editable: responseData.expense.name ?? "",
+              price_editable:
+                responseData.expense.price !== null &&
+                responseData.expense.price !== undefined
+                  ? String(responseData.expense.price)
+                  : "",
+              project_editable: responseData.expense.project ?? "",
+              includes_vat_editable: responseData.expense.includes_vat ?? false,
+            };
+            setLocalExpenses(updated);
+
+            // Collapse the expense after saving
+            setExpandedExpenses((prev) => {
+              const newSet = new Set(prev);
+              newSet.delete(expense.id);
+              return newSet;
+            });
+          }
+
+          setSuccessMessage("Uitgave opgeslagen");
+          setSavingExpenseId(null);
+
+          setTimeout(() => {
+            setSuccessMessage(null);
+          }, 3000);
+        } else {
+          // No changes to save, just collapse
+          setExpandedExpenses((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(expense.id);
+            return newSet;
+          });
+          setSavingExpenseId(null);
+        }
+      }
+    } catch (err) {
+      setError(err.message || "Failed to save expense");
+      setSavingExpenseId(null);
+    }
+  };
+
   const handleDeleteEntry = async (entryId, index) => {
     if (!confirm("Weet je zeker dat je deze entry wilt verwijderen?")) {
       return;
@@ -1339,16 +1561,84 @@ export default function DayEntriesListClient({
       })
     : "";
 
-  if (!selectedDate) return null;
+  if (!selectedDate) return <div>Geen dag geselecteerd</div>;
 
   return (
-    <div className="w-full">
-      <div className="bg-white border-b border-gray-200">
-        <div className="px-4 sm:px-6 py-3 flex items-center justify-between">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900">
-            {dayDateFormatted}
-          </h2>
+    <div className="w-full p-4 flex flex-col h-full">
+      <div className="bg-white border-b border-gray-200 flex-shrink-0">
+        {/* Header */}
+        <div className="px-4 sm:px-6 py-3  rounded-xl bg-gray-100 justify-between">
+          <div className="flex items-center">
+            {/* Back Button with Carbon Icons Chevron */}
+            <button
+              type="button"
+              className="mr-3 p-1 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[#008eff] transition"
+              aria-label="Terug"
+              onClick={() => {
+                if (onClose) onClose();
+              }}
+            >
+              {/* Use react-carbon ChevronLeft Icon */}
+              <ChevronLeft size={24} />
+            </button>
+            <button
+              type="button"
+              className="text-gray-500 text-base hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#008eff] rounded px-1"
+              onClick={() => {
+                if (onClose) onClose();
+              }}
+            >
+              Terug
+            </button>
+          </div>
+          {/* Day Date */}
+          <div className="self-stretch flex pt-4 gap-2 items-center justify-start ">
+            <div>
+              <div className="w-7 p-1 bg-sky-500 rounded-[999px] inline-flex justify-center items-center overflow-hidden">
+                <div className="text-center justify-center text-white text-sm font-normal leading-5">
+                  {selectedDate.getDate()}
+                </div>
+              </div>
+            </div>
+            <div className="justify-start text-App-settings-color-color-app-text-black text-base font-medium leading-5">
+              {dayDateFormatted}
+            </div>
+          </div>
+          {/* Summary */}
+          <div className="self-stretch flex justify-between pt-4  gap-4">
+            <div className="flex-1 inline-flex flex-col justify-start items-start gap-1">
+              <div className="justify-center text-App-settings-color-color-app-text-black text-sm font-normal line-clamp-1">
+                {activeTab === "expenses" ? "Uitgaven" : "Registraties"}
+              </div>
+              <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-lg font-bold">
+                {activeTab === "expenses"
+                  ? expenseSummary.count
+                  : entrySummary.count}
+              </div>
+            </div>
+            <div className="flex-1 inline-flex flex-col justify-start items-start gap-1">
+              <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-sm font-normal line-clamp-1">
+                {activeTab === "expenses" ? "Totaal prijs" : "Uren"}
+              </div>
+              <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-lg font-bold">
+                {activeTab === "expenses"
+                  ? `€${expenseSummary.totalPrice}`
+                  : entrySummary.totalHours}
+              </div>
+            </div>
+            {activeTab !== "expenses" && (
+              <div className="flex-1 inline-flex flex-col justify-start items-start gap-1">
+                <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-sm font-normal line-clamp-1">
+                  Totaal prijs
+                </div>
+                <div className="self-stretch justify-center text-Color-Solids-color-solid-aqua-green text-lg font-bold">
+                  €{entrySummary.totalPrice}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+
         {/* Tab Navigation */}
         <div className="flex border-b border-gray-200">
           <button
@@ -1389,7 +1679,7 @@ export default function DayEntriesListClient({
         </div>
       </div>
 
-      <div className="p-4 sm:p-6 ">
+      <div className="pb-4 flex-1 min-h-0 overflow-hidden">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
             {error}
@@ -1402,58 +1692,18 @@ export default function DayEntriesListClient({
         )}
 
         {/* Time Entries Tab */}
-        <div className={activeTab === "entries" ? "" : "hidden"}>
-          {/* Summary Bar */}
-          <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-6">
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">
-                    Aantal entries
-                  </div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {entrySummary.count}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">
-                    Totaal uren
-                  </div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {entrySummary.totalHours}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">
-                    Totaal prijs
-                  </div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    €{entrySummary.totalPrice}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Add Entry Button */}
-          <div className="mb-4">
-            <button
-              onClick={handleAddEntry}
-              disabled={isSaving || isDeleting}
-              className="w-full sm:w-auto px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
-            >
-              <span className="text-xl">+</span>
-              <span>Entry toevoegen</span>
-            </button>
-          </div>
-
+        <div
+          className={`relative h-full overflow-y-auto ${
+            activeTab === "entries" ? "" : "hidden"
+          }`}
+        >
           {/* Entries List */}
           {localEntries.length === 0 ? (
             <p className="text-gray-500 text-center py-8 bg-white rounded-lg">
               Geen entries gevonden voor deze dag
             </p>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-4 pt-4 pb-20">
               {localEntries.map((entry, index) => {
                 const isExpanded = expandedEntries.has(entry.id);
 
@@ -1497,7 +1747,10 @@ export default function DayEntriesListClient({
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-700">
+                        <div>
+                          <Alarm size={24} />
+                        </div>
+                        <span className="text-lg font-medium text-gray-700">
                           {project ? project.name : "-"}
                         </span>
                         <span
@@ -1529,9 +1782,9 @@ export default function DayEntriesListClient({
                           </div>
                         )}
                         {/* First line: Times */}
-                        <div className="flex items-center gap-4 text-sm flex-wrap">
+                        <div className="flex items-center justify-between gap-4 text-sm flex-wrap">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-gray-500 uppercase tracking-wide">
+                            <span className="text-xs text-gray-500 tracking-wide">
                               Start:
                             </span>
                             <span className="text-gray-900 font-medium">
@@ -1540,7 +1793,7 @@ export default function DayEntriesListClient({
                           </div>
                           {entry.is_running !== true && (
                             <div className="flex items-center gap-1.5">
-                              <span className="text-xs text-gray-500 uppercase tracking-wide">
+                              <span className="text-xs text-gray-500 tracking-wide">
                                 Eind:
                               </span>
                               <span className="text-gray-900 font-medium">
@@ -1549,7 +1802,7 @@ export default function DayEntriesListClient({
                             </div>
                           )}
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-gray-500 uppercase tracking-wide">
+                            <span className="text-xs text-gray-500 tracking-wide">
                               Duur:
                             </span>
                             <span className="text-gray-900 font-medium">
@@ -1560,7 +1813,7 @@ export default function DayEntriesListClient({
                         {/* Second line: Rates and total
                         <div className="flex items-center gap-4 text-sm flex-wrap">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-gray-500 uppercase tracking-wide">
+                            <span className="text-xs text-gray-500 tracking-wide">
                               Uurtarief:
                             </span>
                             <span className="text-gray-900 font-medium">
@@ -1568,7 +1821,7 @@ export default function DayEntriesListClient({
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-gray-500 uppercase tracking-wide">
+                            <span className="text-xs text-gray-500 tracking-wide">
                               Totaal:
                             </span>
                             <span className="text-gray-900 font-semibold">
@@ -1676,8 +1929,8 @@ export default function DayEntriesListClient({
                               </>
                             ) : (
                               <>
-                                <div className="flex flex-col sm:flex-row sm:grid sm:grid-cols-2 gap-4">
-                                  <div className="flex-1 min-w-0">
+                                <div className="flex justify-between gap-6">
+                                  <div className="flex-1 min-w-0 pr-2">
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                       Starttijd
                                     </label>
@@ -1692,7 +1945,7 @@ export default function DayEntriesListClient({
                                         )
                                       }
                                       disabled={isSaving || isDeleting}
-                                      className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="p-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
                                   </div>
 
@@ -1705,13 +1958,13 @@ export default function DayEntriesListClient({
                                       value={entry.end_time_editable || ""}
                                       onChange={(e) =>
                                         handleEntryChange(
-                                          index,
+                                          index,  
                                           "end_time_editable",
                                           e.target.value
                                         )
                                       }
                                       disabled={isSaving || isDeleting}
-                                      className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="p-2 w-full  border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
                                   </div>
                                 </div>
@@ -1814,185 +2067,282 @@ export default function DayEntriesListClient({
               })}
             </div>
           )}
+
+          {/* Add Entry Button */}
+          <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 mt-4">
+            <button
+              onClick={handleAddEntry}
+              disabled={isSaving || isDeleting}
+              className="w-full sm:w-auto px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
+            >
+              <span>Tijdregistratie toevoegen</span>
+            </button>
+          </div>
         </div>
 
         {/* Expenses Tab */}
-        <div className={activeTab === "expenses" ? "" : "hidden"}>
-          {/* Summary Bar */}
-          <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-6">
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">
-                    Aantal uitgaven
-                  </div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {expenseSummary.count}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">
-                    Totaal prijs
-                  </div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    €{expenseSummary.totalPrice}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Add Expense Button */}
-          <div className="mb-4">
-            <button
-              onClick={handleAddExpense}
-              disabled={isSaving || isDeleting}
-              className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
-            >
-              <span className="text-xl">+</span>
-              <span>Uitgave toevoegen</span>
-            </button>
-          </div>
-
+        <div
+          className={`relative h-full overflow-y-auto ${
+            activeTab === "expenses" ? "" : "hidden"
+          }`}
+        >
           {/* Expenses List */}
           {localExpenses.length === 0 ? (
             <p className="text-gray-500 text-center py-8 bg-white rounded-lg">
               Geen uitgaven gevonden voor deze dag
             </p>
           ) : (
-            <div className="space-y-4">
-              {localExpenses.map((expense, index) => (
-                <div
-                  key={expense.id}
-                  className="rounded-lg p-4 space-y-4 bg-white"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-medium text-gray-700">
-                      Uitgave {index + 1}
-                    </div>
-                    {expense.id && !expense.id.startsWith("temp-expense-") && (
+            <div className="space-y-4 pt-4 pb-20">
+              {localExpenses.map((expense, index) => {
+                const isExpanded = expandedExpenses.has(expense.id);
+
+                const project =
+                  expense.project_editable || expense.project
+                    ? projects.find(
+                        (p) =>
+                          p.id === (expense.project_editable || expense.project)
+                      )
+                    : null;
+
+                const priceDisplay =
+                  expense.price_editable !== undefined &&
+                  expense.price_editable !== ""
+                    ? parseFloat(expense.price_editable).toFixed(2)
+                    : expense.price !== null && expense.price !== undefined
+                    ? expense.price.toFixed(2)
+                    : "-";
+
+                const nameDisplay =
+                  expense.name_editable || expense.name || "-";
+
+                return (
+                  <div
+                    key={expense.id}
+                    className="rounded-lg border border-gray-200 p-4 space-y-4 bg-white transition-all duration-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <ToolBox size={24} />
+                        </div>
+                        <span className="text-lg font-medium text-gray-700">
+                          {project ? project.name : "-"}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                            expense.user_name === user
+                              ? "bg-gray-100 text-gray-700"
+                              : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          {expense.user_name || user}
+                        </span>
+                      </div>
                       <button
-                        onClick={() => handleDeleteExpense(expense.id, index)}
-                        disabled={isSaving || isDeleting}
-                        className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                        onClick={() => handleToggleExpandExpense(expense.id)}
+                        className="px-3 py-1.5 text-sm font-medium text-[#008eff] hover:bg-[#008eff]/10 rounded-md transition-colors"
                       >
-                        Verwijderen
+                        {isExpanded ? "Sluiten" : "Bewerken"}
                       </button>
-                    )}
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Projectnaam *
-                      </label>
-                      <select
-                        value={
-                          expense.project_editable !== undefined
-                            ? expense.project_editable || ""
-                            : expense.project || ""
-                        }
-                        onChange={(e) =>
-                          handleExpenseChange(
-                            index,
-                            "project_editable",
-                            e.target.value || null
-                          )
-                        }
-                        disabled={isSaving || isDeleting}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                        required
-                      >
-                        <option value="">Selecteer een project</option>
-                        {projects.map((project) => (
-                          <option key={project.id} value={project.id}>
-                            {project.name}
-                            {project.is_default && " (Standaard)"}
-                            {project.is_shared && " (Gedeeld)"}
-                          </option>
-                        ))}
-                      </select>
                     </div>
 
-                    {(expense.project_editable || expense.project) && (
-                      <>
+                    {!isExpanded ? (
+                      // Collapsed View
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-4 text-sm flex-wrap">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-gray-500 tracking-wide">
+                              Naam:
+                            </span>
+                            <span className="text-gray-900 font-medium">
+                              {nameDisplay}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-gray-500 tracking-wide">
+                              Prijs:
+                            </span>
+                            <span className="text-gray-900 font-medium">
+                              €{priceDisplay}
+                            </span>
+                          </div>
+                          {expense.includes_vat_editable ||
+                          expense.includes_vat ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-gray-500 tracking-wide">
+                                BTW:
+                              </span>
+                              <span className="text-gray-900 font-medium">
+                                Inclusief
+                              </span>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : (
+                      // Expanded View
+                      <div className="space-y-4">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Naam *
+                            Projectnaam *
                           </label>
-                          <input
-                            type="text"
-                            value={expense.name_editable || ""}
+                          <select
+                            value={
+                              expense.project_editable !== undefined
+                                ? expense.project_editable || ""
+                                : expense.project || ""
+                            }
                             onChange={(e) =>
                               handleExpenseChange(
                                 index,
-                                "name_editable",
-                                e.target.value
+                                "project_editable",
+                                e.target.value || null
                               )
                             }
                             disabled={isSaving || isDeleting}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                            placeholder="Bijv. Materialen, Lunch, etc."
                             required
-                          />
+                          >
+                            <option value="">Selecteer een project</option>
+                            {projects.map((project) => (
+                              <option key={project.id} value={project.id}>
+                                {project.name}
+                                {project.is_default && " (Standaard)"}
+                                {project.is_shared && " (Gedeeld)"}
+                              </option>
+                            ))}
+                          </select>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row sm:grid sm:grid-cols-2 gap-4">
-                          <div className="flex-1 min-w-0">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Prijs (€) *
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              placeholder="0.00"
-                              value={expense.price_editable || ""}
-                              onChange={(e) =>
-                                handleExpenseChange(
-                                  index,
-                                  "price_editable",
-                                  e.target.value === "" ? "" : e.target.value
-                                )
-                              }
-                              disabled={isSaving || isDeleting}
-                              className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                              required
-                            />
-                          </div>
-
-                          <div className="flex items-end sm:flex-1 min-w-0">
-                            <label className="flex items-center space-x-2 cursor-pointer w-full">
+                        {(expense.project_editable || expense.project) && (
+                          <>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Naam *
+                              </label>
                               <input
-                                type="checkbox"
-                                checked={expense.includes_vat_editable || false}
+                                type="text"
+                                value={expense.name_editable || ""}
                                 onChange={(e) =>
                                   handleExpenseChange(
                                     index,
-                                    "includes_vat_editable",
-                                    e.target.checked
+                                    "name_editable",
+                                    e.target.value
                                   )
                                 }
                                 disabled={isSaving || isDeleting}
-                                className="w-4 h-4 text-[#008eff] border-gray-300 rounded focus:ring-[#008eff] disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                placeholder="Bijv. Materialen, Lunch, etc."
+                                required
                               />
-                              <span className="text-sm font-medium text-gray-700">
-                                Inclusief BTW
-                              </span>
-                            </label>
-                          </div>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row sm:grid sm:grid-cols-2 gap-4">
+                              <div className="flex-1 min-w-0">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Prijs (€) *
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="0.00"
+                                  value={expense.price_editable || ""}
+                                  onChange={(e) =>
+                                    handleExpenseChange(
+                                      index,
+                                      "price_editable",
+                                      e.target.value === ""
+                                        ? ""
+                                        : e.target.value
+                                    )
+                                  }
+                                  disabled={isSaving || isDeleting}
+                                  className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                  required
+                                />
+                              </div>
+
+                              <div className="flex items-end sm:flex-1 min-w-0">
+                                <label className="flex items-center space-x-2 cursor-pointer w-full">
+                                  <input
+                                    type="checkbox"
+                                    checked={
+                                      expense.includes_vat_editable || false
+                                    }
+                                    onChange={(e) =>
+                                      handleExpenseChange(
+                                        index,
+                                        "includes_vat_editable",
+                                        e.target.checked
+                                      )
+                                    }
+                                    disabled={isSaving || isDeleting}
+                                    className="w-4 h-4 text-[#008eff] border-gray-300 rounded focus:ring-[#008eff] disabled:opacity-50 disabled:cursor-not-allowed"
+                                  />
+                                  <span className="text-sm font-medium text-gray-700">
+                                    Inclusief BTW
+                                  </span>
+                                </label>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                        {/* Save button */}
+                        <div className="pt-2 border-t border-gray-200 flex justify-end">
+                          <button
+                            onClick={() => handleSaveExpense(index)}
+                            disabled={
+                              isSaving ||
+                              isDeleting ||
+                              savingExpenseId === expense.id ||
+                              !expense.project_editable ||
+                              !expense.name_editable ||
+                              !expense.price_editable
+                            }
+                            className="px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                          >
+                            {savingExpenseId === expense.id
+                              ? "Opslaan..."
+                              : "Opslaan"}
+                          </button>
                         </div>
-                      </>
+                        {expense.id &&
+                          !expense.id.startsWith("temp-expense-") && (
+                            <div className="pt-2 border-t border-gray-200">
+                              <button
+                                onClick={() =>
+                                  handleDeleteExpense(expense.id, index)
+                                }
+                                disabled={isSaving || isDeleting}
+                                className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                              >
+                                Verwijderen
+                              </button>
+                            </div>
+                          )}
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
+
+          {/* Add Expense Button */}
+          <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 mt-4">
+            <button
+              onClick={handleAddExpense}
+              disabled={isSaving || isDeleting}
+              className="w-full sm:w-auto px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
+            >
+              <span>Uitgave toevoegen</span>
+            </button>
+          </div>
         </div>
 
         {/* Notes Tab */}
-        <div className={activeTab === "notes" ? "" : "hidden"}>
+        <div className={`h-full overflow-y-auto ${activeTab === "notes" ? "" : "hidden"}`}>
           {loadingNotes ? (
             <div className="bg-white rounded-lg p-8 text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#008eff] mx-auto"></div>
