@@ -1564,7 +1564,13 @@ export default function DayEntriesListClient({
   if (!selectedDate) return <div>Geen dag geselecteerd</div>;
 
   return (
-    <div className="w-full p-4 flex flex-col h-full">
+    <div
+      className="w-full flex flex-col h-full"
+      style={{
+        padding: "1rem",
+        paddingTop: "calc(1rem + env(safe-area-inset-top))",
+      }}
+    >
       <div className="bg-white border-b border-gray-200 flex-shrink-0">
         {/* Header */}
         <div className="px-4 sm:px-6 py-3  rounded-xl bg-gray-100 justify-between">
@@ -1958,7 +1964,7 @@ export default function DayEntriesListClient({
                                       value={entry.end_time_editable || ""}
                                       onChange={(e) =>
                                         handleEntryChange(
-                                          index,  
+                                          index,
                                           "end_time_editable",
                                           e.target.value
                                         )
@@ -2342,7 +2348,11 @@ export default function DayEntriesListClient({
         </div>
 
         {/* Notes Tab */}
-        <div className={`h-full overflow-y-auto ${activeTab === "notes" ? "" : "hidden"}`}>
+        <div
+          className={`h-full overflow-y-auto ${
+            activeTab === "notes" ? "" : "hidden"
+          }`}
+        >
           {loadingNotes ? (
             <div className="bg-white rounded-lg p-8 text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#008eff] mx-auto"></div>

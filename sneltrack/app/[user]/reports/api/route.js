@@ -45,35 +45,57 @@ async function getProjectEntriesForDateRange(
 
   if (project.is_shared) {
     const isOwner = await isProjectOwner(userName, project.id);
+    // Pass date range to filter in Firestore instead of fetching all entries
+    const rangeStart = dateRange?.start
+      ? dateRange.start instanceof Date
+        ? dateRange.start
+        : new Date(dateRange.start)
+      : null;
+    const rangeEnd = dateRange?.end
+      ? dateRange.end instanceof Date
+        ? dateRange.end
+        : new Date(dateRange.end)
+      : null;
     if (isOwner) {
-      entries = await getProjectTimeEntries(project.id);
+      entries = await getProjectTimeEntries(project.id, null, rangeStart, rangeEnd);
     } else {
-      entries = await getProjectTimeEntries(project.id, userName);
+      entries = await getProjectTimeEntries(project.id, userName, rangeStart, rangeEnd);
     }
   } else {
     const db = getDb();
     const ref = db.collection("users").doc(userName).collection("time-entries");
-    const snap = await ref.where("project", "==", project.id).get();
+    // Add date range filtering for user projects too
+    let query = ref.where("project", "==", project.id);
+    if (dateRange && dateRange.start && dateRange.end) {
+      const rangeStart =
+        dateRange.start instanceof Date
+          ? dateRange.start
+          : new Date(dateRange.start);
+      const rangeEnd =
+        dateRange.end instanceof Date ? dateRange.end : new Date(dateRange.end);
+      query = query.where("start_time", "<", rangeEnd);
+    }
+    const snap = await query.orderBy("start_time", "desc").get();
     entries = snap.docs.map(docToEntry);
-  }
+    
+    // Filter entries by date range if provided (for entries that span the range)
+    if (dateRange && dateRange.start && dateRange.end) {
+      const rangeStart =
+        dateRange.start instanceof Date
+          ? dateRange.start
+          : new Date(dateRange.start);
+      const rangeEnd =
+        dateRange.end instanceof Date ? dateRange.end : new Date(dateRange.end);
 
-  // Filter entries by date range if provided
-  if (dateRange && dateRange.start && dateRange.end) {
-    const rangeStart =
-      dateRange.start instanceof Date
-        ? dateRange.start
-        : new Date(dateRange.start);
-    const rangeEnd =
-      dateRange.end instanceof Date ? dateRange.end : new Date(dateRange.end);
+      entries = entries.filter((entry) => {
+        const entryStart = new Date(entry.start_time);
+        const entryEnd = entry.end_time ? new Date(entry.end_time) : null;
 
-    entries = entries.filter((entry) => {
-      const entryStart = new Date(entry.start_time);
-      const entryEnd = entry.end_time ? new Date(entry.end_time) : null;
-
-      return (
-        entryStart < rangeEnd && (entryEnd === null || entryEnd >= rangeStart)
-      );
-    });
+        return (
+          entryStart < rangeEnd && (entryEnd === null || entryEnd >= rangeStart)
+        );
+      });
+    }
   }
 
   return entries;
