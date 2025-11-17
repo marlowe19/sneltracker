@@ -8,12 +8,38 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import { fireAndForget, logError, toIsoString } from "./base";
 
 /**
+ * Looks up a Supabase project UUID by Firestore project ID
+ *
+ * @param {string} firestoreProjectId - Firestore project ID
+ * @returns {Promise<string|null>} Project UUID or null if not found
+ */
+async function lookupProjectId(firestoreProjectId) {
+  if (!firestoreProjectId) return null;
+
+  const { data, error } = await supabaseServer
+    .from("projects")
+    .select("id")
+    .eq("firestore_id", firestoreProjectId)
+    .single();
+
+  if (error || !data) {
+    // Silently return null - project might not be migrated yet
+    return null;
+  }
+
+  return data.id;
+}
+
+/**
  * Maps a Firestore time entry to Supabase schema
  *
  * @param {Object} entry - Firestore entry object
- * @returns {Object} Supabase entry object
+ * @returns {Promise<Object>} Supabase entry object
  */
-export function mapEntryToSupabase(entry) {
+export async function mapEntryToSupabase(entry) {
+  // Look up the Supabase project UUID from firestore_id
+  const projectId = await lookupProjectId(entry.project);
+
   return {
     firestore_id: entry.id,
     user_name: entry.user_name,
@@ -21,8 +47,8 @@ export function mapEntryToSupabase(entry) {
     end_time: toIsoString(entry.end_time),
     duration_ms: entry.duration_ms ?? null,
     hourly_rate: entry.hourly_rate ?? null,
-    project_id: null,
-    firestore_project_id: entry.project,
+    project_id: projectId, // ✅ Now properly linked to Supabase project
+    firestore_project_id: entry.project, // Keep for reference/fallback
     created_at: toIsoString(entry.created_at) || new Date().toISOString(),
     modified_at: toIsoString(entry.modified_at) || new Date().toISOString(),
     creation_method: entry.creation_method ?? null,
@@ -38,7 +64,7 @@ export function mapEntryToSupabase(entry) {
 export function create(entry) {
   fireAndForget(
     async () => {
-      const supabaseData = mapEntryToSupabase(entry);
+      const supabaseData = await mapEntryToSupabase(entry);
       const { error } = await supabaseServer
         .from("time_entries")
         .insert(supabaseData);
@@ -61,7 +87,7 @@ export function create(entry) {
 export function update(entry) {
   fireAndForget(
     async () => {
-      const supabaseData = mapEntryToSupabase(entry);
+      const supabaseData = await mapEntryToSupabase(entry);
       // Remove firestore_id from update data (it's the identifier, not updatable)
       const { firestore_id, ...updateData } = supabaseData;
       // Update modified_at to current time
@@ -91,7 +117,7 @@ export function update(entry) {
 export function upsert(entry) {
   fireAndForget(
     async () => {
-      const supabaseData = mapEntryToSupabase(entry);
+      const supabaseData = await mapEntryToSupabase(entry);
       // Update modified_at to current time for upsert
       supabaseData.modified_at = new Date().toISOString();
 

@@ -211,6 +211,9 @@ function CategoryBreakdownPieChart({ totals }) {
 }
 
 function ProjectCard({ project, user }) {
+  const [showMembers, setShowMembers] = useState(false);
+  const hasMembers = project.members && project.members.length > 0;
+
   return (
     <div className="border border-[#ffa540] bg-[#fff9e5] rounded-lg p-4 hover:bg-gray-50 transition-colors">
       {/* Title row with badges */}
@@ -226,6 +229,12 @@ function ProjectCard({ project, user }) {
         {project.is_shared && (
           <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
             {project.owner === user ? "Eigenaar" : "Gedeeld"}
+          </span>
+        )}
+        {hasMembers && (
+          <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
+            {project.members.length}{" "}
+            {project.members.length === 1 ? "lid" : "leden"}
           </span>
         )}
       </div>
@@ -276,6 +285,74 @@ function ProjectCard({ project, user }) {
           </div>
         </div>
       </div>
+
+      {/* Member Breakdown Section */}
+      {hasMembers && (
+        <div className="mt-4 pt-3 border-t border-gray-200">
+          <button
+            onClick={() => setShowMembers(!showMembers)}
+            className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 w-full"
+          >
+            <span>{showMembers ? "▼" : "▶"}</span>
+            <span>Leden overzicht</span>
+          </button>
+
+          {showMembers && (
+            <div className="mt-3 space-y-2">
+              {project.members.map((member) => {
+                const memberBillableAmount =
+                  member.billableHours * (project.hourlyRate || 0);
+                return (
+                  <div
+                    key={member.user_name}
+                    className="bg-white rounded-lg p-3 border border-gray-200"
+                  >
+                    <div className="font-medium text-gray-900 mb-2">
+                      {member.user_name}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                      <div>
+                        <span className="font-medium">Totaal: </span>
+                        {formatHours(member.hours)}
+                      </div>
+                      <div>
+                        <span className="font-medium">Factureerbaar: </span>
+                        {formatHours(member.billableHours)}
+                      </div>
+                      <div>
+                        <span className="font-medium">
+                          Niet factureerbaar:{" "}
+                        </span>
+                        {formatHours(member.unbillableHours)}
+                      </div>
+                      {memberBillableAmount > 0 && (
+                        <div>
+                          <span className="font-medium">Bedrag: </span>
+                          <span className="text-green-600 font-semibold">
+                            {formatMoney(memberBillableAmount)}
+                          </span>
+                        </div>
+                      )}
+                      {member.expenses > 0 && (
+                        <div>
+                          <span className="font-medium">Uitgaven: </span>
+                          <span className="text-red-600 font-semibold">
+                            {formatMoney(member.expenses)}
+                          </span>
+                        </div>
+                      )}
+                      <div>
+                        <span className="font-medium">Tijdregistraties: </span>
+                        {member.entryCount}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
