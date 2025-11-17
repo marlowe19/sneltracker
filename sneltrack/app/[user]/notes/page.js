@@ -57,6 +57,7 @@ async function NotesContent({ user }) {
       <section className="bg-white rounded-xl p-4">
         <NotesListClient user={user} initialNotes={notes || []} />
       </section>
+      <div className="text-xs px-4">app version: 1.0.0</div>
     </main>
   );
 }

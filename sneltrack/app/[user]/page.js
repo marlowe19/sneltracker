@@ -1,9 +1,5 @@
 import { Suspense } from "react";
-import {
-  getActiveEntries,
-  getStoppedTimersForToday,
-  getAllProjects,
-} from "@/lib/dbFirestore";
+import { getActiveEntries, getAllProjects } from "@/lib/dbFirestore";
 import Link from "next/link";
 import TimerSectionWrapperClient from "./TimerSectionWrapperClient";
 import WeekEntriesClient from "./WeekEntriesClient";
@@ -29,25 +25,7 @@ function UserPageLoading({ user }) {
               />
             </header>
           </div>
-
-          <div className="ml-auto flex gap-2">
-            <Link
-              href={`/${encodeURIComponent(user)}/notes`}
-              prefetch={false}
-              className="text-base text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50"
-            >
-              Notities (test)
-            </Link>
-            <Link
-              href={`/${encodeURIComponent(user)}/projecten`}
-              prefetch={false}
-              className="text-base text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50"
-            >
-              Projecten
-            </Link>
-          </div>
         </div>
-
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#008eff]"></div>
@@ -61,9 +39,8 @@ function UserPageLoading({ user }) {
 
 async function UserPageContent({ user, weekOffset }) {
   // Fetch active entries, stopped timers, and projects on server
-  const [activeEntries, stoppedTimers, projects] = await Promise.all([
+  const [activeEntries, projects] = await Promise.all([
     getActiveEntries(user),
-    getStoppedTimersForToday(user),
     getAllProjects(user),
   ]);
 
@@ -77,7 +54,7 @@ async function UserPageContent({ user, weekOffset }) {
         <TimerSectionWrapperClient
           user={user}
           activeEntries={activeEntries}
-          stoppedTimers={stoppedTimers}
+          stoppedTimers={[]}
         />
       </main>
     </>
