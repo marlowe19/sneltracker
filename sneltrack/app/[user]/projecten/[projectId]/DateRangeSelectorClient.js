@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getWeekBounds, getMonthBounds, getQuarterBounds } from "@/lib/time";
+import { getWeekBoundsUTC, getMonthBoundsUTC, getQuarterBoundsUTC } from "@/lib/dateRangeUtils";
 import {
   addWeeks,
   addMonths,
@@ -93,27 +94,31 @@ function generateRanges(rangeType, currentDate, count = 20) {
   const now = new Date();
 
   if (rangeType === "week") {
-    // Generate weeks around current week
+    // Generate weeks - current week at top, then past weeks
     const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
-    for (let i = -count / 2; i < count / 2; i++) {
+    // Start from 2 weeks in the future, go down to past weeks
+    for (let i = 2; i >= -count + 2; i--) {
       const weekDate = addWeeks(currentWeekStart, i);
-      const { start, end } = getWeekBounds(weekDate);
+      const { start, end } = getWeekBoundsUTC(weekDate);
       ranges.push(formatRangeListItem(start, end, rangeType));
     }
   } else if (rangeType === "month") {
-    // Generate months around current month
+    // Generate months - current month at top, then past months
     const currentMonthStart = startOfMonth(now);
-    for (let i = -count / 2; i < count / 2; i++) {
+    // Start from 2 months in the future, go down to past months
+    for (let i = 2; i >= -count + 2; i--) {
       const monthDate = addMonths(currentMonthStart, i);
-      const { start, end } = getMonthBounds(monthDate);
+      const { start, end } = getMonthBoundsUTC(monthDate);
       ranges.push(formatRangeListItem(start, end, rangeType));
     }
   } else if (rangeType === "quarter") {
-    // Generate quarters around current quarter
+    // Generate quarters - current quarter at top, then past quarters
+    // Limit to 2 years back (8 quarters) + current + 2 ahead = 11 quarters total
     const currentQuarterStart = startOfQuarter(now);
-    for (let i = -count / 2; i < count / 2; i++) {
+    // Start from 2 quarters in the future, go down to 8 quarters back
+    for (let i = 2; i >= -8; i--) {
       const quarterDate = addQuarters(currentQuarterStart, i);
-      const { start, end } = getQuarterBounds(quarterDate);
+      const { start, end } = getQuarterBoundsUTC(quarterDate);
       ranges.push(formatRangeListItem(start, end, rangeType));
     }
   }
@@ -136,13 +141,13 @@ export default function DateRangeSelectorClient({
   // Calculate current range bounds
   const getCurrentBounds = () => {
     if (rangeType === "week") {
-      return getWeekBounds(referenceDate);
+      return getWeekBoundsUTC(referenceDate);
     } else if (rangeType === "month") {
-      return getMonthBounds(referenceDate);
+      return getMonthBoundsUTC(referenceDate);
     } else if (rangeType === "quarter") {
-      return getQuarterBounds(referenceDate);
+      return getQuarterBoundsUTC(referenceDate);
     }
-    return getWeekBounds(referenceDate);
+    return getWeekBoundsUTC(referenceDate);
   };
 
   const currentBounds = getCurrentBounds();
@@ -171,11 +176,11 @@ export default function DateRangeSelectorClient({
     // Calculate bounds for the temp reference date and range type
     let tempBounds;
     if (tempRangeType === "week") {
-      tempBounds = getWeekBounds(tempReferenceDate);
+      tempBounds = getWeekBoundsUTC(tempReferenceDate);
     } else if (tempRangeType === "month") {
-      tempBounds = getMonthBounds(tempReferenceDate);
+      tempBounds = getMonthBoundsUTC(tempReferenceDate);
     } else {
-      tempBounds = getQuarterBounds(tempReferenceDate);
+      tempBounds = getQuarterBoundsUTC(tempReferenceDate);
     }
 
     setRangeType(tempRangeType);
@@ -237,15 +242,15 @@ export default function DateRangeSelectorClient({
               <h3 className="text-base font-semibold text-gray-900">
                 {formatDateRange(
                   tempRangeType === "week"
-                    ? getWeekBounds(tempReferenceDate).start
+                    ? getWeekBoundsUTC(tempReferenceDate).start
                     : tempRangeType === "month"
-                    ? getMonthBounds(tempReferenceDate).start
-                    : getQuarterBounds(tempReferenceDate).start,
+                    ? getMonthBoundsUTC(tempReferenceDate).start
+                    : getQuarterBoundsUTC(tempReferenceDate).start,
                   tempRangeType === "week"
-                    ? getWeekBounds(tempReferenceDate).end
+                    ? getWeekBoundsUTC(tempReferenceDate).end
                     : tempRangeType === "month"
-                    ? getMonthBounds(tempReferenceDate).end
-                    : getQuarterBounds(tempReferenceDate).end,
+                    ? getMonthBoundsUTC(tempReferenceDate).end
+                    : getQuarterBoundsUTC(tempReferenceDate).end,
                   tempRangeType
                 )}
               </h3>
@@ -286,15 +291,15 @@ export default function DateRangeSelectorClient({
             </div>
 
             {/* Range List */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto pb-4">
               {ranges.map((range, index) => {
                 // Check if this range matches the current temp selection
                 const tempBounds =
                   tempRangeType === "week"
-                    ? getWeekBounds(tempReferenceDate)
+                    ? getWeekBoundsUTC(tempReferenceDate)
                     : tempRangeType === "month"
-                    ? getMonthBounds(tempReferenceDate)
-                    : getQuarterBounds(tempReferenceDate);
+                    ? getMonthBoundsUTC(tempReferenceDate)
+                    : getQuarterBoundsUTC(tempReferenceDate);
                 const isSelected =
                   new Date(range.start).getTime() ===
                     tempBounds.start.getTime() &&

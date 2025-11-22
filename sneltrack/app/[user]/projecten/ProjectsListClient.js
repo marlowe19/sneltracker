@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import ProjectFormClient from "./ProjectFormClient";
 import { useStore } from "@/stores/useStore";
 import { useToast } from "@/app/components/Toast";
+import {
+  calculateProjectProgress,
+  getProgressBarColorClass,
+  getProgressTextColorClass,
+  formatHours,
+  hasBudgetTracking,
+} from "@/lib/utils/projectProgress";
 
 function formatMoney(amount) {
   return new Intl.NumberFormat("nl-NL", {
@@ -153,6 +160,9 @@ export default function ProjectsListClient({ user, initialProjects }) {
         <div className="space-y-3">
           {filteredProjects.map((project) => {
             const isOwner = project.is_shared && project.owner === user;
+            const progress = calculateProjectProgress(project);
+            const showBudgetTracking = hasBudgetTracking(project);
+
             return (
               <div
                 key={project.id}
@@ -170,12 +180,23 @@ export default function ProjectsListClient({ user, initialProjects }) {
                           Standaard
                         </span>
                       )}
+                      {project.is_over_budget && (
+                        <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">
+                          Over budget
+                        </span>
+                      )}
                     </div>
                     {project.is_shared && (
                       <div className="flex items-center gap-2">
                         <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
                           {isOwner ? "Eigenaar" : "Gedeeld"}
                         </span>
+                        {project.member_count > 0 && (
+                          <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
+                            {project.member_count}{" "}
+                            {project.member_count === 1 ? "lid" : "leden"}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -202,6 +223,40 @@ export default function ProjectsListClient({ user, initialProjects }) {
                       </div>
                     ) : null;
                   })()}
+
+                  {/* Progress Bar Section */}
+                  {showBudgetTracking && (
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      <div className="flex justify-between text-xs text-gray-600 mb-1">
+                        <span>
+                          {formatHours(project.total_hours)} /{" "}
+                          {formatHours(project.budget_hours)}
+                        </span>
+                        <span
+                          className={getProgressTextColorClass(
+                            progress.statusColor
+                          )}
+                        >
+                          {progress.formattedPercentage}
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all ${getProgressBarColorClass(
+                            progress.statusColor
+                          )}`}
+                          style={{
+                            width: `${Math.min(progress.percentage, 100)}%`,
+                          }}
+                        />
+                      </div>
+                      {progress.isOverBudget && (
+                        <p className="text-xs text-red-600 mt-1">
+                          ⚠️ {progress.formattedRemaining}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );

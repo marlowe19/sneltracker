@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   PieChart,
   Pie,
@@ -13,8 +13,11 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  LineChart,
+  Line,
 } from "recharts";
 import { HOURLY_RATE_BREAKDOWN } from "@/lib/hourlyRateBreakdown";
+import PieChartCarousel from "../../reports/PieChartCarousel";
 
 function formatMoney(amount) {
   return new Intl.NumberFormat("nl-NL", {
@@ -49,16 +52,9 @@ const COLORS = [
 export default function ProjectStatisticsClient({ user, projectId, project }) {
   const [statistics, setStatistics] = useState(null);
   const [memberStatistics, setMemberStatistics] = useState(null);
+  const [velocity, setVelocity] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState(0);
-  const carouselRef = useRef(null);
-  const containerRef = useRef(null);
-  const touchStartX = useRef(null);
-  const touchEndX = useRef(null);
-  const touchStartY = useRef(null);
 
   useEffect(() => {
     async function fetchStatistics() {
@@ -89,6 +85,7 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
         const data = await res.json();
         setStatistics(data.statistics);
         setMemberStatistics(data.memberStatistics || null);
+        setVelocity(data.velocity || null);
       } catch (err) {
         console.error("Error fetching statistics:", err);
         setError(err.message || "Failed to load statistics");
@@ -701,199 +698,230 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
     });
   }
 
-  const totalCards = cards.length;
+  // Velocity Cards
+  if (velocity && velocity.dailyVelocity && velocity.dailyVelocity.length > 0) {
+    // Format daily velocity data for chart
+    const dailyChartData = velocity.dailyVelocity.map((item) => ({
+      date: new Date(item.date).toLocaleDateString("nl-NL", {
+        month: "short",
+        day: "numeric",
+      }),
+      hours: parseFloat(item.hours),
+      fullDate: item.date,
+    }));
 
-  // Card width percentage (92% leaves ~8% visible for next card)
-  const CARD_WIDTH_PERCENT = 92;
-  const CARD_GAP_PERCENT = 2; // Gap as percentage of container width
+    // Card: Daily Velocity Chart
+    cards.push({
+      id: "daily-velocity",
+      title: "Dagelijkse snelheid (uren per dag)",
+      content: (
+        <div className="w-full" style={{ height: "240px" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={dailyChartData}
+              margin={{ top: 5, right: 5, left: 0, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 11 }}
+                stroke="#6b7280"
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
+              <YAxis
+                tick={{ fontSize: 12 }}
+                stroke="#6b7280"
+                tickFormatter={(value) => `${value.toFixed(1)}u`}
+              />
+              <Tooltip
+                formatter={(value) => [`${value.toFixed(2)}u`, "Uren"]}
+                labelFormatter={(label, payload) => {
+                  if (payload && payload[0]) {
+                    return new Date(payload[0].payload.fullDate).toLocaleDateString(
+                      "nl-NL",
+                      {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      }
+                    );
+                  }
+                  return label;
+                }}
+                contentStyle={{
+                  backgroundColor: "white",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "0.5rem",
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="hours"
+                stroke="#008eff"
+                strokeWidth={2}
+                dot={{ fill: "#008eff", r: 3 }}
+                activeDot={{ r: 5 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      ),
+    });
 
-  // Calculate transform percentage
-  // Each card takes CARD_WIDTH_PERCENT + CARD_GAP_PERCENT of the container
-  const getTransformPercent = () => {
-    const step = CARD_WIDTH_PERCENT + CARD_GAP_PERCENT;
-    const baseOffset = currentIndex * step;
-    // Calculate drag offset as percentage
-    const dragOffsetPercent = containerRef.current
-      ? (dragOffset / containerRef.current.offsetWidth) * 100
-      : 0;
-    return -(baseOffset - dragOffsetPercent);
-  };
+    // Card: Velocity Metrics Summary
+    const trendEmoji =
+      velocity.trendDirection === "increasing"
+        ? "📈"
+        : velocity.trendDirection === "decreasing"
+        ? "📉"
+        : "➡️";
+    const trendColor =
+      velocity.trendDirection === "increasing"
+        ? "text-green-600"
+        : velocity.trendDirection === "decreasing"
+        ? "text-red-600"
+        : "text-gray-600";
 
-  // Touch handlers with improved mobile support
-  const handleTouchStart = (e) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-    setIsDragging(true);
-  };
+    cards.push({
+      id: "velocity-metrics",
+      title: "Snelheidsmetrieken",
+      content: (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="text-xs text-gray-600 mb-1">Gemiddeld per dag</div>
+              <div className="text-lg font-semibold text-gray-900">
+                {formatHours(velocity.averageDailyHours)}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-600 mb-1">Actieve dagen</div>
+              <div className="text-lg font-semibold text-gray-900">
+                {velocity.activeDays}
+              </div>
+            </div>
+          </div>
+          {velocity.peakDayDate && (
+            <div>
+              <div className="text-xs text-gray-600 mb-1">Topdag</div>
+              <div className="text-sm font-medium text-gray-900">
+                {new Date(velocity.peakDayDate).toLocaleDateString("nl-NL", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </div>
+              <div className="text-xs text-gray-600">
+                {formatHours(velocity.peakDayHours)}
+              </div>
+            </div>
+          )}
+          {velocity.trendDirection !== "insufficient_data" && (
+            <div>
+              <div className="text-xs text-gray-600 mb-1">Trend</div>
+              <div className={`text-sm font-medium ${trendColor} flex items-center gap-1`}>
+                <span>{trendEmoji}</span>
+                <span>
+                  {velocity.trendDirection === "increasing"
+                    ? "Toenemend"
+                    : velocity.trendDirection === "decreasing"
+                    ? "Afnemend"
+                    : "Stabiel"}
+                </span>
+                {Math.abs(velocity.trendPercentage) > 0 && (
+                  <span className="text-xs">
+                    ({velocity.trendPercentage > 0 ? "+" : ""}
+                    {velocity.trendPercentage.toFixed(1)}%)
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      ),
+    });
 
-  const handleTouchMove = (e) => {
-    if (!touchStartX.current || !touchStartY.current) return;
+    // Card: Weekly Velocity (if we have weekly data)
+    if (velocity.weeklyVelocity && velocity.weeklyVelocity.length > 0) {
+      const weeklyChartData = velocity.weeklyVelocity.map((item) => ({
+        week: new Date(item.weekStart).toLocaleDateString("nl-NL", {
+          month: "short",
+          day: "numeric",
+        }),
+        hours: parseFloat(item.hours),
+        fullWeekStart: item.weekStart,
+      }));
 
-    const currentX = e.touches[0].clientX;
-    const currentY = e.touches[0].clientY;
-    const deltaX = currentX - touchStartX.current;
-    const deltaY = currentY - touchStartY.current;
-
-    // Only prevent scroll if horizontal swipe is dominant
-    if (Math.abs(deltaX) > Math.abs(deltaY)) {
-      e.preventDefault();
-      touchEndX.current = currentX;
-      setDragOffset(deltaX);
+      cards.push({
+        id: "weekly-velocity",
+        title: "Wekelijkse snelheid",
+        content: (
+          <div className="w-full" style={{ height: "200px" }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={weeklyChartData}
+                margin={{ top: 5, right: 5, left: 0, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis
+                  dataKey="week"
+                  tick={{ fontSize: 11 }}
+                  stroke="#6b7280"
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis
+                  tick={{ fontSize: 12 }}
+                  stroke="#6b7280"
+                  tickFormatter={(value) => `${value.toFixed(1)}u`}
+                />
+                <Tooltip
+                  formatter={(value) => [`${value.toFixed(2)}u`, "Uren"]}
+                  labelFormatter={(label, payload) => {
+                    if (payload && payload[0]) {
+                      const weekStart = new Date(
+                        payload[0].payload.fullWeekStart
+                      );
+                      const weekEnd = new Date(weekStart);
+                      weekEnd.setDate(weekEnd.getDate() + 6);
+                      return `Week: ${weekStart.toLocaleDateString("nl-NL", {
+                        day: "numeric",
+                        month: "short",
+                      })} - ${weekEnd.toLocaleDateString("nl-NL", {
+                        day: "numeric",
+                        month: "short",
+                      })}`;
+                    }
+                    return label;
+                  }}
+                  contentStyle={{
+                    backgroundColor: "white",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "0.5rem",
+                  }}
+                />
+                <Bar
+                  dataKey="hours"
+                  fill="#008eff"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ),
+      });
     }
-  };
-
-  const handleTouchEnd = () => {
-    if (!touchStartX.current || !touchEndX.current) {
-      setIsDragging(false);
-      setDragOffset(0);
-      touchStartX.current = null;
-      touchEndX.current = null;
-      touchStartY.current = null;
-      return;
-    }
-
-    const distance = touchStartX.current - touchEndX.current;
-    const minSwipeDistance = 50;
-
-    if (distance > minSwipeDistance && currentIndex < totalCards - 1) {
-      setCurrentIndex(currentIndex + 1);
-    } else if (distance < -minSwipeDistance && currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
-
-    setIsDragging(false);
-    setDragOffset(0);
-    touchStartX.current = null;
-    touchEndX.current = null;
-    touchStartY.current = null;
-  };
-
-  // Mouse drag handlers
-  const handleMouseDown = (e) => {
-    e.preventDefault();
-    touchStartX.current = e.clientX;
-    setIsDragging(true);
-    if (carouselRef.current) {
-      carouselRef.current.style.cursor = "grabbing";
-    }
-  };
-
-  const handleMouseMove = (e) => {
-    if (touchStartX.current !== null && isDragging) {
-      e.preventDefault();
-      touchEndX.current = e.clientX;
-      setDragOffset(e.clientX - touchStartX.current);
-    }
-  };
-
-  const handleMouseUp = () => {
-    if (touchStartX.current !== null && touchEndX.current !== null) {
-      const distance = touchStartX.current - touchEndX.current;
-      const minSwipeDistance = 50;
-
-      if (distance > minSwipeDistance && currentIndex < totalCards - 1) {
-        setCurrentIndex(currentIndex + 1);
-      } else if (distance < -minSwipeDistance && currentIndex > 0) {
-        setCurrentIndex(currentIndex - 1);
-      }
-    }
-
-    setIsDragging(false);
-    setDragOffset(0);
-    touchStartX.current = null;
-    touchEndX.current = null;
-    if (carouselRef.current) {
-      carouselRef.current.style.cursor = "grab";
-    }
-  };
-
-  const goToCard = (index) => {
-    setCurrentIndex(index);
-    setDragOffset(0);
-  };
+  }
 
   return (
     <div className="mb-6">
       <h2 className="text-lg font-semibold text-gray-900 mb-4">Statistieken</h2>
-
-      {totalCards > 0 && (
-        <>
-          {/* Carousel Container */}
-          <div
-            ref={containerRef}
-            className="relative overflow-hidden pb-4"
-            style={{
-              marginLeft: "-4px",
-              marginRight: "-4px",
-              paddingLeft: "4px",
-              paddingRight: "4px",
-            }}
-          >
-            <div
-              ref={carouselRef}
-              className="flex select-none min-h-[400px]"
-              style={{
-                transform: `translateX(${getTransformPercent()}%)`,
-                cursor: isDragging ? "grabbing" : "grab",
-                transition: isDragging ? "none" : "transform 0.3s ease-out",
-              }}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={() => {
-                setIsDragging(false);
-                setDragOffset(0);
-                touchStartX.current = null;
-                touchEndX.current = null;
-                if (carouselRef.current) {
-                  carouselRef.current.style.cursor = "grab";
-                }
-              }}
-            >
-              {cards.map((card, index) => (
-                <div
-                  key={card.id}
-                  className="shrink-0"
-                  style={{
-                    width: `${CARD_WIDTH_PERCENT}%`,
-                    marginRight:
-                      index < totalCards - 1 ? `${CARD_GAP_PERCENT}%` : "0",
-                  }}
-                >
-                  <div className="bg-white rounded-xl p-4 shadow-md select-text h-full min-h-[320px]">
-                    <div className="text-sm text-gray-600 mb-3 font-medium">
-                      {card.title}
-                    </div>
-                    {card.content}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Dots Indicator */}
-          {totalCards > 1 && (
-            <div className="mt-4 flex items-center justify-center gap-2">
-              {cards.map((_, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  onClick={() => goToCard(index)}
-                  className={`transition-all ${
-                    index === currentIndex
-                      ? "w-2 h-2 bg-[#008eff] rounded-full"
-                      : "w-2 h-2 bg-gray-300 rounded-full hover:bg-gray-400"
-                  }`}
-                  aria-label={`Go to card ${index + 1}`}
-                />
-              ))}
-            </div>
-          )}
-        </>
-      )}
+      <PieChartCarousel cards={cards} />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import BackButtonClient from "../projecten/[projectId]/BackButtonClient";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import {
   DateRangeProvider,
@@ -10,6 +11,7 @@ import {
   useDateRangeContext,
 } from "../components/DateRangeProvider";
 import { getWeekBounds, getMonthBounds, getQuarterBounds } from "@/lib/time";
+import { formatDateForAPI } from "@/lib/dateRangeUtils";
 import { HOURLY_RATE_BREAKDOWN } from "@/lib/hourlyRateBreakdown";
 import PieChartCarousel from "./PieChartCarousel";
 
@@ -150,9 +152,9 @@ function CategoryBreakdownPieChart({ totals }) {
 
   return (
     <div className="w-full">
-      <div style={{ height: "250px" }}>
+      <div style={{ height: "230px" }}>
         <ResponsiveContainer width="100%" height="100%">
-          <PieChart margin={{ top: 30, right: 30, bottom: 20, left: 30 }}>
+          <PieChart margin={{ top: 30, right: 30, bottom: 10, left: 30 }}>
             <Pie
               data={breakdownData}
               cx="50%"
@@ -191,7 +193,7 @@ function CategoryBreakdownPieChart({ totals }) {
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-6 flex flex-col gap-2">
+      <div className="flex flex-col gap-2">
         {breakdownData.map((item, index) => (
           <div key={item.name} className="flex items-center gap-2">
             <div
@@ -403,7 +405,7 @@ function ReportsContent() {
           window.location.origin
         );
         url.searchParams.set("rangeType", rangeType);
-        url.searchParams.set("referenceDate", referenceDate.toISOString());
+        url.searchParams.set("referenceDate", formatDateForAPI(referenceDate));
 
         const res = await fetch(url);
         if (!res.ok) {
@@ -510,14 +512,8 @@ export default function ReportsClient() {
 
   return (
     <main className="flex flex-col min-h-screen">
-      <div className="flex items-center justify-between p-4">
-        <Link
-          href={`/${encodedUser}`}
-          prefetch={false}
-          className="text-[#008eff] hover:underline"
-        >
-          ← Terug
-        </Link>
+      <div className="flex items-center justify-between py-4">
+        <BackButtonClient />
         <h1 className="text-lg font-bold text-gray-900">Reports</h1>
         <div className="w-16"></div> {/* Spacer for centering */}
       </div>

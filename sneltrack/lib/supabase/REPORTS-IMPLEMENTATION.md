@@ -328,3 +328,5 @@ Response time: ~50-200ms
 - Member data is returned as **JSONB** for efficient aggregation
 - The function handles all visibility rules (owner vs member access)
 
+
+

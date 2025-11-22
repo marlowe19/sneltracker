@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createEntry } from "@/lib/dbFirestore";
+import { createEntry } from "@/lib/supabase/services/timeEntriesService";
 
 export async function POST(req, context) {
   try {
@@ -17,7 +17,7 @@ export async function POST(req, context) {
     const dayDate = new Date(body.dayDate);
     const durationMs = body.duration_ms ?? null;
     const hourlyRate = body.hourly_rate ?? null;
-    const project = body.project ?? null;
+    const project = body.project_id ?? null;
     const startTime = body.start_time ? new Date(body.start_time) : null;
     const endTime = body.end_time ? new Date(body.end_time) : null;
 

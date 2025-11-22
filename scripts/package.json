@@ -7,9 +7,17 @@
   "scripts": {
     "backup:firebase": "node backup/backup-firebase.mjs",
     "backup:firebase:dev": "ENV_FILE=.env.development node backup/backup-firebase.mjs",
-    "backup:firebase:local": "ENV_FILE=.env.local node backup/backup-firebase.mjs"
+    "backup:firebase:local": "ENV_FILE=.env.local node backup/backup-firebase.mjs",
+    "migrate": "node migration/migrate-firestore-to-supabase.mjs",
+    "migrate:dev": "ENV_FILE=.env.development node migration/migrate-firestore-to-supabase.mjs",
+    "migrate:local": "ENV_FILE=.env.local node migration/migrate-firestore-to-supabase.mjs",
+    "migrate:prod": "ENV_FILE=.env.production node migration/migrate-firestore-to-supabase.mjs",
+    "migrate:verify": "node migration/verify-backup.mjs",
+    "migrate:verify:dev": "ENV_FILE=.env.development node migration/verify-backup.mjs",
+    "migrate:verify:local": "ENV_FILE=.env.local node migration/verify-backup.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.81.1",
     "dotenv": "^17.2.3",
     "firebase-admin": "^12.6.0"
   }

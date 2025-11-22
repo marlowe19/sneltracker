@@ -32,6 +32,7 @@ export default function ProjectDetailClient({
   project,
   isOwner,
   initialMembers = [],
+  initialMemberStats = null,
   isShared,
   statisticsComponent,
 }) {
@@ -48,6 +49,16 @@ export default function ProjectDetailClient({
   const [budgetHours, setBudgetHours] = useState(
     project?.budget_hours ? String(project.budget_hours) : ""
   );
+  const [deadline, setDeadline] = useState(
+    project?.due_date
+      ? new Date(project.due_date).toISOString().split("T")[0]
+      : ""
+  );
+  const [startDate, setStartDate] = useState(
+    project?.start_date
+      ? new Date(project.start_date).toISOString().split("T")[0]
+      : ""
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
@@ -58,8 +69,8 @@ export default function ProjectDetailClient({
   const [isAdding, setIsAdding] = useState(false);
   const [memberError, setMemberError] = useState(null);
 
-  // Member statistics state (for leden tab)
-  const [memberStatistics, setMemberStatistics] = useState(null);
+  // Member statistics state (for leden tab) - now using server-provided data
+  const [memberStatistics, setMemberStatistics] = useState(initialMemberStats);
   const [loadingStats, setLoadingStats] = useState(false);
 
   const canEdit = isShared ? isOwner : true;
@@ -70,6 +81,16 @@ export default function ProjectDetailClient({
       setName(project.name || "");
       setHourlyRate(project.hourly_rate ? String(project.hourly_rate) : "");
       setBudgetHours(project.budget_hours ? String(project.budget_hours) : "");
+      setDeadline(
+        project.due_date
+          ? new Date(project.due_date).toISOString().split("T")[0]
+          : ""
+      );
+      setStartDate(
+        project.start_date
+          ? new Date(project.start_date).toISOString().split("T")[0]
+          : ""
+      );
     }
   }, [project]);
 
@@ -85,20 +106,12 @@ export default function ProjectDetailClient({
     }
   }, [activeTab, isShared]);
 
-  // Fetch member statistics when on members tab
-  useEffect(() => {
-    if (activeTab === "members" && isShared && isOwner && !loadingStats) {
-      fetchMemberStatistics();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, isShared, isOwner]);
-
-  async function fetchMemberStatistics() {
+  // Helper function to refresh member statistics (used after adding/removing members)
+  async function refreshMemberStatistics() {
     if (loadingStats) return; // Prevent concurrent calls
 
     setLoadingStats(true);
     try {
-      // Fetch all-time statistics from API (no date range parameters)
       const url = new URL(
         `/${encodeURIComponent(user)}/projecten/${projectId}/api`,
         window.location.origin
@@ -107,22 +120,22 @@ export default function ProjectDetailClient({
       const res = await fetch(url);
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        console.error("API Error fetching member statistics:", {
+        console.error("API Error refreshing member statistics:", {
           status: res.status,
           statusText: res.statusText,
           error: errorData,
           url: url.toString(),
         });
         throw new Error(
-          errorData.error || `Failed to fetch member statistics (${res.status})`
+          errorData.error ||
+            `Failed to refresh member statistics (${res.status})`
         );
       }
 
       const data = await res.json();
       setMemberStatistics(data.memberStatistics || null);
     } catch (err) {
-      console.error("Error fetching member statistics:", err);
-      setMemberStatistics(null);
+      console.error("Error refreshing member statistics:", err);
     } finally {
       setLoadingStats(false);
     }
@@ -140,6 +153,8 @@ export default function ProjectDetailClient({
         name: name.trim(),
         hourly_rate: hourlyRate ? parseFloat(hourlyRate) : null,
         budget_hours: budgetHours ? parseFloat(budgetHours) : null,
+        due_date: deadline || null,
+        start_date: startDate || null,
       };
 
       const res = await fetch(`/${encodeURIComponent(user)}/projecten/api`, {
@@ -202,7 +217,7 @@ export default function ProjectDetailClient({
 
       // Refresh member statistics if on members tab
       if (activeTab === "members") {
-        fetchMemberStatistics();
+        refreshMemberStatistics();
       }
     } catch (err) {
       setMemberError(err.message || "Failed to add member");
@@ -238,7 +253,7 @@ export default function ProjectDetailClient({
 
       // Refresh member statistics if on members tab
       if (activeTab === "members") {
-        fetchMemberStatistics();
+        refreshMemberStatistics();
       }
     } catch (err) {
       alert(err.message || "Failed to remove member");
@@ -388,6 +403,44 @@ export default function ProjectDetailClient({
                   !canEdit ? "bg-gray-100 cursor-not-allowed" : ""
                 }`}
                 placeholder="0.00"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="deadline"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Project Deadline
+              </label>
+              <input
+                type="date"
+                id="deadline"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                disabled={!canEdit}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-base ${
+                  !canEdit ? "bg-gray-100 cursor-not-allowed" : ""
+                }`}
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="startDate"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Project start datum
+              </label>
+              <input
+                type="date"
+                id="startDate"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                disabled={!canEdit}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-base ${
+                  !canEdit ? "bg-gray-100 cursor-not-allowed" : ""
+                }`}
               />
             </div>
 

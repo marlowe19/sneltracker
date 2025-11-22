@@ -35,13 +35,13 @@ export default function PieChartCarousel({ cards = [] }) {
   return (
     <div className="mb-6">
       <div className="px-4">
-        <div style={{ height: "480px" }}>
+        <div style={{ height: "500px" }}>
           <Slider {...settings}>
             {cards.map((card) => (
-              <div key={card.id}>
+              <div key={card.id} className="px-2 py-4">
                 <div
-                  className="bg-white rounded-xl p-4 shadow-md select-text h-full mx-4"
-                  style={{ height: "480px" }}
+                  className="bg-white rounded-3xl p-6 shadow-lg select-text"
+                  style={{ height: "450px" }}
                 >
                   <div className="text-sm text-gray-600 mb-3 font-medium text-center">
                     {card.title}

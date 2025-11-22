@@ -727,6 +727,14 @@ export async function updateEntry(userName, entryId, updates) {
 
       // Delete old entry from user collection
       await userRef.doc(entryId).delete();
+      console.log(
+        `[Firestore] Successfully deleted user entry ${entryId} (moved to shared project ${newProject})`,
+        {
+          entryId,
+          userName,
+          newProject,
+        }
+      );
 
       // Fire-and-forget sync to Supabase
       timeEntriesService.create(newEntry);
@@ -735,6 +743,14 @@ export async function updateEntry(userName, entryId, updates) {
 
     // If project is being removed or changed to non-shared, or if staying in user entries, just update
     await userRef.doc(entryId).update(updateData);
+    console.log(
+      `[Firestore] Successfully updated user entry ${entryId} for user ${userName}`,
+      {
+        entryId,
+        userName,
+        updatedFields: Object.keys(updateData),
+      }
+    );
     const updated = await userRef.doc(entryId).get();
     const entry = docToEntry(updated);
     // Fire-and-forget sync to Supabase
@@ -818,9 +834,20 @@ export async function updateEntry(userName, entryId, updates) {
         modified_at: updateData.modified_at,
       };
       await userRef.doc(entryId).set(newUserEntry);
+      console.log(
+        `[Firestore] Successfully created user entry ${entryId} (moved from shared project)`,
+        {
+          entryId,
+          userName,
+          previousProject: currentSharedProject.id,
+        }
+      );
       await getSharedProjectTimeEntriesCollection(currentSharedProject.id)
         .doc(entryId)
         .delete();
+      console.log(
+        `[Firestore] Successfully deleted shared project entry ${entryId} from project ${currentSharedProject.id}`
+      );
       const entry = docToEntry(await userRef.doc(entryId).get());
       // Fire-and-forget sync to Supabase
       timeEntriesService.update(entry);
@@ -891,6 +918,15 @@ export async function updateEntry(userName, entryId, updates) {
         await getSharedProjectTimeEntriesCollection(currentSharedProject.id)
           .doc(entryId)
           .delete();
+        console.log(
+          `[Firestore] Successfully moved entry ${entryId} from shared project ${currentSharedProject.id} to ${newProject}`,
+          {
+            entryId,
+            userName,
+            oldProject: currentSharedProject.id,
+            newProject,
+          }
+        );
         // Fire-and-forget sync to Supabase
         timeEntriesService.create(newEntry);
         return newEntry;
@@ -1437,6 +1473,14 @@ export async function updateProjectTimeEntry(projectId, entryId, updates) {
   }
 
   await docRef.update(updateData);
+  console.log(
+    `[Firestore] Successfully updated shared project entry ${entryId} in project ${projectId}`,
+    {
+      entryId,
+      projectId,
+      updatedFields: Object.keys(updateData),
+    }
+  );
   const updated = await docRef.get();
   const entry = docToEntry(updated);
   // Fire-and-forget sync to Supabase

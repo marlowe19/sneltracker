@@ -1,8 +1,9 @@
 import { Suspense } from "react";
-import { getAllProjects } from "@/lib/dbFirestore";
+import { getUserProjectsWithStats } from "@/lib/supabase/services/projectsService";
 import Link from "next/link";
 import ProjectsListClient from "./ProjectsListClient";
 import ProjectsHydrator from "../ProjectsHydrator";
+import BackButtonClient from "../projecten/[projectId]/BackButtonClient";
 
 export const dynamic = "force-dynamic";
 
@@ -20,15 +21,14 @@ function ProjectsLoading({ user }) {
     <>
       <main className="container mx-auto max-w-md sm:max-w-xl md:max-w-2xl p-4 sm:p-2 flex flex-col gap-6">
         <section className="bg-white">
-          <div className="flex items-center justify-between">
-            <h2 className="text-left text-lg font-semibold">Projecten</h2>
-            <Link
-              href={`/${encodeURIComponent(user)}`}
-              prefetch={false}
-              className="text-base text-gray-600 hover:text-gray-900"
-            >
-              ← Terug
-            </Link>
+          <div className="flex items-center justify-between p-4">
+            <div className="flex-1">
+              <BackButtonClient />
+            </div>
+            <h2 className="flex-1 text-center text-lg font-semibold">
+              Projecten
+            </h2>
+            <div className="flex-1"></div>
           </div>
 
           <div className="text-center py-8 text-gray-500">
@@ -42,25 +42,24 @@ function ProjectsLoading({ user }) {
 }
 
 async function ProjectsContent({ user }) {
-  const projects = await getAllProjects(user);
+  const projects = await getUserProjectsWithStats(user);
 
   return (
     <>
       <ProjectsHydrator user={user} initialProjects={projects} />
-      <main className="container mx-auto max-w-md sm:max-w-xl md:max-w-2xl p-4 sm:p-2 flex flex-col gap-6">
+      <main className=" flex flex-col gap-6">
         <section className=" bg-white  ">
-          <div className="flex items-center justify-between">
-            <h2 className="text-left text-lg font-semibold">Projecten</h2>
-            <Link
-              href={`/${encodeURIComponent(user)}`}
-              prefetch={false}
-              className="text-base text-gray-600 hover:text-gray-900"
-            >
-              ← Terug
-            </Link>
+          <div className="flex items-center justify-between p-4">
+            <div className="flex-1">
+              <BackButtonClient />
+            </div>
+            <h2 className="flex-1 text-center text-lg font-semibold">
+              Projecten
+            </h2>
+            <div className="flex-1"></div>
           </div>
 
-          <div className="">
+          <div className="p-4">
             <ProjectsListClient user={user} initialProjects={projects} />
           </div>
         </section>

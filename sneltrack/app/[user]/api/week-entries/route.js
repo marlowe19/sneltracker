@@ -1,4 +1,4 @@
-import { getWeekEntries } from "@/lib/dbFirestore";
+import { getWeekEntries } from "@/lib/supabase/services/timeEntriesService";
 import { NextResponse } from "next/server";
 
 export async function GET(request, { params }) {
@@ -25,5 +25,7 @@ export async function GET(request, { params }) {
     );
   }
 }
+
+
 
 

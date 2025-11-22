@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { updateEntry, deleteEntry } from "@/lib/dbFirestore";
+import {
+  updateEntry,
+  deleteEntry,
+} from "@/lib/supabase/services/timeEntriesService";
 
 export async function PATCH(req, context) {
   try {
@@ -28,8 +31,16 @@ export async function PATCH(req, context) {
     if (body.hourly_rate !== undefined) {
       updates.hourly_rate = body.hourly_rate;
     }
-    if (body.project !== undefined) {
-      updates.project = body.project;
+    // Handle both project_id (Supabase UUID) and project (could be UUID or Firestore ID)
+    if (body.project_id !== undefined) {
+      updates.project_id = body.project_id || null;
+    } else if (body.project !== undefined) {
+      // Client sends 'project' field - could be Supabase UUID or Firestore ID
+      // updateEntry will handle the lookup if it's a Firestore ID
+      updates.project_id = body.project || null;
+    }
+    if (body.billable !== undefined) {
+      updates.billable = body.billable;
     }
 
     if (Object.keys(updates).length === 0) {
@@ -39,8 +50,9 @@ export async function PATCH(req, context) {
       );
     }
 
-    const updated = await updateEntry(user, id, updates);
-    return NextResponse.json({ entry: updated });
+    //const updated = await updateEntry(user, id, updates);
+    const updatedInSupabase = await updateEntry(user, id, updates);
+    return NextResponse.json({ entry: updatedInSupabase });
   } catch (error) {
     console.error("Error updating entry:", error);
     return NextResponse.json(

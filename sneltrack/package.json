@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@carbon/icons-react": "^11.70.0",
+    "@date-fns/utc": "^2.1.1",
     "@supabase/supabase-js": "^2.80.0",
     "@vercel/postgres": "^0.9.0",
     "date-fns": "^4.1.0",

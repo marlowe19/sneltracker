@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getWeekBounds, getMonthBounds, getQuarterBounds } from "@/lib/time";
+import {
+  getWeekBoundsUTC,
+  getMonthBoundsUTC,
+  getQuarterBoundsUTC,
+} from "@/lib/dateRangeUtils";
 import { getUserProjectReports } from "@/lib/supabase/services/reportsService";
 
 export const dynamic = "force-dynamic";
@@ -35,13 +39,13 @@ export async function GET(req, context) {
       }
 
       if (rangeType === "week") {
-        const { start, end } = getWeekBounds(referenceDate);
+        const { start, end } = getWeekBoundsUTC(referenceDateParam);
         dateRange = { start, end };
       } else if (rangeType === "month") {
-        const { start, end } = getMonthBounds(referenceDate);
+        const { start, end } = getMonthBoundsUTC(referenceDateParam);
         dateRange = { start, end };
       } else if (rangeType === "quarter") {
-        const { start, end } = getQuarterBounds(referenceDate);
+        const { start, end } = getQuarterBoundsUTC(referenceDateParam);
         dateRange = { start, end };
       } else {
         return NextResponse.json(

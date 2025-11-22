@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
-import {
-  getProjectStatistics,
-  getProjectStatisticsByMember,
-  getProjectById,
-  isProjectOwner,
-} from "@/lib/dbFirestore";
 import { getWeekBounds, getMonthBounds, getQuarterBounds } from "@/lib/time";
+import { getProjectDetail, getProjectVelocity } from "@/lib/supabase/services/projectsService";
 
 export const dynamic = "force-dynamic";
 
@@ -19,18 +14,19 @@ export async function GET(req, context) {
     const endDateParam = url.searchParams.get("endDate");
 
     // Prefer startDate/endDate if provided (avoids timezone recalculation issues)
-    // If no date range parameters are provided, dateRange will be null (all-time stats)
-    let dateRange = null;
+    // If no date range parameters are provided, startDate/endDate will be null (all-time stats)
+    let startDate = null;
+    let endDate = null;
+    
     if (startDateParam && endDateParam) {
-      const start = new Date(startDateParam);
-      const end = new Date(endDateParam);
-      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      startDate = new Date(startDateParam);
+      endDate = new Date(endDateParam);
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
         return NextResponse.json(
           { error: "Invalid startDate or endDate" },
           { status: 400 }
         );
       }
-      dateRange = { start, end };
     } else if (rangeType && referenceDateParam) {
       // Fallback to calculating from reference date
       const referenceDate = new Date(referenceDateParam);
@@ -43,14 +39,17 @@ export async function GET(req, context) {
 
       // Calculate date bounds based on range type
       if (rangeType === "week") {
-        const { start, end } = getWeekBounds(referenceDate);
-        dateRange = { start, end };
+        const bounds = getWeekBounds(referenceDate);
+        startDate = bounds.start;
+        endDate = bounds.end;
       } else if (rangeType === "month") {
-        const { start, end } = getMonthBounds(referenceDate);
-        dateRange = { start, end };
+        const bounds = getMonthBounds(referenceDate);
+        startDate = bounds.start;
+        endDate = bounds.end;
       } else if (rangeType === "quarter") {
-        const { start, end } = getQuarterBounds(referenceDate);
-        dateRange = { start, end };
+        const bounds = getQuarterBounds(referenceDate);
+        startDate = bounds.start;
+        endDate = bounds.end;
       } else {
         return NextResponse.json(
           { error: "Invalid rangeType. Must be 'week', 'month', or 'quarter'" },
@@ -58,25 +57,26 @@ export async function GET(req, context) {
         );
       }
     }
-    // If no date range parameters are provided, dateRange remains null for all-time stats
+    // If no date range parameters are provided, startDate/endDate remain null for all-time stats
 
-    // Get statistics (all-time if dateRange is null)
-    const statistics = await getProjectStatistics(user, projectId, dateRange);
-
-    // Get member statistics if this is a shared project and user is owner
-    let memberStatistics = null;
-    const project = await getProjectById(user, projectId);
-    if (project && project.is_shared) {
-      const userIsOwner = await isProjectOwner(user, projectId);
-      if (userIsOwner) {
-        memberStatistics = await getProjectStatisticsByMember(
-          projectId,
-          dateRange
-        );
-      }
+    // Get project detail with statistics (migrated to Supabase - single query!)
+    const projectDetail = await getProjectDetail(user, projectId, startDate, endDate);
+    
+    if (!projectDetail) {
+      return NextResponse.json(
+        { error: "Project not found or access denied" },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json({ statistics, memberStatistics });
+    // Get velocity metrics
+    const velocity = await getProjectVelocity(user, projectId, startDate, endDate);
+
+    return NextResponse.json({ 
+      statistics: projectDetail.statistics, 
+      memberStatistics: projectDetail.memberStatistics,
+      velocity: velocity
+    });
   } catch (error) {
     console.error("Error fetching statistics:", error);
     return NextResponse.json(

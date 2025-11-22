@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { stopEntry } from "@/lib/dbFirestore";
+import { stopEntry } from "@/lib/supabase/services/timeEntriesService";
 import { computeEntryDurationMs } from "@/lib/time";
 
 async function performStop(user, entryId = null) {
   const result = await stopEntry(user, entryId);
   if (!result) return null;
-  
+
   // Handle both single entry and array of entries
   const entries = Array.isArray(result) ? result : [result];
-  
-  const results = entries.map(entry => {
+
+  const results = entries.map((entry) => {
     const durationMs = computeEntryDurationMs(
       entry.start_time,
       entry.end_time,
@@ -17,7 +17,7 @@ async function performStop(user, entryId = null) {
     );
     return { entry, durationMs };
   });
-  
+
   // Return array if multiple entries, single object if one entry (for backward compatibility)
   return Array.isArray(result) && results.length > 1 ? results : results[0];
 }
@@ -39,10 +39,10 @@ export async function POST(req, context) {
   const entryId = body.entryId || null;
   const result = await performStop(user, entryId);
   if (!result) return NextResponse.json({ status: "idle", user });
-  
+
   // Handle both single entry and array of entries
   const results = Array.isArray(result) ? result : [result];
-  
+
   if (results.length === 1) {
     // Single entry - return backward compatible format
     const { entry, durationMs } = results[0];

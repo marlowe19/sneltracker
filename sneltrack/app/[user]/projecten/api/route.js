@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import {
-  getAllProjects,
   createProject,
   updateProject,
   deleteProject,
@@ -18,6 +17,15 @@ import {
   getProjectById,
   updateMemberHourlyRate,
 } from "@/lib/dbFirestore";
+import {
+  getProjectDetail,
+  getUserProjectsWithStats,
+  addProjectMember,
+  updateProjectMemberRate,
+  removeProjectMember,
+  createProject as createProjectSupabase,
+  updateProject as updateProjectSupabase,
+} from "@/lib/supabase/services/projectsService";
 
 export const dynamic = "force-dynamic";
 
@@ -38,8 +46,16 @@ export async function GET(req, context) {
 
     if (projectId && statsByMember) {
       // Return member statistics (owner only)
-      const isOwner = await isProjectOwner(user, projectId);
-      if (!isOwner) {
+      // ✅ Use Supabase for ownership check
+      const projectDetail = await getProjectDetail(user, projectId);
+      if (!projectDetail) {
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 404 }
+        );
+      }
+
+      if (!projectDetail.is_owner) {
         return NextResponse.json(
           { error: "Only project owners can view member statistics" },
           { status: 403 }
@@ -55,8 +71,8 @@ export async function GET(req, context) {
       return NextResponse.json({ statistics });
     }
 
-    // Return all projects
-    const projects = await getAllProjects(user);
+    // Return all projects with statistics (migrated to Supabase)
+    const projects = await getUserProjectsWithStats(user);
     return NextResponse.json({ projects });
   } catch (error) {
     console.error("Error fetching projects:", error);
@@ -83,14 +99,43 @@ export async function POST(req, context) {
           { status: 400 }
         );
       }
-      const isOwner = await isProjectOwner(user, projectId);
-      if (!isOwner) {
+      // ✅ NEW: Use Supabase for ownership check
+      const projectDetail = await getProjectDetail(user, projectId);
+      if (!projectDetail) {
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 404 }
+        );
+      }
+
+      if (!projectDetail.is_owner) {
         return NextResponse.json(
           { error: "Only project owners can add members" },
           { status: 403 }
         );
       }
-      await addMemberToProject(projectId, memberName, "member", hourly_rate ?? null);
+
+      // // Write to Firestore (existing data)
+      // await addMemberToProject(
+      //   projectId,
+      //   memberName,
+      //   "member",
+      //   hourly_rate ?? null
+      // );
+
+      // ✅ NEW: Also write to Supabase
+      try {
+        await addProjectMember(
+          projectId,
+          memberName,
+          "member",
+          hourly_rate ?? null
+        );
+      } catch (error) {
+        console.error("Failed to add member to Supabase:", error);
+        // Continue anyway - Firestore is still written
+      }
+
       return NextResponse.json({ success: true });
     }
 
@@ -121,14 +166,25 @@ export async function POST(req, context) {
     const isDefault = body.is_default === true;
     const budgetHours = body.budget_hours ?? null;
     const isShared = body.is_shared === true;
+    const dueDate = body.due_date || null;
+    const startDate = body.start_date || null;
 
     if (isShared) {
-      const newProject = await createSharedProject(
-        user,
-        name,
-        hourlyRate,
-        budgetHours
-      );
+      // Also create in Supabase
+      try {
+        await createProjectSupabase(user, {
+          name,
+          hourly_rate: hourlyRate,
+          budget_hours: budgetHours,
+          is_shared: true,
+          is_default: false,
+          due_date: dueDate,
+          start_date: startDate,
+        });
+      } catch (error) {
+        console.error("Failed to create project in Supabase:", error);
+        // Continue anyway - Firestore is still written
+      }
       return NextResponse.json({ project: newProject }, { status: 201 });
     } else {
       const newProject = await createProject(
@@ -138,6 +194,21 @@ export async function POST(req, context) {
         isDefault,
         budgetHours
       );
+      // Also create in Supabase
+      try {
+        await createProjectSupabase(user, {
+          name,
+          hourly_rate: hourlyRate,
+          budget_hours: budgetHours,
+          is_shared: false,
+          is_default: isDefault,
+          due_date: dueDate,
+          start_date: startDate,
+        });
+      } catch (error) {
+        console.error("Failed to create project in Supabase:", error);
+        // Continue anyway - Firestore is still written
+      }
       return NextResponse.json({ project: newProject }, { status: 201 });
     }
   } catch (error) {
@@ -147,6 +218,36 @@ export async function POST(req, context) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Helper function to build project updates object from request body
+ * @param {Object} body - Request body
+ * @returns {Object} Updates object
+ */
+function buildProjectUpdates(body) {
+  const updates = {};
+
+  if (body.name !== undefined) {
+    updates.name = typeof body.name === "string" ? body.name.trim() : body.name;
+  }
+  if (body.hourly_rate !== undefined) {
+    updates.hourly_rate = body.hourly_rate;
+  }
+  if (body.budget_hours !== undefined) {
+    updates.budget_hours = body.budget_hours;
+  }
+  if (body.due_date !== undefined) {
+    updates.due_date = body.due_date || null;
+  }
+  if (body.start_date !== undefined) {
+    updates.start_date = body.start_date || null;
+  }
+  if (body.is_default !== undefined) {
+    updates.is_default = body.is_default === true;
+  }
+
+  return updates;
 }
 
 export async function PATCH(req, context) {
@@ -165,17 +266,37 @@ export async function PATCH(req, context) {
           { status: 400 }
         );
       }
-      const isOwner = await isProjectOwner(user, projectId);
-      if (!isOwner) {
+
+      const projectDetail = await getProjectDetail(user, projectId);
+      if (!projectDetail) {
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 404 }
+        );
+      }
+
+      if (!projectDetail.is_owner) {
         return NextResponse.json(
           { error: "Only project owners can update member rates" },
           { status: 403 }
         );
       }
-      await updateMemberHourlyRate(projectId, memberName, hourly_rate ?? null);
+
+      try {
+        await updateProjectMemberRate(
+          projectId,
+          memberName,
+          hourly_rate ?? null
+        );
+      } catch (error) {
+        console.error("Failed to update member rate in Supabase:", error);
+        throw error;
+      }
+
       return NextResponse.json({ success: true });
     }
 
+    // Regular project update
     if (!body.id) {
       return NextResponse.json(
         { error: "project id is required" },
@@ -183,71 +304,41 @@ export async function PATCH(req, context) {
       );
     }
 
-    // Check if project is shared
-    const project = await getProjectById(user, body.id);
-    if (!project) {
+    // Validate name if provided
+    if (body.name !== undefined && (!body.name || body.name.trim() === "")) {
       return NextResponse.json(
-        { error: "Project not found" },
-        { status: 404 }
+        { error: "name must be a non-empty string" },
+        { status: 400 }
       );
     }
 
-    if (project.is_shared) {
-      // Check ownership before allowing updates
-      const isOwner = await isProjectOwner(user, body.id);
-      if (!isOwner) {
-        return NextResponse.json(
-          { error: "Only project owners can update shared projects" },
-          { status: 403 }
-        );
-      }
+    // Build updates object (updateProjectSupabase will handle permissions and is_default validation)
+    const updates = buildProjectUpdates(body);
 
-      const updates = {};
-      if (body.name !== undefined) {
-        if (typeof body.name !== "string" || body.name.trim() === "") {
-          return NextResponse.json(
-            { error: "name must be a non-empty string" },
-            { status: 400 }
-          );
-        }
-        updates.name = body.name.trim();
-      }
-      if (body.hourly_rate !== undefined) {
-        updates.hourly_rate = body.hourly_rate;
-      }
-      if (body.budget_hours !== undefined) {
-        updates.budget_hours = body.budget_hours;
-      }
+    // Update in Supabase (this function handles permission checks internally)
+    const updatedProject = await updateProjectSupabase(user, body.id, updates);
 
-      const updatedProject = await updateSharedProject(body.id, updates);
-      return NextResponse.json({ project: updatedProject });
-    } else {
-      // User project update (existing behavior)
-      const updates = {};
-      if (body.name !== undefined) {
-        if (typeof body.name !== "string" || body.name.trim() === "") {
-          return NextResponse.json(
-            { error: "name must be a non-empty string" },
-            { status: 400 }
-          );
-        }
-        updates.name = body.name.trim();
-      }
-      if (body.hourly_rate !== undefined) {
-        updates.hourly_rate = body.hourly_rate;
-      }
-      if (body.budget_hours !== undefined) {
-        updates.budget_hours = body.budget_hours;
-      }
-      if (body.is_default !== undefined) {
-        updates.is_default = body.is_default === true;
-      }
-
-      const updatedProject = await updateProject(user, body.id, updates);
-      return NextResponse.json({ project: updatedProject });
-    }
+    return NextResponse.json({ project: updatedProject });
   } catch (error) {
     console.error("Error updating project:", error);
+
+    // Handle specific errors from updateProjectSupabase
+    if (error.message === "Project not found") {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+    if (error.message === "Only project owners can update shared projects") {
+      return NextResponse.json(
+        { error: "Only project owners can update shared projects" },
+        { status: 403 }
+      );
+    }
+    if (error.message === "Only user projects can update is_default") {
+      return NextResponse.json(
+        { error: "Only user projects can update is_default" },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to update project", message: error.message },
       { status: 500 }
@@ -278,38 +369,55 @@ export async function DELETE(req, context) {
           { status: 400 }
         );
       }
-      const isOwner = await isProjectOwner(user, projectId);
-      if (!isOwner) {
+
+      // ✅ Use Supabase for ownership check
+      const projectDetail = await getProjectDetail(user, projectId);
+      if (!projectDetail) {
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 404 }
+        );
+      }
+
+      if (!projectDetail.is_owner) {
         return NextResponse.json(
           { error: "Only project owners can remove members" },
           { status: 403 }
         );
       }
+
       // Don't allow removing the owner
-      const project = await getProjectById(user, projectId);
-      if (project && project.owner === memberName) {
+      if (projectDetail.owner === memberName) {
         return NextResponse.json(
           { error: "Cannot remove project owner" },
           { status: 400 }
         );
       }
+
+      // Write to Firestore (existing data)
       await removeMemberFromProject(projectId, memberName);
+
+      // ✅ NEW: Also remove from Supabase
+      try {
+        await removeProjectMember(projectId, memberName);
+      } catch (error) {
+        console.error("Failed to remove member from Supabase:", error);
+        // Continue anyway - Firestore is still updated
+      }
+
       return NextResponse.json({ success: true });
     }
 
     // Delete project
-    const project = await getProjectById(user, projectId);
-    if (!project) {
-      return NextResponse.json(
-        { error: "Project not found" },
-        { status: 404 }
-      );
+    // ✅ Use Supabase to check project and ownership
+    const projectDetail = await getProjectDetail(user, projectId);
+    if (!projectDetail) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    if (project.is_shared) {
+    if (projectDetail.is_shared) {
       // Check ownership before deleting shared project
-      const isOwner = await isProjectOwner(user, projectId);
-      if (!isOwner) {
+      if (!projectDetail.is_owner) {
         return NextResponse.json(
           { error: "Only project owners can delete shared projects" },
           { status: 403 }
