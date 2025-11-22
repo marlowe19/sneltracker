@@ -6,7 +6,9 @@ import Link from "next/link";
 import { useStore } from "@/stores/useStore";
 import { computeEntryDurationMs } from "@/lib/time";
 import { useToast } from "@/app/components/Toast";
+import { formatLocalDate } from "@/lib/dateRangeUtils";
 import NotificationBadge from "@/app/components/NotificationBadge";
+import { mapEntryToEditable } from "@/lib/utils/entryMapper";
 import {
   Alarm,
   ChevronLeft,
@@ -98,8 +100,6 @@ function formatMoney(amount) {
 export default function DayEntriesListClient({
   user,
   selectedDate,
-  entries: initialEntries,
-  expenses: initialExpenses,
   onEntryUpdate,
   onClose, // Add this prop
 }) {
@@ -110,7 +110,6 @@ export default function DayEntriesListClient({
   const replaceTempEntry = useStore((state) => state.replaceTempEntry);
   const deleteEntry = useStore((state) => state.deleteEntry);
   const fetchDayExpenses = useStore((state) => state.fetchDayExpenses);
-  const fetchDayEntries = useStore((state) => state.fetchDayEntries);
   const addExpense = useStore((state) => state.addExpense);
   const updateExpense = useStore((state) => state.updateExpense);
   const replaceTempExpense = useStore((state) => state.replaceTempExpense);
@@ -132,6 +131,7 @@ export default function DayEntriesListClient({
   const [savingEntryId, setSavingEntryId] = useState(null);
   const [expandedExpenses, setExpandedExpenses] = useState(new Set());
   const [savingExpenseId, setSavingExpenseId] = useState(null);
+  const [loadingEntries, setLoadingEntries] = useState(false);
   const toast = useToast();
   const dayDateString = selectedDate?.toISOString();
 
@@ -143,52 +143,69 @@ export default function DayEntriesListClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayDateString, user]);
 
+  const fetchDayEntries = async (user, dayDate) => {
+    try {
+      setLoadingEntries(true);
+      const dateStr = formatLocalDate(dayDate);
+      const res = await fetch(
+        `/${encodeURIComponent(user)}/api/day-entries?dayDate=${dateStr}`
+      );
+      if (!res.ok) throw new Error("Failed to fetch day entries");
+      const data = await res.json();
+      const mappedEntries = (data.entries || []).map(mapEntryToEditable);
+      console.log(mappedEntries);
+      setLocalEntries(mappedEntries);
+      setLoadingEntries(false);
+    } catch (error) {
+      console.error("Error fetching day entries:", error);
+    }
+  };
   // Fetch day entries
   useEffect(() => {
-    if (selectedDate && fetchDayEntries) {
+    if (selectedDate) {
       fetchDayEntries(user, selectedDate);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayDateString, user]);
 
-  // Initialize entries
-  useEffect(() => {
-    if (initialEntries && selectedDate) {
-      const sortedEntries = [...initialEntries].sort((a, b) => {
-        const dateA = new Date(a.created_at || a.modified_at || 0);
-        const dateB = new Date(b.created_at || b.modified_at || 0);
-        return dateB - dateA;
-      });
+  // // Initialize entries
+  // useEffect(() => {
+  //   if (initialEntries && selectedDate) {
+  //     const sortedEntries = [...initialEntries].sort((a, b) => {
+  //       const dateA = new Date(a.created_at || a.modified_at || 0);
+  //       const dateB = new Date(b.created_at || b.modified_at || 0);
+  //       return dateB - dateA;
+  //     });
 
-      const mappedEntries = sortedEntries.map((entry) => {
-        const durationMs =
-          entry.duration_ms ??
-          (entry.end_time
-            ? computeEntryDurationMs(entry.start_time, entry.end_time, null)
-            : null);
+  //     const mappedEntries = sortedEntries.map((entry) => {
+  //       const durationMs =
+  //         entry.duration_ms ??
+  //         (entry.end_time
+  //           ? computeEntryDurationMs(entry.start_time, entry.end_time, null)
+  //           : null);
 
-        return {
-          ...entry,
-          start_time_editable: formatTime(entry.start_time),
-          end_time_editable: formatTime(entry.end_time),
-          duration_editable: durationMs ? formatHoursMinutes(durationMs) : "",
-          hourly_rate_editable: entry.hourly_rate ?? "",
-          project_editable: entry.project ?? "",
-          isProjectMember: false,
-        };
-      });
+  //       return {
+  //         ...entry,
+  //         start_time_editable: formatTime(entry.start_time),
+  //         end_time_editable: formatTime(entry.end_time),
+  //         duration_editable: durationMs ? formatHoursMinutes(durationMs) : "",
+  //         hourly_rate_editable: entry.hourly_rate ?? "",
+  //         project_editable: entry.project ?? "",
+  //         isProjectMember: false,
+  //       };
+  //     });
 
-      setLocalEntries(mappedEntries);
+  //     setLocalEntries(mappedEntries);
 
-      // Automatically expand temp entries
-      const tempEntryIds = mappedEntries
-        .filter((entry) => entry.id && entry.id.startsWith("temp-"))
-        .map((entry) => entry.id);
-      if (tempEntryIds.length > 0) {
-        setExpandedEntries((prev) => new Set([...prev, ...tempEntryIds]));
-      }
-    }
-  }, [dayDateString, initialEntries]);
+  //     // Automatically expand temp entries
+  //     const tempEntryIds = mappedEntries
+  //       .filter((entry) => entry.id && entry.id.startsWith("temp-"))
+  //       .map((entry) => entry.id);
+  //     if (tempEntryIds.length > 0) {
+  //       setExpandedEntries((prev) => new Set([...prev, ...tempEntryIds]));
+  //     }
+  //   }
+  // }, [dayDateString, initialEntries]);
 
   // Initialize expenses
   useEffect(() => {
@@ -273,18 +290,45 @@ export default function DayEntriesListClient({
     if (field === "project_editable") {
       if (value) {
         const selectedProject = projects.find((p) => p.id === value);
-        if (selectedProject && selectedProject.is_shared) {
-          if (membersCache[value]) {
-            const members = membersCache[value];
-            const currentUserMember = members.find((m) => m.user_name === user);
-            updated[index].isProjectMember = !!currentUserMember;
+        if (selectedProject) {
+          // For shared projects, check membership status (but use member_hourly_rate from project)
+          if (selectedProject.is_shared) {
+            // Check membership status (still need this for isProjectMember flag)
+            if (membersCache[value]) {
+              const members = membersCache[value];
+              const currentUserMember = members.find(
+                (m) => m.user_name === user
+              );
+              updated[index].isProjectMember = !!currentUserMember;
+            } else {
+              // Fetch members only to check membership status
+              try {
+                const res = await fetch(
+                  `/${encodeURIComponent(
+                    user
+                  )}/projecten/api?action=members&projectId=${value}`
+                );
+                const data = await res.json();
+                const members = data.members || [];
+                setMembersCache((prev) => ({ ...prev, [value]: members }));
+                const currentUserMember = members.find(
+                  (m) => m.user_name === user
+                );
+                updated[index].isProjectMember = !!currentUserMember;
+              } catch (error) {
+                console.error("Error fetching member status:", error);
+                updated[index].isProjectMember = false;
+              }
+            }
+
+            // Use member_hourly_rate from project (already populated by getUserProjectsWithStats)
+            // Priority: member_hourly_rate > hourly_rate
             if (
-              currentUserMember &&
-              currentUserMember.hourly_rate !== null &&
-              currentUserMember.hourly_rate !== undefined
+              selectedProject.member_hourly_rate !== null &&
+              selectedProject.member_hourly_rate !== undefined
             ) {
               updated[index].hourly_rate_editable = String(
-                currentUserMember.hourly_rate
+                selectedProject.member_hourly_rate
               );
             } else if (selectedProject.hourly_rate) {
               updated[index].hourly_rate_editable = String(
@@ -292,48 +336,13 @@ export default function DayEntriesListClient({
               );
             }
           } else {
-            try {
-              const res = await fetch(
-                `/${encodeURIComponent(
-                  user
-                )}/projecten/api?action=members&projectId=${value}`
+            // Non-shared project
+            updated[index].isProjectMember = false;
+            if (selectedProject.hourly_rate) {
+              updated[index].hourly_rate_editable = String(
+                selectedProject.hourly_rate
               );
-              const data = await res.json();
-              const members = data.members || [];
-              setMembersCache((prev) => ({ ...prev, [value]: members }));
-              const currentUserMember = members.find(
-                (m) => m.user_name === user
-              );
-              updated[index].isProjectMember = !!currentUserMember;
-              if (
-                currentUserMember &&
-                currentUserMember.hourly_rate !== null &&
-                currentUserMember.hourly_rate !== undefined
-              ) {
-                updated[index].hourly_rate_editable = String(
-                  currentUserMember.hourly_rate
-                );
-              } else if (selectedProject.hourly_rate) {
-                updated[index].hourly_rate_editable = String(
-                  selectedProject.hourly_rate
-                );
-              }
-            } catch (error) {
-              console.error("Error fetching member rate:", error);
-              updated[index].isProjectMember = false;
-              if (selectedProject.hourly_rate) {
-                updated[index].hourly_rate_editable = String(
-                  selectedProject.hourly_rate
-                );
-              }
             }
-          }
-        } else {
-          updated[index].isProjectMember = false;
-          if (selectedProject && selectedProject.hourly_rate) {
-            updated[index].hourly_rate_editable = String(
-              selectedProject.hourly_rate
-            );
           }
         }
       } else {
@@ -539,16 +548,12 @@ export default function DayEntriesListClient({
           }
 
           if (durationWasEdited && selectedDate && updates.duration_ms) {
+            // Create UTC midnight for the selected date to avoid timezone issues
             const date = new Date(selectedDate);
-            const dayStart = new Date(
-              date.getFullYear(),
-              date.getMonth(),
-              date.getDate(),
-              0,
-              0,
-              0,
-              0
-            );
+            const year = date.getUTCFullYear();
+            const month = date.getUTCMonth();
+            const day = date.getUTCDate();
+            const dayStart = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
             const dayEnd = new Date(dayStart.getTime() + updates.duration_ms);
             updates.start_time = dayStart.toISOString();
             updates.end_time = dayEnd.toISOString();
@@ -603,7 +608,11 @@ export default function DayEntriesListClient({
             entry.project_editable !== undefined &&
             entry.project_editable !== ""
           ) {
-            updates.project = entry.project_editable;
+            updates.project_id = entry.project_editable;
+          }
+
+          if (entry.billable_editable !== undefined) {
+            updates.billable = entry.billable_editable;
           }
 
           const response = await fetch(`/${encodeURIComponent(user)}/entries`, {
@@ -613,9 +622,10 @@ export default function DayEntriesListClient({
               dayDate: selectedDate.toISOString(),
               duration_ms: updates.duration_ms ?? null,
               hourly_rate: updates.hourly_rate ?? null,
-              project: updates.project ?? null,
+              project_id: updates.project_id ?? null,
               start_time: updates.start_time ?? null,
               end_time: updates.end_time ?? null,
+              billable: updates.billable ?? true,
             }),
           });
 
@@ -739,9 +749,17 @@ export default function DayEntriesListClient({
             entry.project_editable === "" || entry.project_editable === null
               ? null
               : entry.project_editable;
-          const currentProject = entry.project;
+          const currentProject = entry.project_id;
           if (newProject !== currentProject) {
-            updates.project = newProject;
+            updates.project_id = newProject;
+          }
+        }
+
+        if (entry.billable_editable !== undefined) {
+          const newBillable = Boolean(entry.billable_editable);
+          const currentBillable = entry.billable ?? true;
+          if (newBillable !== currentBillable) {
+            updates.billable = newBillable;
           }
         }
 
@@ -1004,7 +1022,11 @@ export default function DayEntriesListClient({
           entry.project_editable !== undefined &&
           entry.project_editable !== ""
         ) {
-          updates.project = entry.project_editable;
+          updates.project_id = entry.project_editable;
+        }
+
+        if (entry.billable_editable !== undefined) {
+          updates.billable = entry.billable_editable;
         }
 
         const response = await fetch(`/${encodeURIComponent(user)}/entries`, {
@@ -1014,9 +1036,10 @@ export default function DayEntriesListClient({
             dayDate: selectedDate.toISOString(),
             duration_ms: updates.duration_ms ?? null,
             hourly_rate: updates.hourly_rate ?? null,
-            project: updates.project ?? null,
+            project_id: updates.project_id ?? null,
             start_time: updates.start_time ?? null,
             end_time: updates.end_time ?? null,
+            billable: updates.billable ?? true,
           }),
         });
 
@@ -1038,8 +1061,9 @@ export default function DayEntriesListClient({
               ? formatHoursMinutes(responseData.entry.duration_ms)
               : "",
             hourly_rate_editable: responseData.entry.hourly_rate ?? "",
-            project_editable: responseData.entry.project ?? "",
-            isProjectMember: updated[index].isProjectMember,
+            project_editable: responseData.entry.project_id ?? "",
+            isProjectOwner: responseData.entry.isProjectOwner ?? false,
+            isProjectMember: responseData.entry.isProjectMember ?? false,
           };
           setLocalEntries(updated);
 
@@ -1171,9 +1195,17 @@ export default function DayEntriesListClient({
             entry.project_editable === "" || entry.project_editable === null
               ? null
               : entry.project_editable;
-          const currentProject = entry.project;
+          const currentProject = entry.project_id;
           if (newProject !== currentProject) {
-            updates.project = newProject;
+            updates.project_id = newProject;
+          }
+        }
+
+        if (entry.billable_editable !== undefined) {
+          const newBillable = Boolean(entry.billable_editable);
+          const currentBillable = entry.billable ?? true;
+          if (newBillable !== currentBillable) {
+            updates.billable = newBillable;
           }
         }
 
@@ -1205,8 +1237,9 @@ export default function DayEntriesListClient({
                 ? formatHoursMinutes(responseData.entry.duration_ms)
                 : "",
               hourly_rate_editable: responseData.entry.hourly_rate ?? "",
-              project_editable: responseData.entry.project ?? "",
-              isProjectMember: updated[index].isProjectMember,
+              project_editable: responseData.entry.project_id ?? "",
+              isProjectOwner: responseData.entry.isProjectOwner ?? false,
+              isProjectMember: responseData.entry.isProjectMember ?? false,
             };
             setLocalEntries(updated);
 
@@ -1573,7 +1606,7 @@ export default function DayEntriesListClient({
     >
       <div className="bg-white border-b border-gray-200 flex-shrink-0">
         {/* Header */}
-        <div className="px-4 sm:px-6 py-3  rounded-xl bg-gray-100 justify-between">
+        <div className="px-4 sm:px-6 py-3 border-[#e6e6e6] border rounded-xl bg-[#f5f5f5] justify-between">
           <div className="flex items-center">
             {/* Back Button with Carbon Icons Chevron */}
             <button
@@ -1713,20 +1746,7 @@ export default function DayEntriesListClient({
               {localEntries.map((entry, index) => {
                 const isExpanded = expandedEntries.has(entry.id);
 
-                const project =
-                  entry.project_editable || entry.project
-                    ? projects.find(
-                        (p) =>
-                          p.id === (entry.project_editable || entry.project)
-                      )
-                    : null;
-
-                console.log(
-                  "Found project:",
-                  project ? { id: project.id, name: project.name } : null
-                );
-
-                const entryTotal = calculateEntryTotal(entry);
+                //const entryTotal = calculateEntryTotal(entry);
                 const startTimeDisplay =
                   entry.start_time_editable ||
                   formatTime(entry.start_time) ||
@@ -1748,19 +1768,17 @@ export default function DayEntriesListClient({
 
                 return (
                   <div
+                    // onClick={() => handleToggleExpand(entry.id)}
                     key={entry.id}
-                    className="rounded-lg border border-gray-200 p-4 space-y-4 bg-white transition-all duration-200"
+                    className="rounded-lg border cursor-pointer border-gray-200 p-4 space-y-4 bg-white transition-all duration-200"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div>
-                          <Alarm size={24} />
-                        </div>
-                        <span className="text-lg font-medium text-gray-700">
-                          {project ? project.name : "-"}
-                        </span>
+                    <div
+                      onClick={() => handleToggleExpand(entry.id)}
+                      className="flex flex-col gap-2"
+                    >
+                      <div className="flex justify-between items-center">
                         <span
-                          className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                          className={`px-2 py-0.5 capitalize text-xs font-medium rounded-full ${
                             entry.user_name === user
                               ? "bg-gray-100 text-gray-700"
                               : "bg-blue-100 text-blue-700"
@@ -1768,13 +1786,27 @@ export default function DayEntriesListClient({
                         >
                           {entry.user_name || user}
                         </span>
+                        <button
+                          // onClick={() => handleToggleExpand(entry.id)}
+                          className="px-3 py-1.5 text-sm font-medium text-[#008eff] hover:bg-[#008eff]/10 rounded-md transition-colors"
+                        >
+                          {isExpanded ? "Sluiten" : "Bewerken"}
+                        </button>
                       </div>
-                      <button
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <Alarm size={24} />
+                        </div>
+                        <span className="text-base  text-gray-700">
+                          {entry ? entry.project_name : "-"}
+                        </span>
+                      </div>
+                      {/* <button
                         onClick={() => handleToggleExpand(entry.id)}
                         className="px-3 py-1.5 text-sm font-medium text-[#008eff] hover:bg-[#008eff]/10 rounded-md transition-colors"
                       >
                         {isExpanded ? "Sluiten" : "Bewerken"}
-                      </button>
+                      </button> */}
                     </div>
 
                     {!isExpanded ? (
@@ -1854,7 +1886,7 @@ export default function DayEntriesListClient({
                             value={
                               entry.project_editable !== undefined
                                 ? entry.project_editable || ""
-                                : entry.project || ""
+                                : entry.project_name || ""
                             }
                             onChange={(e) =>
                               handleEntryChange(
@@ -1927,10 +1959,64 @@ export default function DayEntriesListClient({
                                     disabled={
                                       isSaving ||
                                       isDeleting ||
-                                      entry.isProjectMember
+                                      !entry.isProjectOwner // ✅ Disable if NOT owner
                                     }
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
                                   />
+                                </div>
+
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Declarabel
+                                  </label>
+                                  <div className="flex gap-4">
+                                    <label className="flex items-center space-x-2 cursor-pointer">
+                                      <input
+                                        type="radio"
+                                        name={`billable-${entry.id}`}
+                                        checked={
+                                          entry.billable_editable !== undefined
+                                            ? entry.billable_editable === true
+                                            : entry.billable !== false
+                                        }
+                                        onChange={() =>
+                                          handleEntryChange(
+                                            index,
+                                            "billable_editable",
+                                            true
+                                          )
+                                        }
+                                        disabled={isSaving || isDeleting}
+                                        className="w-4 h-4 text-[#008eff] border-gray-300 focus:ring-[#008eff] disabled:opacity-50 disabled:cursor-not-allowed"
+                                      />
+                                      <span className="text-sm text-gray-700">
+                                        Declarabel
+                                      </span>
+                                    </label>
+                                    <label className="flex items-center space-x-2 cursor-pointer">
+                                      <input
+                                        type="radio"
+                                        name={`billable-${entry.id}`}
+                                        checked={
+                                          entry.billable_editable !== undefined
+                                            ? entry.billable_editable === false
+                                            : entry.billable === false
+                                        }
+                                        onChange={() =>
+                                          handleEntryChange(
+                                            index,
+                                            "billable_editable",
+                                            false
+                                          )
+                                        }
+                                        disabled={isSaving || isDeleting}
+                                        className="w-4 h-4 text-[#008eff] border-gray-300 focus:ring-[#008eff] disabled:opacity-50 disabled:cursor-not-allowed"
+                                      />
+                                      <span className="text-sm text-gray-700">
+                                        Niet declarabel
+                                      </span>
+                                    </label>
+                                  </div>
                                 </div>
                               </>
                             ) : (
@@ -2024,10 +2110,64 @@ export default function DayEntriesListClient({
                                       disabled={
                                         isSaving ||
                                         isDeleting ||
-                                        entry.isProjectMember
+                                        !entry.isProjectOwner // ✅ Disable if NOT owner
                                       }
                                       className="w-full min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Declarabel
+                                  </label>
+                                  <div className="flex gap-4">
+                                    <label className="flex items-center space-x-2 cursor-pointer">
+                                      <input
+                                        type="radio"
+                                        name={`billable-${entry.id}`}
+                                        checked={
+                                          entry.billable_editable !== undefined
+                                            ? entry.billable_editable === true
+                                            : entry.billable !== false
+                                        }
+                                        onChange={() =>
+                                          handleEntryChange(
+                                            index,
+                                            "billable_editable",
+                                            true
+                                          )
+                                        }
+                                        disabled={isSaving || isDeleting}
+                                        className="w-4 h-4 text-[#008eff] border-gray-300 focus:ring-[#008eff] disabled:opacity-50 disabled:cursor-not-allowed"
+                                      />
+                                      <span className="text-sm text-gray-700">
+                                        Declarabel
+                                      </span>
+                                    </label>
+                                    <label className="flex items-center space-x-2 cursor-pointer">
+                                      <input
+                                        type="radio"
+                                        name={`billable-${entry.id}`}
+                                        checked={
+                                          entry.billable_editable !== undefined
+                                            ? entry.billable_editable === false
+                                            : entry.billable === false
+                                        }
+                                        onChange={() =>
+                                          handleEntryChange(
+                                            index,
+                                            "billable_editable",
+                                            false
+                                          )
+                                        }
+                                        disabled={isSaving || isDeleting}
+                                        className="w-4 h-4 text-[#008eff] border-gray-300 focus:ring-[#008eff] disabled:opacity-50 disabled:cursor-not-allowed"
+                                      />
+                                      <span className="text-sm text-gray-700">
+                                        Niet declarabel
+                                      </span>
+                                    </label>
                                   </div>
                                 </div>
                               </>
@@ -2044,7 +2184,7 @@ export default function DayEntriesListClient({
                               savingEntryId === entry.id ||
                               !entry.project_editable
                             }
-                            className="px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                            className="px-4 w-full sm:w-auto py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                           >
                             {savingEntryId === entry.id
                               ? "Opslaan..."
@@ -2123,16 +2263,17 @@ export default function DayEntriesListClient({
 
                 return (
                   <div
+                    onClick={() => handleToggleExpandExpense(expense.id)}
                     key={expense.id}
-                    className="rounded-lg border border-gray-200 p-4 space-y-4 bg-white transition-all duration-200"
+                    className="rounded-lg cursor-pointer border border-gray-200 p-4 space-y-4 bg-white transition-all duration-200"
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-2">
                       <div className="flex items-center gap-2">
                         <div>
                           <ToolBox size={24} />
                         </div>
                         <span className="text-lg font-medium text-gray-700">
-                          {project ? project.name : "-"}
+                          {project ? project.project_name : "-"}
                         </span>
                         <span
                           className={`px-2 py-0.5 text-xs font-medium rounded-full ${
@@ -2144,12 +2285,17 @@ export default function DayEntriesListClient({
                           {expense.user_name || user}
                         </span>
                       </div>
-                      <button
-                        onClick={() => handleToggleExpandExpense(expense.id)}
-                        className="px-3 py-1.5 text-sm font-medium text-[#008eff] hover:bg-[#008eff]/10 rounded-md transition-colors"
-                      >
-                        {isExpanded ? "Sluiten" : "Bewerken"}
-                      </button>
+                      <div className="flex justify-end">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation(); // ✅ Prevent parent onClick from firing
+                            handleToggleExpandExpense(expense.id);
+                          }}
+                          className="px-3 py-1.5 text-sm font-medium text-[#008eff] hover:bg-[#008eff]/10 rounded-md transition-colors"
+                        >
+                          {isExpanded ? "Sluiten" : "Bewerken"}
+                        </button>
+                      </div>
                     </div>
 
                     {!isExpanded ? (
@@ -2386,7 +2532,7 @@ export default function DayEntriesListClient({
                         </h3>
                         {project && (
                           <p className="text-xs text-gray-500 mt-1">
-                            {project.name}
+                            {project.project_name}
                           </p>
                         )}
                       </div>

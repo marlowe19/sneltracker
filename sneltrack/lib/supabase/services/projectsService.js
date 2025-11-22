@@ -1,7 +1,8 @@
 /**
  * Projects Service for Supabase
- * Handles all project operations with fire-and-forget pattern
- * Designed to support gradual migration from Firestore
+ * Handles all project operations including:
+ * - Fire-and-forget writes for gradual migration from Firestore
+ * - Read operations for projects listing and detail pages
  */
 
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -46,7 +47,7 @@ async function lookupUserIdByUsername(username) {
 async function mapProjectToSupabase(project, userName) {
   // Determine owner name: for shared projects use project.owner, for user projects use userName
   const ownerName = project.is_shared ? project.owner : userName;
-  
+
   // Look up owner_id from users table
   const ownerId = await lookupUserIdByUsername(ownerName);
 
@@ -191,3 +192,394 @@ export function upsert(project, userName) {
   );
 }
 
+// ==========================================
+// READ OPERATIONS (for migrated pages)
+// ==========================================
+
+/**
+ * Get all projects for a user with statistics (hours, progress, etc.)
+ * Uses PostgreSQL function for efficient single-query retrieval
+ * Replaces getAllProjects() from Firestore
+ *
+ * @param {string} userName - Username to get projects for
+ * @returns {Promise<Array>} Array of projects with statistics
+ */
+export async function getUserProjectsWithStats(userName) {
+  const { data, error } = await supabaseServer.rpc(
+    "get_user_projects_with_stats",
+    {
+      p_user_name: userName,
+    }
+  );
+
+  if (error) {
+    console.error("Error fetching user projects with stats:", error);
+    throw error;
+  }
+
+  // Transform to match expected format
+  return (data || []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    hourly_rate: row.hourly_rate,
+    member_hourly_rate: row.member_hourly_rate,
+    budget_hours: row.budget_hours,
+    is_shared: row.is_shared,
+    is_default: row.is_default,
+    owner: row.owner_name,
+    is_owner: row.is_owner,
+    member_count: row.member_count,
+    total_hours: row.total_hours,
+    is_over_budget: row.is_over_budget,
+  }));
+}
+
+/**
+ * Get detailed project information including statistics and members
+ * Uses PostgreSQL function for efficient single-query retrieval
+ * Replaces multiple Firestore queries (getProjectById, isProjectOwner, getProjectMembers, etc.)
+ *
+ * @param {string} userName - Username accessing the project
+ * @param {string} projectId - Project UUID
+ * @param {Date} startDate - Optional start date for statistics
+ * @param {Date} endDate - Optional end date for statistics
+ * @returns {Promise<Object|null>} Project detail object or null if not found
+ */
+export async function getProjectDetail(
+  userName,
+  projectId,
+  startDate = null,
+  endDate = null
+) {
+  const { data, error } = await supabaseServer.rpc("get_project_detail", {
+    p_user_name: userName,
+    p_project_id: projectId,
+    p_start_date: startDate ? startDate.toISOString() : null,
+    p_end_date: endDate ? endDate.toISOString() : null,
+  });
+
+  if (error) {
+    console.error("Error fetching project detail:", error);
+    throw error;
+  }
+
+  // Function returns single row or empty array
+  if (!data || data.length === 0) {
+    return null;
+  }
+
+  const row = data[0];
+
+  // Fetch date fields directly from projects table since function doesn't return them yet
+  const { data: projectData, error: projectError } = await supabaseServer
+    .from("projects")
+    .select("due_date, start_date")
+    .eq("id", projectId)
+    .single();
+
+  if (projectError) {
+    console.error("Error fetching project date fields:", projectError);
+    // Continue without date fields rather than failing
+  }
+
+  return {
+    id: row.id,
+    name: row.name,
+    hourly_rate: row.hourly_rate,
+    member_hourly_rate: row.member_hourly_rate,
+    budget_hours: row.budget_hours,
+    is_shared: row.is_shared,
+    is_default: row.is_default,
+    owner: row.owner_name,
+    is_owner: row.is_owner,
+    due_date: projectData?.due_date || null,
+    start_date: projectData?.start_date || null,
+    statistics: {
+      totalHours: row.total_hours,
+      entryCount: Number(row.entry_count),
+      totalMoney: row.total_billable,
+    },
+    members: row.members || [],
+    memberStatistics: row.member_statistics || [],
+  };
+}
+
+// ==========================================
+// WRITE OPERATIONS (for API routes)
+// ==========================================
+
+/**
+ * Creates a new project in Supabase
+ *
+ * @param {string} userName - Username creating the project
+ * @param {Object} projectData - Project data object
+ * @param {string} projectData.name - Project name (required)
+ * @param {number|null} projectData.hourly_rate - Hourly rate
+ * @param {number|null} projectData.budget_hours - Budget hours
+ * @param {boolean} projectData.is_shared - Whether project is shared
+ * @param {boolean} projectData.is_default - Whether project is default
+ * @param {string|null} projectData.due_date - Deadline date (ISO date string or null)
+ * @param {string|null} projectData.start_date - Project start date (ISO date string or null)
+ * @returns {Promise<Object>} Created project object
+ */
+export async function createProject(userName, projectData) {
+  // Look up owner_id from username
+  const ownerId = await lookupUserIdByUsername(userName);
+  if (!ownerId) {
+    throw new Error(
+      `Cannot create project: owner_id not found for username "${userName}"`
+    );
+  }
+
+  // Prepare project data for insertion
+  const insertData = {
+    name: projectData.name.trim(),
+    owner_id: ownerId,
+    owner_name: userName,
+    hourly_rate: projectData.hourly_rate ?? null,
+    budget_hours: projectData.budget_hours ?? null,
+    is_shared: projectData.is_shared ?? false,
+    is_default: projectData.is_default ?? false,
+    due_date: projectData.due_date || null,
+    start_date: projectData.start_date || null,
+    created_at: new Date().toISOString(),
+    modified_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabaseServer
+    .from("projects")
+    .insert(insertData)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error creating project in Supabase:", error);
+    throw error;
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    hourly_rate: data.hourly_rate,
+    budget_hours: data.budget_hours,
+    is_shared: data.is_shared,
+    is_default: data.is_default,
+    due_date: data.due_date,
+    start_date: data.start_date,
+    owner: data.owner_name,
+  };
+}
+
+/**
+ * Updates a project in Supabase
+ * Validates user has permission (owner for shared projects)
+ *
+ * @param {string} userName - Username updating the project
+ * @param {string} projectId - Project UUID
+ * @param {Object} updates - Update data object
+ * @param {string} [updates.name] - Project name
+ * @param {number|null} [updates.hourly_rate] - Hourly rate
+ * @param {number|null} [updates.budget_hours] - Budget hours
+ * @param {boolean} [updates.is_default] - Whether project is default
+ * @param {string|null} [updates.due_date] - Deadline date (ISO date string or null)
+ * @param {string|null} [updates.start_date] - Project start date (ISO date string or null)
+ * @returns {Promise<Object>} Updated project object
+ */
+export async function updateProject(userName, projectId, updates) {
+  // First check if project exists and user has permission
+  const projectDetail = await getProjectDetail(userName, projectId);
+  if (!projectDetail) {
+    throw new Error("Project not found");
+  }
+
+  // For shared projects, only owner can update
+  if (projectDetail.is_shared && !projectDetail.is_owner) {
+    throw new Error("Only project owners can update shared projects");
+  }
+
+  // Only user projects can update is_default
+  if (updates.is_default !== undefined && projectDetail.is_shared) {
+    throw new Error("Only user projects can update is_default");
+  }
+
+  // Prepare update data
+  const updateData = {
+    modified_at: new Date().toISOString(),
+  };
+
+  if (updates.name !== undefined) {
+    updateData.name = updates.name.trim();
+  }
+  if (updates.hourly_rate !== undefined) {
+    updateData.hourly_rate = updates.hourly_rate;
+  }
+  if (updates.budget_hours !== undefined) {
+    updateData.budget_hours = updates.budget_hours;
+  }
+  if (updates.is_default !== undefined) {
+    updateData.is_default = updates.is_default;
+  }
+  if (updates.due_date !== undefined) {
+    updateData.due_date = updates.due_date || null;
+  }
+  if (updates.start_date !== undefined) {
+    updateData.start_date = updates.start_date || null;
+  }
+
+  const { data, error } = await supabaseServer
+    .from("projects")
+    .update(updateData)
+    .eq("id", projectId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error updating project in Supabase:", error);
+    throw error;
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    hourly_rate: data.hourly_rate,
+    budget_hours: data.budget_hours,
+    is_shared: data.is_shared,
+    is_default: data.is_default,
+    due_date: data.due_date,
+    start_date: data.start_date,
+    owner: data.owner_name,
+  };
+}
+
+// ==========================================
+// PROJECT MEMBER OPERATIONS
+// ==========================================
+
+/**
+ * Adds a member to a project in Supabase
+ *
+ * @param {string} projectId - Supabase project UUID
+ * @param {string} userName - Username to add as member
+ * @param {string} role - Member role (default: 'member')
+ * @param {number|null} hourlyRate - Optional hourly rate for this member
+ */
+export async function addProjectMember(
+  projectId,
+  userName,
+  role = "member",
+  hourlyRate = null
+) {
+  const memberData = {
+    project_id: projectId,
+    user_name: userName,
+    role: role,
+    hourly_rate: hourlyRate,
+    added_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabaseServer
+    .from("project_members")
+    .upsert(memberData, {
+      onConflict: "project_id,user_name",
+    });
+
+  if (error) {
+    console.error("Error adding project member to Supabase:", error);
+    throw error;
+  }
+
+  return true;
+}
+
+/**
+ * Updates a project member's hourly rate in Supabase
+ *
+ * @param {string} projectId - Supabase project UUID
+ * @param {string} userName - Username of member to update
+ * @param {number|null} hourlyRate - New hourly rate
+ */
+export async function updateProjectMemberRate(
+  projectId,
+  userName,
+  hourlyRate = null
+) {
+  const { error } = await supabaseServer
+    .from("project_members")
+    .update({ hourly_rate: hourlyRate })
+    .eq("project_id", projectId)
+    .eq("user_name", userName);
+
+  if (error) {
+    console.error("Error updating member rate in Supabase:", error);
+    throw error;
+  }
+
+  return true;
+}
+
+/**
+ * Removes a member from a project in Supabase
+ *
+ * @param {string} projectId - Supabase project UUID
+ * @param {string} userName - Username to remove
+ */
+export async function removeProjectMember(projectId, userName) {
+  const { error } = await supabaseServer
+    .from("project_members")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("user_name", userName);
+
+  if (error) {
+    console.error("Error removing member from Supabase:", error);
+    throw error;
+  }
+
+  return true;
+}
+
+/**
+ * Get velocity metrics for a project (daily and weekly hours, trends, etc.)
+ *
+ * @param {string} userName - Username accessing the project
+ * @param {string} projectId - Project UUID
+ * @param {Date} startDate - Optional start date for velocity calculation
+ * @param {Date} endDate - Optional end date for velocity calculation
+ * @returns {Promise<Object|null>} Velocity metrics object or null if not found
+ */
+export async function getProjectVelocity(
+  userName,
+  projectId,
+  startDate = null,
+  endDate = null
+) {
+  const { data, error } = await supabaseServer.rpc("get_project_velocity", {
+    p_user_name: userName,
+    p_project_id: projectId,
+    p_start_date: startDate ? startDate.toISOString() : null,
+    p_end_date: endDate ? endDate.toISOString() : null,
+  });
+
+  if (error) {
+    console.error("Error fetching project velocity:", error);
+    throw error;
+  }
+
+  // Function returns single row or empty array
+  if (!data || data.length === 0) {
+    return null;
+  }
+
+  const row = data[0];
+
+  return {
+    dailyVelocity: row.daily_velocity || [],
+    weeklyVelocity: row.weekly_velocity || [],
+    averageDailyHours: row.average_daily_hours || 0,
+    activeDays: row.active_days || 0,
+    peakDayDate: row.peak_day_date,
+    peakDayHours: row.peak_day_hours || 0,
+    trendDirection: row.trend_direction || "insufficient_data",
+    trendPercentage: row.trend_percentage || 0,
+  };
+}

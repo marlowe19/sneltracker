@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
-import { getAllProjects } from "@/lib/dbFirestore";
+import { getUserProjectsWithStats } from "@/lib/supabase/services/projectsService";
 
 export const dynamic = "force-dynamic";
 
@@ -38,8 +38,8 @@ export async function GET(req, context) {
       query = query.gte("due_date", startDate).lte("due_date", endDate);
     }
 
-    // Get all projects where user is owner or member (from Firestore)
-    const projects = await getAllProjects(user);
+    // Get all projects where user is owner or member (from Supabase)
+    const projects = await getUserProjectsWithStats(user);
     const projectIds = projects.map((p) => p.id).filter(Boolean);
 
     // Apply OR condition: notes created by user OR notes from user's projects

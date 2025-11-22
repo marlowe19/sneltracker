@@ -158,17 +158,32 @@ export default function TimerSectionClient({ user }) {
             >
               <span className="flex items-center gap-1.5 flex-1 text-left">
                 {(() => {
+                  // Use project_id (Supabase UUID) to find project, fallback to project (Firestore ID)
                   const selectedProjectId =
-                    entry?.project || pending?.projectId || "";
+                    entry?.project_id ||
+                    entry?.project ||
+                    pending?.projectId ||
+                    "";
                   const selectedProject = projects.find(
                     (p) => p.id === selectedProjectId
                   );
+
+                  // Use project_name from entry if available (from API), otherwise use project name from store
+                  const projectName =
+                    entry?.project_name || selectedProject?.name;
+                  const isDefault = selectedProject?.is_default || false;
+                  const isShared =
+                    entry?.isProjectOwner ||
+                    entry?.isProjectMember ||
+                    selectedProject?.is_shared ||
+                    false;
+
                   return (
                     <>
-                      {selectedProject ? (
+                      {projectName ? (
                         <>
-                          <span>{selectedProject.name}</span>
-                          {selectedProject.is_default && (
+                          <span>{projectName}</span>
+                          {isDefault && (
                             <svg
                               width="14"
                               height="14"
@@ -180,7 +195,7 @@ export default function TimerSectionClient({ user }) {
                               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                             </svg>
                           )}
-                          {selectedProject.is_shared && (
+                          {isShared && (
                             <svg
                               width="14"
                               height="14"
@@ -377,7 +392,19 @@ export default function TimerSectionClient({ user }) {
         ? (durationMs / (1000 * 60 * 60)) * entry.hourly_rate
         : 0;
 
-    const selectedProject = projects.find((p) => p.id === entry.project);
+    // Use project_id (Supabase UUID) to find project, fallback to project (Firestore ID)
+    const selectedProject = projects.find(
+      (p) => p.id === entry.project_id || p.id === entry.project
+    );
+
+    // Use project_name from entry if available (from API), otherwise use project name from store
+    const projectName = entry?.project_name || selectedProject?.name;
+    const isDefault = selectedProject?.is_default || false;
+    const isShared =
+      entry?.isProjectOwner ||
+      entry?.isProjectMember ||
+      selectedProject?.is_shared ||
+      false;
 
     return (
       <div
@@ -388,10 +415,10 @@ export default function TimerSectionClient({ user }) {
         <div className="flex items-center justify-between w-full">
           <div className="py-2 text-base text-gray-700 flex items-center gap-2 min-w-[200px]">
             <span className="flex items-center gap-1.5 flex-1 text-left">
-              {selectedProject ? (
+              {projectName ? (
                 <>
-                  <span>{selectedProject.name}</span>
-                  {selectedProject.is_default && (
+                  <span>{projectName}</span>
+                  {isDefault && (
                     <svg
                       width="14"
                       height="14"
@@ -403,7 +430,7 @@ export default function TimerSectionClient({ user }) {
                       <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                     </svg>
                   )}
-                  {selectedProject.is_shared && (
+                  {isShared && (
                     <svg
                       width="14"
                       height="14"

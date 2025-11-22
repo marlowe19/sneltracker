@@ -1,4 +1,4 @@
-import { getTimeEntries } from "@/lib/dbFirestore";
+import { getDayEntries } from "@/lib/supabase/services/timeEntriesService";
 import { NextResponse } from "next/server";
 
 export async function GET(request, { params }) {
@@ -19,7 +19,8 @@ export async function GET(request, { params }) {
     const date = new Date(year, month - 1, day);
     date.setHours(0, 0, 0, 0);
 
-    const entries = await getTimeEntries(user, date);
+    const entries = await getDayEntries(user, date);
+
     return NextResponse.json({ entries });
   } catch (error) {
     console.error("Error fetching day entries:", error);
@@ -29,4 +30,3 @@ export async function GET(request, { params }) {
     );
   }
 }
-

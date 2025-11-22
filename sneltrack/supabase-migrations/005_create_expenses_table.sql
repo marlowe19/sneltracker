@@ -53,3 +53,5 @@ COMMENT ON TABLE public.expenses IS 'Stores project-related expenses like materi
 COMMENT ON COLUMN public.expenses.firestore_id IS 'Firestore document ID for migration tracking - can be removed after full migration';
 COMMENT ON COLUMN public.expenses.firestore_project_id IS 'Temporary Firestore project reference - can be removed after full migration';
 
+
+

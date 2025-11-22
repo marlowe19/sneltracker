@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { startEntry } from "@/lib/dbFirestore";
+
+import { startEntry } from "@/lib/supabase/services/timeEntriesService";
 
 export async function GET(req, context) {
   const { user } = await context.params;
@@ -8,8 +9,8 @@ export async function GET(req, context) {
   const project = url.searchParams.get("project");
 
   console.log("startEntry--------------------", user);
+  //await startEntry(user, rate, project);
   await startEntry(user, rate, project);
-
   return NextResponse.redirect(
     new URL(`/${encodeURIComponent(user)}`, req.url),
     302

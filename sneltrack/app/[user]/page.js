@@ -1,5 +1,6 @@
 import { Suspense } from "react";
-import { getActiveEntries, getAllProjects } from "@/lib/dbFirestore";
+import { getActiveEntries } from "@/lib/supabase/services/timeEntriesService";
+import { getUserProjectsWithStats } from "@/lib/supabase/services/projectsService";
 import Link from "next/link";
 import TimerSectionWrapperClient from "./TimerSectionWrapperClient";
 import WeekEntriesClient from "./WeekEntriesClient";
@@ -41,7 +42,7 @@ async function UserPageContent({ user, weekOffset }) {
   // Fetch active entries, stopped timers, and projects on server
   const [activeEntries, projects] = await Promise.all([
     getActiveEntries(user),
-    getAllProjects(user),
+    getUserProjectsWithStats(user),
   ]);
 
   return (
