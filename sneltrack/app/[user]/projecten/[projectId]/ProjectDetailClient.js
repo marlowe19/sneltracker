@@ -6,6 +6,7 @@ import Link from "next/link";
 import MembersListClient from "../MembersListClient";
 import ProjectNotesClient from "./ProjectNotesClient";
 import CalendarViewClient from "@/app/[user]/components/CalendarViewClient";
+import ProjectForecastClient from "./ProjectForecastClient";
 
 function formatMoney(amount) {
   if (!amount && amount !== 0) return "";
@@ -49,6 +50,14 @@ export default function ProjectDetailClient({
   const [budgetHours, setBudgetHours] = useState(
     project?.budget_hours ? String(project.budget_hours) : ""
   );
+  const [capacity, setCapacity] = useState(
+    project?.capacity_per_week ? String(project.capacity_per_week) : ""
+  );
+  const [priority, setPriority] = useState(
+    project?.priority ? String(project.priority) : ""
+  );
+  const [zipCode, setZipCode] = useState(project?.zip_code || "");
+  const [zipCodeError, setZipCodeError] = useState(null);
   const [deadline, setDeadline] = useState(
     project?.due_date
       ? new Date(project.due_date).toISOString().split("T")[0]
@@ -73,6 +82,11 @@ export default function ProjectDetailClient({
   const [memberStatistics, setMemberStatistics] = useState(initialMemberStats);
   const [loadingStats, setLoadingStats] = useState(false);
 
+  // Google Calendar connection state
+  const [calendarConnected, setCalendarConnected] = useState(null);
+  const [checkingCalendar, setCheckingCalendar] = useState(false);
+  const [calendarError, setCalendarError] = useState(null);
+
   const canEdit = isShared ? isOwner : true;
 
   // Update form state when project prop changes
@@ -81,6 +95,10 @@ export default function ProjectDetailClient({
       setName(project.name || "");
       setHourlyRate(project.hourly_rate ? String(project.hourly_rate) : "");
       setBudgetHours(project.budget_hours ? String(project.budget_hours) : "");
+      setCapacity(project.capacity_per_week ? String(project.capacity_per_week) : "");
+      setPriority(project.priority ? String(project.priority) : "");
+      setZipCode(project.zip_code || "");
+      setZipCodeError(null);
       setDeadline(
         project.due_date
           ? new Date(project.due_date).toISOString().split("T")[0]
@@ -105,6 +123,69 @@ export default function ProjectDetailClient({
       setActiveTab("settings");
     }
   }, [activeTab, isShared]);
+
+  // Check Google Calendar connection status when on settings tab
+  useEffect(() => {
+    if (
+      activeTab === "settings" &&
+      calendarConnected === null &&
+      !checkingCalendar
+    ) {
+      checkCalendarStatus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  async function checkCalendarStatus() {
+    setCheckingCalendar(true);
+    setCalendarError(null);
+    try {
+      const res = await fetch(
+        `/${encodeURIComponent(user)}/api/calendar/status`
+      );
+      if (!res.ok) {
+        throw new Error("Failed to check calendar status");
+      }
+      const data = await res.json();
+      setCalendarConnected(data.isConnected);
+    } catch (err) {
+      setCalendarError(err.message || "Failed to check calendar status");
+    } finally {
+      setCheckingCalendar(false);
+    }
+  }
+
+  function handleConnectCalendar() {
+    const authUrl = `/api/auth/google/authorize?user=${encodeURIComponent(
+      user
+    )}`;
+    window.location.href = authUrl;
+  }
+
+  async function handleDisconnectCalendar() {
+    if (!confirm("Weet je zeker dat je Google Calendar wilt loskoppelen?")) {
+      return;
+    }
+
+    setCheckingCalendar(true);
+    setCalendarError(null);
+    try {
+      const res = await fetch(
+        `/${encodeURIComponent(user)}/api/calendar/status`,
+        {
+          method: "DELETE",
+        }
+      );
+      if (!res.ok) {
+        throw new Error("Failed to disconnect calendar");
+      }
+      setCalendarConnected(false);
+    } catch (err) {
+      setCalendarError(err.message || "Failed to disconnect calendar");
+    } finally {
+      setCheckingCalendar(false);
+    }
+  }
 
   // Helper function to refresh member statistics (used after adding/removing members)
   async function refreshMemberStatistics() {
@@ -141,11 +222,34 @@ export default function ProjectDetailClient({
     }
   }
 
+  // Validate Dutch zip code format (1234AB)
+  function validateZipCode(code) {
+    if (!code || code.trim() === "") return null; // Empty is valid (optional field)
+    const normalized = code.trim().toUpperCase();
+    const pattern = /^[0-9]{4}[A-Z]{2}$/;
+    return pattern.test(normalized) ? normalized : false;
+  }
+
   async function handleSaveSettings(e) {
     e.preventDefault();
     setError(null);
     setSuccess(false);
+    setZipCodeError(null);
+    
+    // Prevent concurrent saves
+    if (isSaving) return;
+    
     setIsSaving(true);
+
+    // Validate zip code if provided
+    if (zipCode && zipCode.trim() !== "") {
+      const validatedZip = validateZipCode(zipCode);
+      if (validatedZip === false) {
+        setZipCodeError("Ongeldig postcode formaat. Gebruik 1234AB formaat.");
+        setIsSaving(false);
+        return;
+      }
+    }
 
     try {
       const body = {
@@ -153,6 +257,9 @@ export default function ProjectDetailClient({
         name: name.trim(),
         hourly_rate: hourlyRate ? parseFloat(hourlyRate) : null,
         budget_hours: budgetHours ? parseFloat(budgetHours) : null,
+        capacity_per_week: capacity ? parseFloat(capacity) : null,
+        priority: priority ? parseInt(priority, 10) : null,
+        zip_code: zipCode && zipCode.trim() !== "" ? zipCode.trim().toUpperCase() : null,
         due_date: deadline || null,
         start_date: startDate || null,
       };
@@ -325,7 +432,12 @@ export default function ProjectDetailClient({
       </div>
 
       {/* Tab Content */}
-      {activeTab === "statistieken" && <div>{statisticsComponent}</div>}
+      {activeTab === "statistieken" && (
+        <div>
+          {statisticsComponent}
+          <ProjectForecastClient user={user} projectId={projectId} project={project} />
+        </div>
+      )}
 
       {activeTab === "notes" && (
         <div>
@@ -408,6 +520,96 @@ export default function ProjectDetailClient({
 
             <div>
               <label
+                htmlFor="capacity"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Capaciteit per week (uren)
+              </label>
+              <input
+                type="number"
+                id="capacity"
+                value={capacity}
+                onChange={(e) => setCapacity(e.target.value)}
+                step="0.5"
+                min="0"
+                disabled={!canEdit}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-base ${
+                  !canEdit ? "bg-gray-100 cursor-not-allowed" : ""
+                }`}
+                placeholder="0.0"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="priority"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Prioriteit (5 = hoogste, 1 = laagste)
+              </label>
+              <select
+                id="priority"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-base"
+              >
+                <option value="">Geen prioriteit</option>
+                <option value="5">5 - Hoogste</option>
+                <option value="4">4 - Hoog</option>
+                <option value="3">3 - Gemiddeld</option>
+                <option value="2">2 - Laag</option>
+                <option value="1">1 - Laagste</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="zipCode"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Postcode (1234AB)
+              </label>
+              <input
+                type="text"
+                id="zipCode"
+                value={zipCode}
+                onChange={(e) => {
+                  const value = e.target.value.toUpperCase();
+                  setZipCode(value);
+                  // Clear error when user types
+                  if (zipCodeError) {
+                    setZipCodeError(null);
+                  }
+                }}
+                onBlur={(e) => {
+                  // Validate on blur
+                  if (e.target.value && e.target.value.trim() !== "") {
+                    const validated = validateZipCode(e.target.value);
+                    if (validated === false) {
+                      setZipCodeError("Ongeldig postcode formaat. Gebruik 1234AB formaat.");
+                    } else if (validated) {
+                      setZipCode(validated);
+                      setZipCodeError(null);
+                    }
+                  } else {
+                    setZipCodeError(null);
+                  }
+                }}
+                maxLength={6}
+                placeholder="1234AB"
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-gray-400 text-base ${
+                  zipCodeError
+                    ? "border-red-300 bg-red-50"
+                    : "border-gray-300"
+                }`}
+              />
+              {zipCodeError && (
+                <p className="mt-1 text-sm text-red-600">{zipCodeError}</p>
+              )}
+            </div>
+
+            <div>
+              <label
                 htmlFor="deadline"
                 className="block text-sm font-medium text-gray-700 mb-1"
               >
@@ -475,6 +677,83 @@ export default function ProjectDetailClient({
               </div>
             )}
           </form>
+
+          {/* Google Calendar Connection Section */}
+          <div className="mt-8 pt-8 border-t border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4">
+              Google Calendar Integratie
+            </h3>
+            <div className="space-y-3">
+              {checkingCalendar ? (
+                <div className="text-sm text-gray-500">Status controleren...</div>
+              ) : calendarError ? (
+                <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
+                  {calendarError}
+                </div>
+              ) : calendarConnected ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-green-600">
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <span>Google Calendar is verbonden</span>
+                  </div>
+                  <p className="text-xs text-gray-600">
+                    Je agenda wordt gebruikt voor projectvoorspellingen om
+                    bezette tijden uit te sluiten.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleDisconnectCalendar}
+                    disabled={checkingCalendar}
+                    className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 disabled:opacity-60 text-sm"
+                  >
+                    Loskoppelen
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <span>Google Calendar is niet verbonden</span>
+                  </div>
+                  <p className="text-xs text-gray-600">
+                    Verbind je Google Calendar om bezette tijden uit te sluiten
+                    bij projectvoorspellingen.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleConnectCalendar}
+                    className="px-4 py-2 bg-[#008eff] text-white rounded-lg hover:bg-[#0073cc] text-sm"
+                  >
+                    Verbind Google Calendar
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Member Management Section (only for shared projects) */}
           {isShared && isOwner && (

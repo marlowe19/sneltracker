@@ -17,23 +17,16 @@ import { fireAndForget, logError, toIsoString } from "./base";
 async function lookupUserIdByUsername(username) {
   if (!username) return null;
 
-  // Try common field names for username in users table
-  // Common patterns: username, name, user_name, email
-  const possibleFields = ["username", "name", "user_name", "email"];
+  const { data, error } = await supabaseServer
+    .from("users")
+    .select("id")
+    .eq("user_name", username)
+    .single();
 
-  for (const field of possibleFields) {
-    const { data, error } = await supabaseServer
-      .from("users")
-      .select("id")
-      .eq(field, username)
-      .single();
-
-    if (!error && data?.id) {
-      return data.id;
-    }
+  if (!error && data?.id) {
+    return data.id;
   }
 
-  // If no field matched, return null
   return null;
 }
 
@@ -270,16 +263,16 @@ export async function getProjectDetail(
 
   const row = data[0];
 
-  // Fetch date fields directly from projects table since function doesn't return them yet
+  // Fetch additional fields directly from projects table since function doesn't return them yet
   const { data: projectData, error: projectError } = await supabaseServer
     .from("projects")
-    .select("due_date, start_date")
+    .select("due_date, start_date, capacity_per_week, priority, zip_code")
     .eq("id", projectId)
     .single();
 
   if (projectError) {
-    console.error("Error fetching project date fields:", projectError);
-    // Continue without date fields rather than failing
+    console.error("Error fetching project fields:", projectError);
+    // Continue without these fields rather than failing
   }
 
   return {
@@ -294,6 +287,9 @@ export async function getProjectDetail(
     is_owner: row.is_owner,
     due_date: projectData?.due_date || null,
     start_date: projectData?.start_date || null,
+    capacity_per_week: projectData?.capacity_per_week || null,
+    priority: projectData?.priority || null,
+    zip_code: projectData?.zip_code || null,
     statistics: {
       totalHours: row.total_hours,
       entryCount: Number(row.entry_count),
@@ -380,6 +376,9 @@ export async function createProject(userName, projectData) {
  * @param {string} [updates.name] - Project name
  * @param {number|null} [updates.hourly_rate] - Hourly rate
  * @param {number|null} [updates.budget_hours] - Budget hours
+ * @param {number|null} [updates.capacity_per_week] - Capacity per week in hours
+ * @param {number|null} [updates.priority] - Priority level (1-5, 5=highest)
+ * @param {string|null} [updates.zip_code] - Dutch postal code (1234AB format)
  * @param {boolean} [updates.is_default] - Whether project is default
  * @param {string|null} [updates.due_date] - Deadline date (ISO date string or null)
  * @param {string|null} [updates.start_date] - Project start date (ISO date string or null)
@@ -392,9 +391,20 @@ export async function updateProject(userName, projectId, updates) {
     throw new Error("Project not found");
   }
 
-  // For shared projects, only owner can update
+  // For shared projects, only owner can update most fields
+  // Exception: priority and zip_code can be updated by all users
   if (projectDetail.is_shared && !projectDetail.is_owner) {
-    throw new Error("Only project owners can update shared projects");
+    const allowedFieldsForMembers = ["priority", "zip_code"];
+    const updateKeys = Object.keys(updates).filter(
+      (key) => updates[key] !== undefined
+    );
+    const hasRestrictedFields = updateKeys.some(
+      (key) => !allowedFieldsForMembers.includes(key)
+    );
+    
+    if (hasRestrictedFields) {
+      throw new Error("Only project owners can update shared projects");
+    }
   }
 
   // Only user projects can update is_default
@@ -415,6 +425,18 @@ export async function updateProject(userName, projectId, updates) {
   }
   if (updates.budget_hours !== undefined) {
     updateData.budget_hours = updates.budget_hours;
+  }
+  if (updates.capacity_per_week !== undefined) {
+    updateData.capacity_per_week = updates.capacity_per_week;
+  }
+  if (updates.priority !== undefined) {
+    updateData.priority = updates.priority;
+  }
+  if (updates.zip_code !== undefined) {
+    // Normalize zip code: uppercase and trim
+    updateData.zip_code = updates.zip_code
+      ? updates.zip_code.trim().toUpperCase()
+      : null;
   }
   if (updates.is_default !== undefined) {
     updateData.is_default = updates.is_default;
@@ -462,18 +484,21 @@ export async function updateProject(userName, projectId, updates) {
  * @param {string} userName - Username to add as member
  * @param {string} role - Member role (default: 'member')
  * @param {number|null} hourlyRate - Optional hourly rate for this member
+ * @param {number|null} capacityPerWeek - Optional capacity per week for this member
  */
 export async function addProjectMember(
   projectId,
   userName,
   role = "member",
-  hourlyRate = null
+  hourlyRate = null,
+  capacityPerWeek = null
 ) {
   const memberData = {
     project_id: projectId,
     user_name: userName,
     role: role,
     hourly_rate: hourlyRate,
+    capacity_per_week: capacityPerWeek,
     added_at: new Date().toISOString(),
   };
 
@@ -511,6 +536,32 @@ export async function updateProjectMemberRate(
 
   if (error) {
     console.error("Error updating member rate in Supabase:", error);
+    throw error;
+  }
+
+  return true;
+}
+
+/**
+ * Updates a project member's capacity per week in Supabase
+ *
+ * @param {string} projectId - Supabase project UUID
+ * @param {string} userName - Username of member to update
+ * @param {number|null} capacityPerWeek - New capacity per week
+ */
+export async function updateProjectMemberCapacity(
+  projectId,
+  userName,
+  capacityPerWeek = null
+) {
+  const { error } = await supabaseServer
+    .from("project_members")
+    .update({ capacity_per_week: capacityPerWeek })
+    .eq("project_id", projectId)
+    .eq("user_name", userName);
+
+  if (error) {
+    console.error("Error updating member capacity in Supabase:", error);
     throw error;
   }
 
