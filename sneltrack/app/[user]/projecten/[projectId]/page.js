@@ -36,16 +36,16 @@ export default async function ProjectDetailPage({ params }) {
   const memberStats = projectDetail.memberStatistics || null;
 
   return (
-    <main className="flex flex-col ">
+    <main className="flex flex-col h-screen overflow-hidden">
       {/* Header with back button and centered project name */}
-      <div className="relative flex items-center justify-between p-4">
+      <div className="relative flex items-center justify-between p-4 flex-shrink-0">
         <BackButtonClient />
         <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center gap-2">
           <h1 className="text-lg font-bold text-gray-900">Project</h1>
         </div>
         <div className="w-16"></div> {/* Spacer for centering */}
       </div>
-      <section className="w-full flex items-center justify-center">
+      <section className="w-full flex items-center justify-center flex-shrink-0">
         <h1 className="text-base  text-gray-900">{project.name}</h1>
         <div className="flex items-center gap-2">
           {project.is_shared && (
@@ -60,8 +60,11 @@ export default async function ProjectDetailPage({ params }) {
           )}
         </div>
       </section>
-      <section className="bg-white rounded-xl">
-        <div className="p-4">
+      <section className="bg-white rounded-xl flex-1 min-h-0 overflow-y-auto">
+        <div
+          className="p-4"
+          style={{ paddingBottom: "calc(5rem + env(safe-area-inset-bottom))" }}
+        >
           {/* Tabs Section - moved to top */}
           <ProjectDetailClient
             user={user}

@@ -440,7 +440,7 @@ export default function ProjectDetailClient({
       )}
 
       {activeTab === "notes" && (
-        <div>
+        <div className="mb-4">
           <ProjectNotesClient
             user={user}
             projectId={projectId}
@@ -450,7 +450,7 @@ export default function ProjectDetailClient({
       )}
 
       {activeTab === "settings" && (
-        <div className="space-y-6">
+        <div className="space-y-6 mb-4">
           <form onSubmit={handleSaveSettings} className="space-y-4">
             {/* Editable Fields */}
             <div>
@@ -855,7 +855,7 @@ export default function ProjectDetailClient({
       )}
 
       {activeTab === "members" && isShared && (
-        <div>
+        <div className="mb-4">
           <MembersListClient
             user={user}
             projectId={projectId}
