@@ -22,6 +22,7 @@ import {
   getUserProjectsWithStats,
   addProjectMember,
   updateProjectMemberRate,
+  updateProjectMemberCapacity,
   removeProjectMember,
   createProject as createProjectSupabase,
   updateProject as updateProjectSupabase,
@@ -129,7 +130,8 @@ export async function POST(req, context) {
           projectId,
           memberName,
           "member",
-          hourly_rate ?? null
+          hourly_rate ?? null,
+          body.capacity_per_week ?? null
         );
       } catch (error) {
         console.error("Failed to add member to Supabase:", error);
@@ -237,6 +239,15 @@ function buildProjectUpdates(body) {
   if (body.budget_hours !== undefined) {
     updates.budget_hours = body.budget_hours;
   }
+  if (body.capacity_per_week !== undefined) {
+    updates.capacity_per_week = body.capacity_per_week;
+  }
+  if (body.priority !== undefined) {
+    updates.priority = body.priority;
+  }
+  if (body.zip_code !== undefined) {
+    updates.zip_code = body.zip_code;
+  }
   if (body.due_date !== undefined) {
     updates.due_date = body.due_date || null;
   }
@@ -290,6 +301,45 @@ export async function PATCH(req, context) {
         );
       } catch (error) {
         console.error("Failed to update member rate in Supabase:", error);
+        throw error;
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    // Handle updateMemberCapacity action
+    if (action === "updateMemberCapacity") {
+      const { projectId, memberName, capacity_per_week } = body;
+      if (!projectId || !memberName) {
+        return NextResponse.json(
+          { error: "projectId and memberName are required" },
+          { status: 400 }
+        );
+      }
+
+      const projectDetail = await getProjectDetail(user, projectId);
+      if (!projectDetail) {
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 404 }
+        );
+      }
+
+      if (!projectDetail.is_owner) {
+        return NextResponse.json(
+          { error: "Only project owners can update member capacity" },
+          { status: 403 }
+        );
+      }
+
+      try {
+        await updateProjectMemberCapacity(
+          projectId,
+          memberName,
+          capacity_per_week ?? null
+        );
+      } catch (error) {
+        console.error("Failed to update member capacity in Supabase:", error);
         throw error;
       }
 
