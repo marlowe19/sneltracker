@@ -172,9 +172,10 @@ export async function POST(req, context) {
     const startDate = body.start_date || null;
 
     if (isShared) {
-      // Also create in Supabase
+      // Create in Supabase
+      let newProject;
       try {
-        await createProjectSupabase(user, {
+        newProject = await createProjectSupabase(user, {
           name,
           hourly_rate: hourlyRate,
           budget_hours: budgetHours,
@@ -185,7 +186,13 @@ export async function POST(req, context) {
         });
       } catch (error) {
         console.error("Failed to create project in Supabase:", error);
-        // Continue anyway - Firestore is still written
+        return NextResponse.json(
+          {
+            error: "Failed to create project in Supabase",
+            message: error.message,
+          },
+          { status: 500 }
+        );
       }
       return NextResponse.json({ project: newProject }, { status: 201 });
     } else {

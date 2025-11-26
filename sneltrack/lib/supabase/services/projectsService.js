@@ -244,7 +244,7 @@ export async function getProjectDetail(
   startDate = null,
   endDate = null
 ) {
-  const { data, error } = await supabaseServer.rpc("get_project_detail", {
+  const { data, error } = await supabaseServer.rpc("get_project_detail_v2", {
     p_user_name: userName,
     p_project_id: projectId,
     p_start_date: startDate ? startDate.toISOString() : null,
@@ -401,7 +401,7 @@ export async function updateProject(userName, projectId, updates) {
     const hasRestrictedFields = updateKeys.some(
       (key) => !allowedFieldsForMembers.includes(key)
     );
-    
+
     if (hasRestrictedFields) {
       throw new Error("Only project owners can update shared projects");
     }
@@ -469,6 +469,9 @@ export async function updateProject(userName, projectId, updates) {
     is_default: data.is_default,
     due_date: data.due_date,
     start_date: data.start_date,
+    capacity_per_week: data.capacity_per_week,
+    priority: data.priority,
+    zip_code: data.zip_code,
     owner: data.owner_name,
   };
 }

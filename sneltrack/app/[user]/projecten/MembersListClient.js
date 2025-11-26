@@ -109,7 +109,9 @@ export default function MembersListClient({
 
   function handleStartEditCapacity(member) {
     setEditingCapacity(member.user_name);
-    setEditCapacityValue(member.capacity_per_week ? String(member.capacity_per_week) : "");
+    setEditCapacityValue(
+      member.capacity_per_week ? String(member.capacity_per_week) : ""
+    );
   }
 
   function handleCancelEditCapacity() {
@@ -123,14 +125,19 @@ export default function MembersListClient({
 
     try {
       const res = await fetch(
-        `/${encodeURIComponent(user)}/projecten/api?action=updateMemberCapacity`,
+        `/${encodeURIComponent(
+          user
+        )}/projecten/api?action=updateMemberCapacity`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             projectId,
             memberName,
-            capacity_per_week: editCapacityValue ? parseFloat(editCapacityValue) : null,
+            capacity_per_week:
+              editCapacityValue && editCapacityValue.trim() !== ""
+                ? parseFloat(editCapacityValue)
+                : null,
           }),
         }
       );
@@ -146,7 +153,10 @@ export default function MembersListClient({
           m.user_name === memberName
             ? {
                 ...m,
-                capacity_per_week: editCapacityValue ? parseFloat(editCapacityValue) : null,
+                capacity_per_week:
+                  editCapacityValue && editCapacityValue.trim() !== ""
+                    ? parseFloat(editCapacityValue)
+                    : null,
               }
             : m
         )
@@ -173,7 +183,9 @@ export default function MembersListClient({
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Capaciteit uit agenda berekenen mislukt");
+        throw new Error(
+          data.error || "Capaciteit uit agenda berekenen mislukt"
+        );
       }
 
       const data = await res.json();
@@ -296,7 +308,9 @@ export default function MembersListClient({
               <div className="mt-2 pt-2 border-t border-gray-200">
                 {editingCapacity === member.user_name ? (
                   <div className="flex items-center gap-2">
-                    <label className="text-xs text-gray-500">Capaciteit per week:</label>
+                    <label className="text-xs text-gray-500">
+                      Capaciteit per week:
+                    </label>
                     <input
                       type="number"
                       step="0.5"
@@ -348,136 +362,160 @@ export default function MembersListClient({
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleCalculateCapacityFromCalendar(member.user_name)}
+                          onClick={() =>
+                            handleCalculateCapacityFromCalendar(
+                              member.user_name
+                            )
+                          }
                           disabled={calculatingCapacity === member.user_name}
                           className="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 disabled:opacity-60 disabled:cursor-not-allowed"
                           title="Bereken capaciteit uit Google Calendar (volgende 2 weken)"
                         >
-                          {calculatingCapacity === member.user_name ? "..." : "📅"}
+                          {calculatingCapacity === member.user_name
+                            ? "..."
+                            : "📅"}
                         </button>
                       </>
                     )}
                   </div>
                 )}
-                {calculatedCapacity?.memberName === member.user_name && (() => {
-                  // Use member's capacity_per_week or default to 40 hours/week
-                  const plannedCapacity = member.capacity_per_week || 40;
-                  const week1Hours = calculatedCapacity.week1?.hours || 0;
-                  const week2Hours = calculatedCapacity.week2?.hours || 0;
-                  
-                  // Calculate percentages (can exceed 100%)
-                  const week1Percentage = plannedCapacity > 0 ? (week1Hours / plannedCapacity) * 100 : 0;
-                  const week2Percentage = plannedCapacity > 0 ? (week2Hours / plannedCapacity) * 100 : 0;
-                  
-                  return (
-                    <div className="text-xs mt-1 space-y-2">
-                      <div className="font-medium text-gray-700">Berekend uit agenda:</div>
-                      
-                      {/* Week 1 */}
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-600">Week 1</span>
+                {calculatedCapacity?.memberName === member.user_name &&
+                  (() => {
+                    // Use member's capacity_per_week or default to 40 hours/week
+                    const plannedCapacity = member.capacity_per_week || 40;
+                    const week1Hours = calculatedCapacity.week1?.hours || 0;
+                    const week2Hours = calculatedCapacity.week2?.hours || 0;
+
+                    // Calculate percentages (can exceed 100%)
+                    const week1Percentage =
+                      plannedCapacity > 0
+                        ? (week1Hours / plannedCapacity) * 100
+                        : 0;
+                    const week2Percentage =
+                      plannedCapacity > 0
+                        ? (week2Hours / plannedCapacity) * 100
+                        : 0;
+
+                    return (
+                      <div className="text-xs mt-1 space-y-2">
+                        <div className="font-medium text-gray-700">
+                          Berekend uit agenda:
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2 relative">
-                          <div
-                            className={`h-2 rounded-full relative ${
-                              week1Percentage < 100
-                                ? "bg-red-500"
-                                : week1Percentage >= 100
-                                ? "bg-green-500"
-                                : "bg-yellow-500"
-                            }`}
-                            style={{
-                              width: `${Math.min(week1Percentage, 100)}%`,
-                            }}
-                          >
-                            {/* Label on top of progress bar at end of fill */}
-                            {week1Percentage > 0 && (
-                              <span 
-                                className="absolute top-0 text-xs font-medium text-gray-700 whitespace-nowrap"
-                                style={{
-                                  right: 0,
-                                  transform: week1Percentage >= 95 ? 'translateY(-100%) translateY(-12px)' : 'translateY(-100%)',
-                                  marginBottom: '2px',
-                                }}
-                              >
-                                {week1Hours.toFixed(1)} uur
-                              </span>
-                            )}
+
+                        {/* Week 1 */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-600">Week 1</span>
                           </div>
-                          {/* Label on top of bar at end (100% = planned capacity) */}
-                          <span 
-                            className="absolute top-0 text-xs text-gray-500 whitespace-nowrap"
-                            style={{
-                              right: 0,
-                              transform: 'translateY(-100%)',
-                              marginBottom: '2px',
-                            }}
-                          >
-                            {plannedCapacity.toFixed(1)} uur
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-600">
-                          {week1Percentage.toFixed(1)}% van {plannedCapacity.toFixed(1)} uur geplande capaciteit
-                        </div>
-                      </div>
-                      
-                      {/* Week 2 */}
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-600">Week 2</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2 relative">
-                          <div
-                            className={`h-2 rounded-full relative ${
-                              week2Percentage < 100
-                                ? "bg-red-500"
-                                : week2Percentage >= 100
-                                ? "bg-green-500"
-                                : "bg-yellow-500"
-                            }`}
-                            style={{
-                              width: `${Math.min(week2Percentage, 100)}%`,
-                            }}
-                          >
-                            {/* Label on top of progress bar at end of fill */}
-                            {week2Percentage > 0 && (
-                              <span 
-                                className="absolute top-0 text-xs font-medium text-gray-700 whitespace-nowrap"
-                                style={{
-                                  right: 0,
-                                  transform: week2Percentage >= 95 ? 'translateY(-100%) translateY(-12px)' : 'translateY(-100%)',
-                                  marginBottom: '2px',
-                                }}
-                              >
-                                {week2Hours.toFixed(1)} uur
-                              </span>
-                            )}
+                          <div className="w-full bg-gray-200 rounded-full h-2 relative">
+                            <div
+                              className={`h-2 rounded-full relative ${
+                                week1Percentage < 100
+                                  ? "bg-red-500"
+                                  : week1Percentage >= 100
+                                  ? "bg-green-500"
+                                  : "bg-yellow-500"
+                              }`}
+                              style={{
+                                width: `${Math.min(week1Percentage, 100)}%`,
+                              }}
+                            >
+                              {/* Label on top of progress bar at end of fill */}
+                              {week1Percentage > 0 && (
+                                <span
+                                  className="absolute top-0 text-xs font-medium text-gray-700 whitespace-nowrap"
+                                  style={{
+                                    right: 0,
+                                    transform:
+                                      week1Percentage >= 95
+                                        ? "translateY(-100%) translateY(-12px)"
+                                        : "translateY(-100%)",
+                                    marginBottom: "2px",
+                                  }}
+                                >
+                                  {week1Hours.toFixed(1)} uur
+                                </span>
+                              )}
+                            </div>
+                            {/* Label on top of bar at end (100% = planned capacity) */}
+                            <span
+                              className="absolute top-0 text-xs text-gray-500 whitespace-nowrap"
+                              style={{
+                                right: 0,
+                                transform: "translateY(-100%)",
+                                marginBottom: "2px",
+                              }}
+                            >
+                              {plannedCapacity.toFixed(1)} uur
+                            </span>
                           </div>
-                          {/* Label on top of bar at end (100% = planned capacity) */}
-                          <span 
-                            className="absolute top-0 text-xs text-gray-500 whitespace-nowrap"
-                            style={{
-                              right: 0,
-                              transform: 'translateY(-100%)',
-                              marginBottom: '2px',
-                            }}
-                          >
-                            {plannedCapacity.toFixed(1)} uur
-                          </span>
+                          <div className="text-xs text-gray-600">
+                            {week1Percentage.toFixed(1)}% van{" "}
+                            {plannedCapacity.toFixed(1)} uur geplande capaciteit
+                          </div>
                         </div>
-                        <div className="text-xs text-gray-600">
-                          {week2Percentage.toFixed(1)}% van {plannedCapacity.toFixed(1)} uur geplande capaciteit
+
+                        {/* Week 2 */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-600">Week 2</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2 relative">
+                            <div
+                              className={`h-2 rounded-full relative ${
+                                week2Percentage < 100
+                                  ? "bg-red-500"
+                                  : week2Percentage >= 100
+                                  ? "bg-green-500"
+                                  : "bg-yellow-500"
+                              }`}
+                              style={{
+                                width: `${Math.min(week2Percentage, 100)}%`,
+                              }}
+                            >
+                              {/* Label on top of progress bar at end of fill */}
+                              {week2Percentage > 0 && (
+                                <span
+                                  className="absolute top-0 text-xs font-medium text-gray-700 whitespace-nowrap"
+                                  style={{
+                                    right: 0,
+                                    transform:
+                                      week2Percentage >= 95
+                                        ? "translateY(-100%) translateY(-12px)"
+                                        : "translateY(-100%)",
+                                    marginBottom: "2px",
+                                  }}
+                                >
+                                  {week2Hours.toFixed(1)} uur
+                                </span>
+                              )}
+                            </div>
+                            {/* Label on top of bar at end (100% = planned capacity) */}
+                            <span
+                              className="absolute top-0 text-xs text-gray-500 whitespace-nowrap"
+                              style={{
+                                right: 0,
+                                transform: "translateY(-100%)",
+                                marginBottom: "2px",
+                              }}
+                            >
+                              {plannedCapacity.toFixed(1)} uur
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-600">
+                            {week2Percentage.toFixed(1)}% van{" "}
+                            {plannedCapacity.toFixed(1)} uur geplande capaciteit
+                          </div>
+                        </div>
+
+                        {/* Average (text only) */}
+                        <div className="font-medium pt-0.5 text-gray-700">
+                          Gemiddeld: {calculatedCapacity.capacity.toFixed(1)}{" "}
+                          uren/week
                         </div>
                       </div>
-                      
-                      {/* Average (text only) */}
-                      <div className="font-medium pt-0.5 text-gray-700">
-                        Gemiddeld: {calculatedCapacity.capacity.toFixed(1)} uren/week
-                      </div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()}
               </div>
 
               {/* Statistics for selected period */}

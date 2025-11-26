@@ -71,6 +71,7 @@ export default function ProjectDetailClient({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Member management state (for settings tab)
   const [newMemberName, setNewMemberName] = useState("");
@@ -95,7 +96,9 @@ export default function ProjectDetailClient({
       setName(project.name || "");
       setHourlyRate(project.hourly_rate ? String(project.hourly_rate) : "");
       setBudgetHours(project.budget_hours ? String(project.budget_hours) : "");
-      setCapacity(project.capacity_per_week ? String(project.capacity_per_week) : "");
+      setCapacity(
+        project.capacity_per_week ? String(project.capacity_per_week) : ""
+      );
       setPriority(project.priority ? String(project.priority) : "");
       setZipCode(project.zip_code || "");
       setZipCodeError(null);
@@ -235,10 +238,10 @@ export default function ProjectDetailClient({
     setError(null);
     setSuccess(false);
     setZipCodeError(null);
-    
+
     // Prevent concurrent saves
     if (isSaving) return;
-    
+
     setIsSaving(true);
 
     // Validate zip code if provided
@@ -259,7 +262,10 @@ export default function ProjectDetailClient({
         budget_hours: budgetHours ? parseFloat(budgetHours) : null,
         capacity_per_week: capacity ? parseFloat(capacity) : null,
         priority: priority ? parseInt(priority, 10) : null,
-        zip_code: zipCode && zipCode.trim() !== "" ? zipCode.trim().toUpperCase() : null,
+        zip_code:
+          zipCode && zipCode.trim() !== ""
+            ? zipCode.trim().toUpperCase()
+            : null,
         due_date: deadline || null,
         start_date: startDate || null,
       };
@@ -284,6 +290,39 @@ export default function ProjectDetailClient({
       setError(err.message || "An error occurred");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleDeleteProject() {
+    if (
+      !confirm(
+        "Weet je zeker dat je dit project wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
+      )
+    ) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setError(null);
+
+    try {
+      const res = await fetch(
+        `/${encodeURIComponent(user)}/projecten/api?id=${projectId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete project");
+      }
+
+      // Redirect to projects list after successful deletion
+      router.push(`/${encodeURIComponent(user)}/projecten`);
+    } catch (err) {
+      setError(err.message || "Failed to delete project");
+      setIsDeleting(false);
     }
   }
 
@@ -435,7 +474,11 @@ export default function ProjectDetailClient({
       {activeTab === "statistieken" && (
         <div>
           {statisticsComponent}
-          <ProjectForecastClient user={user} projectId={projectId} project={project} />
+          <ProjectForecastClient
+            user={user}
+            projectId={projectId}
+            project={project}
+          />
         </div>
       )}
 
@@ -586,7 +629,9 @@ export default function ProjectDetailClient({
                   if (e.target.value && e.target.value.trim() !== "") {
                     const validated = validateZipCode(e.target.value);
                     if (validated === false) {
-                      setZipCodeError("Ongeldig postcode formaat. Gebruik 1234AB formaat.");
+                      setZipCodeError(
+                        "Ongeldig postcode formaat. Gebruik 1234AB formaat."
+                      );
                     } else if (validated) {
                       setZipCode(validated);
                       setZipCodeError(null);
@@ -598,9 +643,7 @@ export default function ProjectDetailClient({
                 maxLength={6}
                 placeholder="1234AB"
                 className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-gray-400 text-base ${
-                  zipCodeError
-                    ? "border-red-300 bg-red-50"
-                    : "border-gray-300"
+                  zipCodeError ? "border-red-300 bg-red-50" : "border-gray-300"
                 }`}
               />
               {zipCodeError && (
@@ -685,7 +728,9 @@ export default function ProjectDetailClient({
             </h3>
             <div className="space-y-3">
               {checkingCalendar ? (
-                <div className="text-sm text-gray-500">Status controleren...</div>
+                <div className="text-sm text-gray-500">
+                  Status controleren...
+                </div>
               ) : calendarError ? (
                 <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
                   {calendarError}
@@ -846,6 +891,34 @@ export default function ProjectDetailClient({
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {/* Delete Project Section */}
+          {canEdit && (
+            <div className="mt-8 pt-8 border-t border-red-200">
+              <h3 className="text-sm font-semibold text-red-900 mb-4">
+                Gevaarlijke Zone
+              </h3>
+              <div className="space-y-3">
+                <p className="text-xs text-gray-600">
+                  Het verwijderen van een project kan niet ongedaan worden
+                  gemaakt. Alle tijdregistraties en gegevens die aan dit project
+                  zijn gekoppeld, blijven behouden.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleDeleteProject}
+                  disabled={isDeleting || isSaving}
+                  className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-medium"
+                >
+                  {isDeleting ? "Verwijderen..." : "Project Verwijderen"}
+                </button>
+                {error && isDeleting && (
+                  <div className="text-sm text-red-600 bg-red-50 p-3 rounded">
+                    {error}
                   </div>
                 )}
               </div>
