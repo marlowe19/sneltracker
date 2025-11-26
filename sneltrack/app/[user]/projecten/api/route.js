@@ -22,6 +22,7 @@ import {
   getUserProjectsWithStats,
   addProjectMember,
   updateProjectMemberRate,
+  deleteProject as deleteProjectSupabase,
   updateProjectMemberCapacity,
   removeProjectMember,
   createProject as createProjectSupabase,
@@ -451,9 +452,6 @@ export async function DELETE(req, context) {
         );
       }
 
-      // Write to Firestore (existing data)
-      await removeMemberFromProject(projectId, memberName);
-
       // ✅ NEW: Also remove from Supabase
       try {
         await removeProjectMember(projectId, memberName);
@@ -472,18 +470,14 @@ export async function DELETE(req, context) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    if (projectDetail.is_shared) {
-      // Check ownership before deleting shared project
-      if (!projectDetail.is_owner) {
-        return NextResponse.json(
-          { error: "Only project owners can delete shared projects" },
-          { status: 403 }
-        );
-      }
-      await deleteSharedProject(projectId);
-    } else {
-      await deleteProject(user, projectId);
+    if (!projectDetail.is_owner) {
+      return NextResponse.json(
+        { error: "Only project owners can delete projects" },
+        { status: 403 }
+      );
     }
+
+    await deleteProjectSupabase(user, projectId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

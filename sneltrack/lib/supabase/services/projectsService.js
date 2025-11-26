@@ -593,6 +593,39 @@ export async function removeProjectMember(projectId, userName) {
 }
 
 /**
+ * Deletes a project from Supabase
+ * Validates user has permission (must be owner)
+ *
+ * @param {string} userName - Username deleting the project
+ * @param {string} projectId - Project UUID to delete
+ * @returns {Promise<boolean>} True if deletion was successful
+ */
+export async function deleteProject(userName, projectId) {
+  // First check if project exists and user has permission
+  const projectDetail = await getProjectDetail(userName, projectId);
+  if (!projectDetail) {
+    throw new Error("Project not found");
+  }
+
+  // Only project owner can delete
+  if (!projectDetail.is_owner) {
+    throw new Error("Only project owners can delete projects");
+  }
+
+  const { error } = await supabaseServer
+    .from("projects")
+    .delete()
+    .eq("id", projectId);
+
+  if (error) {
+    console.error("Error deleting project from Supabase:", error);
+    throw error;
+  }
+
+  return true;
+}
+
+/**
  * Get velocity metrics for a project (daily and weekly hours, trends, etc.)
  *
  * @param {string} userName - Username accessing the project

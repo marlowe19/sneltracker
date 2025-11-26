@@ -16,3 +16,4 @@ COMMENT ON COLUMN projects.zip_code IS 'Dutch postal code (1234AB format) for di
 -- Note: priority field already exists from migration 013
 
 
+

@@ -9,3 +9,4 @@ ADD COLUMN IF NOT EXISTS capacity_per_week NUMERIC(5,2);
 COMMENT ON COLUMN project_members.capacity_per_week IS 'Weekly capacity in hours for this member (used for project forecasting)';
 
 
+

@@ -20,7 +20,7 @@ function getHolidaysForYear(year) {
 
   const hd = new Holidays("NL");
   const holidays = hd.getHolidays(year);
-  
+
   // Convert to Date objects and filter out weekends (holidays package may include them)
   const holidayDates = holidays
     .map((holiday) => {
@@ -55,7 +55,7 @@ export function isHoliday(date) {
   checkDate.setHours(0, 0, 0, 0);
   const year = checkDate.getFullYear();
   const holidays = getHolidaysForYear(year);
-  
+
   return holidays.some((holiday) => {
     const holidayDate = new Date(holiday);
     holidayDate.setHours(0, 0, 0, 0);
@@ -71,7 +71,7 @@ export function isHoliday(date) {
  */
 export function getHolidaysInRange(startDate, endDate) {
   if (!startDate || !endDate) return [];
-  
+
   const start = new Date(startDate);
   start.setHours(0, 0, 0, 0);
   const end = new Date(endDate);
@@ -104,14 +104,13 @@ export function isWorkday(date) {
   if (!date) return false;
   const checkDate = new Date(date);
   const dayOfWeek = checkDate.getDay();
-  
+
   // Weekend check
   if (dayOfWeek === 0 || dayOfWeek === 6) {
     return false;
   }
-  
+
   // Holiday check
   return !isHoliday(checkDate);
 }
-
 
