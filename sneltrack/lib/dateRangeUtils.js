@@ -133,3 +133,10 @@ export function formatHoursMinutes(ms) {
   const minutes = totalMinutes % 60;
   return `${hours}:${String(minutes).padStart(2, "0")}`;
 }
+
+export function getCurrentDate(selectedDate) {
+  const year = selectedDate.getFullYear();
+  const month = selectedDate.getMonth();
+  const day = selectedDate.getDate();
+  return new Date(Date.UTC(year, month, day, 0, 0, 0, 0)).toISOString();
+}

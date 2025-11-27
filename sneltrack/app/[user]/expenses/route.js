@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createExpense, getExpenses } from "@/lib/dbFirestore";
+import { expensesService } from "@/lib/supabase/services";
 
 export async function POST(req, context) {
   try {
@@ -20,16 +20,10 @@ export async function POST(req, context) {
       );
     }
     if (!body.name || body.name.trim() === "") {
-      return NextResponse.json(
-        { error: "name is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
     if (body.price === undefined || body.price === null) {
-      return NextResponse.json(
-        { error: "price is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "price is required" }, { status: 400 });
     }
 
     const dayDate = new Date(body.dayDate);
@@ -39,7 +33,7 @@ export async function POST(req, context) {
     const includesVat = body.includes_vat ?? false;
     const expenseType = body.expense_type ?? "materials";
 
-    const newExpense = await createExpense(
+    const newExpense = await expensesService.create(
       user,
       dayDate,
       project,
@@ -72,7 +66,11 @@ export async function GET(req, context) {
       );
     }
 
-    const expenses = await getExpenses(user, weekStart, weekEnd);
+    const expenses = await expensesService.getWeekExpenses(
+      user,
+      weekStart,
+      weekEnd
+    );
     return NextResponse.json({ expenses });
   } catch (error) {
     console.error("Error fetching expenses:", error);
@@ -82,9 +80,3 @@ export async function GET(req, context) {
     );
   }
 }
-
-
-
-
-
-

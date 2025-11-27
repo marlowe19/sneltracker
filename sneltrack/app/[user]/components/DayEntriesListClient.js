@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useStore } from "@/stores/useStore";
@@ -9,6 +9,7 @@ import { useToast } from "@/app/components/Toast";
 import { formatLocalDate } from "@/lib/dateRangeUtils";
 import NotificationBadge from "@/app/components/NotificationBadge";
 import { mapEntryToEditable } from "@/lib/utils/entryMapper";
+import { getCurrentDate } from "@/lib/dateRangeUtils";
 import {
   Alarm,
   ChevronLeft,
@@ -133,7 +134,11 @@ export default function DayEntriesListClient({
   const [savingExpenseId, setSavingExpenseId] = useState(null);
   const [loadingEntries, setLoadingEntries] = useState(false);
   const toast = useToast();
-  const dayDateString = selectedDate?.toISOString();
+  // Memoize dayDateString to ensure stable reference
+  const dayDateString = useMemo(
+    () => selectedDate?.toISOString(),
+    [selectedDate]
+  );
 
   // Fetch day expenses
   useEffect(() => {
@@ -239,7 +244,7 @@ export default function DayEntriesListClient({
         setExpandedExpenses((prev) => new Set([...prev, ...tempExpenseIds]));
       }
     }
-  }, [expenses, dayDateString]);
+  }, [expenses, selectedDate, dayDateString]);
 
   // Fetch notes
   useEffect(() => {
@@ -816,7 +821,7 @@ export default function DayEntriesListClient({
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                dayDate: selectedDate.toISOString(),
+                dayDate: getCurrentDate(selectedDate),
                 project: expense.project_editable,
                 name: expense.name_editable.trim(),
                 price: parseFloat(expense.price_editable),
@@ -1308,7 +1313,7 @@ export default function DayEntriesListClient({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            dayDate: selectedDate.toISOString(),
+            dayDate: getCurrentDate(selectedDate),
             project: expense.project_editable,
             name: expense.name_editable.trim(),
             price: parseFloat(expense.price_editable),
@@ -2263,38 +2268,44 @@ export default function DayEntriesListClient({
 
                 return (
                   <div
-                    onClick={() => handleToggleExpandExpense(expense.id)}
                     key={expense.id}
                     className="rounded-lg cursor-pointer border border-gray-200 p-4 space-y-4 bg-white transition-all duration-200"
                   >
-                    <div className="flex flex-col gap-2">
+                    <div
+                      onClick={() => handleToggleExpandExpense(expense.id)}
+                      className="flex flex-col gap-2"
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span
+                            className={`px-2 py-0.5 capitalize text-xs font-medium rounded-full ${
+                              expense.user_name === user
+                                ? "bg-gray-100 text-gray-700"
+                                : "bg-blue-100 text-blue-700"
+                            }`}
+                          >
+                            {expense.user_name || user}
+                          </span>
+                        </div>
+                        <div className="flex justify-end">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation(); // ✅ Prevent parent onClick from firing
+                              handleToggleExpandExpense(expense.id);
+                            }}
+                            className="px-3 py-1.5 text-sm font-medium text-[#008eff] hover:bg-[#008eff]/10 rounded-md transition-colors"
+                          >
+                            {isExpanded ? "Sluiten" : "Bewerken"}
+                          </button>
+                        </div>
+                      </div>
                       <div className="flex items-center gap-2">
                         <div>
                           <ToolBox size={24} />
                         </div>
-                        <span className="text-lg font-medium text-gray-700">
-                          {project ? project.project_name : "-"}
+                        <span className="text-base  text-gray-700">
+                          {project ? project.name : "-"}
                         </span>
-                        <span
-                          className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                            expense.user_name === user
-                              ? "bg-gray-100 text-gray-700"
-                              : "bg-blue-100 text-blue-700"
-                          }`}
-                        >
-                          {expense.user_name || user}
-                        </span>
-                      </div>
-                      <div className="flex justify-end">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation(); // ✅ Prevent parent onClick from firing
-                            handleToggleExpandExpense(expense.id);
-                          }}
-                          className="px-3 py-1.5 text-sm font-medium text-[#008eff] hover:bg-[#008eff]/10 rounded-md transition-colors"
-                        >
-                          {isExpanded ? "Sluiten" : "Bewerken"}
-                        </button>
                       </div>
                     </div>
 

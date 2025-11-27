@@ -1,5 +1,5 @@
-import { getDayExpenses } from "@/lib/dbFirestore";
 import { NextResponse } from "next/server";
+import { expensesService } from "@/lib/supabase/services";
 
 export async function GET(request, { params }) {
   try {
@@ -19,7 +19,7 @@ export async function GET(request, { params }) {
     const date = new Date(year, month - 1, day);
     date.setHours(0, 0, 0, 0);
 
-    const expenses = await getDayExpenses(user, date);
+    const expenses = await expensesService.getDayExpenses(user, date);
     return NextResponse.json({ expenses });
   } catch (error) {
     console.error("Error fetching day expenses:", error);

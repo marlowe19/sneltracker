@@ -10,3 +10,4 @@ COMMENT ON COLUMN project_members.capacity_per_week IS 'Weekly capacity in hours
 
 
 
+

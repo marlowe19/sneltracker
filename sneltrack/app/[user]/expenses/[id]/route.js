@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { updateExpense, deleteExpense } from "@/lib/dbFirestore";
+import { expensesService } from "@/lib/supabase/services";
 
 export async function PATCH(req, context) {
   try {
@@ -42,7 +42,7 @@ export async function PATCH(req, context) {
       );
     }
 
-    const updated = await updateExpense(user, id, updates);
+    const updated = await expensesService.update(user, id, updates);
     return NextResponse.json({ expense: updated });
   } catch (error) {
     console.error("Error updating expense:", error);
@@ -65,7 +65,7 @@ export async function DELETE(req, context) {
       );
     }
 
-    await deleteExpense(user, id);
+    await expensesService.deleteExpense(user, id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting expense:", error);
@@ -75,9 +75,3 @@ export async function DELETE(req, context) {
     );
   }
 }
-
-
-
-
-
-
