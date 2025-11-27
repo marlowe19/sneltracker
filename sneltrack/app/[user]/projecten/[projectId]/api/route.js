@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getWeekBounds, getMonthBounds, getQuarterBounds } from "@/lib/time";
 import { getProjectDetail, getProjectVelocity } from "@/lib/supabase/services/projectsService";
+import { expensesService } from "@/lib/supabase/services";
 
 export const dynamic = "force-dynamic";
 
@@ -8,10 +9,16 @@ export async function GET(req, context) {
   try {
     const { user, projectId } = await context.params;
     const url = new URL(req.url);
+    const action = url.searchParams.get("action");
     const rangeType = url.searchParams.get("rangeType");
     const referenceDateParam = url.searchParams.get("referenceDate");
     const startDateParam = url.searchParams.get("startDate");
     const endDateParam = url.searchParams.get("endDate");
+
+    if (action === "expensesSummary") {
+      const summary = await expensesService.getProjectExpensesSummary(projectId);
+      return NextResponse.json(summary);
+    }
 
     // Prefer startDate/endDate if provided (avoids timezone recalculation issues)
     // If no date range parameters are provided, startDate/endDate will be null (all-time stats)

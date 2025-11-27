@@ -330,7 +330,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
                   {perDayMoney[i] > 0 ? formatMoney(perDayMoney[i]) : "\u200B"}
                 </div>
                 <div
-                  className={`day-expenses text-[10px] font-medium text-green-600 tabular-nums min-h-3.5 w-full text-center ${
+                  className={`day-expenses text-[10px] font-medium text-red-500 tabular-nums min-h-3.5 w-full text-center ${
                     perDayExpenses[i] > 0 ? "" : "invisible"
                   }`}
                 >

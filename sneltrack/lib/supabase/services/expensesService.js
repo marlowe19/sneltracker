@@ -167,6 +167,42 @@ export async function getWeekExpenses(userName, weekStart, weekEnd) {
 }
 
 /**
+ * Gets aggregated expense summary for a project
+ * Returns total expenses and count of expense entries
+ *
+ * @param {string} projectId - Supabase project UUID
+ * @returns {Promise<{ totalExpenses: number, expenseCount: number }>}
+ */
+export async function getProjectExpensesSummary(projectId) {
+  if (!projectId) {
+    throw new Error("projectId is required to get expenses summary");
+  }
+
+  const { data, error } = await supabaseServer
+    .from("expenses")
+    .select("price")
+    .eq("project_id", projectId);
+
+  if (error) {
+    console.error("Error fetching project expenses summary:", error);
+    throw error;
+  }
+
+  const rows = data || [];
+  const totalRaw = rows.reduce((sum, row) => {
+    const price = row.price ?? 0;
+    return sum + (typeof price === "string" ? parseFloat(price) : price);
+  }, 0);
+
+  const totalExpenses = Math.round((totalRaw + Number.EPSILON) * 100) / 100;
+
+  return {
+    totalExpenses,
+    expenseCount: rows.length,
+  };
+}
+
+/**
  * Updates an expense in Supabase
  *
  * @param {string} userName - Username (for authorization check)

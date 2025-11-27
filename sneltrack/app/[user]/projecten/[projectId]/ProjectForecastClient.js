@@ -9,6 +9,11 @@ export default function ProjectForecastClient({ user, projectId, project }) {
   const abortControllerRef = useRef(null);
   const isMountedRef = useRef(true);
 
+  // Expenses summary + run period cards state
+  const [expenseSummary, setExpenseSummary] = useState(null);
+  const [loadingExpenses, setLoadingExpenses] = useState(false);
+  const [expensesError, setExpensesError] = useState(null);
+
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -19,6 +24,37 @@ export default function ProjectForecastClient({ user, projectId, project }) {
       }
     };
   }, []);
+
+  // Fetch expenses summary once on mount
+  useEffect(() => {
+    async function fetchExpensesSummary() {
+      try {
+        setLoadingExpenses(true);
+        setExpensesError(null);
+        const url = `/${encodeURIComponent(
+          user
+        )}/projecten/${projectId}/api?action=expensesSummary`;
+        const res = await fetch(url);
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(
+            data.error || `Failed to fetch expenses summary (${res.status})`
+          );
+        }
+        const data = await res.json();
+        setExpenseSummary(data);
+      } catch (err) {
+        console.error("Error fetching expenses summary:", err);
+        setExpensesError(err.message || "Failed to fetch expenses summary");
+      } finally {
+        setLoadingExpenses(false);
+      }
+    }
+
+    if (projectId && user) {
+      fetchExpensesSummary();
+    }
+  }, [projectId, user]);
 
   async function fetchForecast() {
     // Prevent concurrent calls
@@ -92,7 +128,18 @@ export default function ProjectForecastClient({ user, projectId, project }) {
     return minutes > 0 ? `${hours}u ${minutes}m` : `${hours}u`;
   }
 
-  // Format date
+  // Format money (EUR)
+  function formatMoney(amount) {
+    if (!amount && amount !== 0) return "";
+    return new Intl.NumberFormat("nl-NL", {
+      style: "currency",
+      currency: "EUR",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  }
+
+  // Format date for headings (e.g. "2 januari")
   function formatDate(date) {
     if (!date) return "";
     const d = new Date(date);
@@ -100,6 +147,55 @@ export default function ProjectForecastClient({ user, projectId, project }) {
       month: "long",
       day: "numeric",
     });
+  }
+
+  // Format YYYY-MM-DD to Dutch d-m-jjjj
+  function formatDateDMY(dateString) {
+    if (!dateString) return "";
+    const d = new Date(dateString);
+    if (Number.isNaN(d.getTime())) return dateString;
+    return d.toLocaleDateString("nl-NL", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  }
+
+  // Calculate workdays (Mon–Fri) between two dates (inclusive)
+  function calculateWorkdays(startDateString, endDateString) {
+    if (!startDateString || !endDateString) return null;
+
+    const start = new Date(startDateString);
+    const end = new Date(endDateString);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()))
+      return null;
+
+    if (end < start) return { calendarDays: 0, workdays: 0 };
+
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    let calendarDays =
+      Math.floor(
+        (end.setHours(0, 0, 0, 0) - start.setHours(0, 0, 0, 0)) / oneDayMs
+      ) + 1;
+
+    let workdays = 0;
+    const current = new Date(start);
+    current.setHours(0, 0, 0, 0);
+
+    while (current <= end) {
+      const day = current.getDay(); // 0=Sunday, 6=Saturday
+      if (day >= 1 && day <= 5) {
+        workdays += 1;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+
+    if (calendarDays < 0) {
+      calendarDays = 0;
+    }
+
+    return { calendarDays, workdays };
   }
 
   // Forecast display component (reusable)
@@ -166,16 +262,157 @@ export default function ProjectForecastClient({ user, projectId, project }) {
   // Get due date
   const dueDate = project?.due_date || project?.end_date;
 
+  // Derived dates for run period card
+  const startDateString = project?.start_date
+    ? new Date(project.start_date).toISOString().split("T")[0]
+    : null;
+  const deadlineString = project?.due_date
+    ? new Date(project.due_date).toISOString().split("T")[0]
+    : null;
+
+  function renderBudgetAndRunPeriodCards() {
+    const parsedBudget =
+      project?.budget_amount !== null && project?.budget_amount !== undefined
+        ? Number(project.budget_amount)
+        : null;
+    const hasBudget =
+      parsedBudget !== null && !Number.isNaN(parsedBudget) && parsedBudget >= 0;
+
+    const period =
+      startDateString && deadlineString
+        ? calculateWorkdays(startDateString, deadlineString)
+        : null;
+
+    return (
+      <div className="mt-6 space-y-4">
+        {/* Project run period summary */}
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-900 mb-2">
+            Looptijd van het project
+          </h3>
+          {startDateString && deadlineString && period ? (
+            <div className="space-y-1 text-xs text-gray-700">
+              <p>
+                Startdatum:{" "}
+                <span className="font-medium">
+                  {formatDateDMY(startDateString)}
+                </span>
+              </p>
+              <p>
+                Deadline:{" "}
+                <span className="font-medium">
+                  {formatDateDMY(deadlineString)}
+                </span>
+              </p>
+              <p>
+                Totaal kalenderdagen:{" "}
+                <span className="font-medium">{period.calendarDays}</span>
+              </p>
+              <p>
+                Totaal werkdagen :{" "}
+                <span className="font-medium">{period.workdays}</span>
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-600">
+              Stel zowel een startdatum als project deadline in om de looptijd
+              te berekenen.
+            </p>
+          )}
+        </div>
+
+        {/* Budget vs expenses summary */}
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-900 mb-2">
+            Uitgaven ten opzichte van projectbudget
+          </h3>
+          {loadingExpenses ? (
+            <p className="text-xs text-gray-600">Uitgaven laden...</p>
+          ) : expensesError ? (
+            <p className="text-xs text-red-600">{expensesError}</p>
+          ) : !expenseSummary ? (
+            <p className="text-xs text-gray-600">
+              Nog geen uitgaven gevonden voor dit project.
+            </p>
+          ) : (
+            (() => {
+              const totalExpenses = expenseSummary.totalExpenses || 0;
+              const expenseCount = expenseSummary.expenseCount || 0;
+
+              let statusText = "";
+              let statusClass = "text-xs text-gray-700";
+
+              if (hasBudget) {
+                const remaining = parsedBudget - totalExpenses;
+                if (remaining < 0) {
+                  statusText = `Budget overschreden met ${formatMoney(
+                    Math.abs(remaining)
+                  )}.`;
+                  statusClass = "text-xs text-red-600";
+                } else if (remaining === 0) {
+                  statusText = "Budget precies bereikt.";
+                  statusClass = "text-xs text-amber-600";
+                } else if (remaining <= parsedBudget * 0.1) {
+                  statusText = `Bijna op budget, nog ${formatMoney(
+                    remaining
+                  )} over.`;
+                  statusClass = "text-xs text-amber-600";
+                } else {
+                  statusText = `Binnen budget, nog ${formatMoney(
+                    remaining
+                  )} over.`;
+                  statusClass = "text-xs text-green-600";
+                }
+              }
+
+              return (
+                <div className="space-y-1 text-xs text-gray-700">
+                  <p>
+                    Totaal aantal uitgaven:{" "}
+                    <span className="font-medium">{expenseCount}</span>
+                  </p>
+                  <p>
+                    Totaal uitgaven:{" "}
+                    <span className="font-medium">
+                      {formatMoney(totalExpenses)}
+                    </span>
+                  </p>
+                  {hasBudget ? (
+                    <p>
+                      Ingesteld uitgavenbudget:{" "}
+                      <span className="font-medium">
+                        {formatMoney(parsedBudget)}
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-600">
+                      Er is nog geen uitgavenbudget ingesteld. Vul het budget in
+                      bij de instellingen om het te volgen.
+                    </p>
+                  )}
+                  {hasBudget && <p className={statusClass}>{statusText}</p>}
+                </div>
+              );
+            })()
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (!forecast && !loading && !error) {
     return (
-      <div className="mt-6">
+      <div className="mt-6 space-y-4">
         <button
           onClick={fetchForecast}
           disabled={loading}
           className="px-4 py-2 bg-[#008eff] text-white rounded-lg hover:bg-[#0073cc] disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          Bereken Voorspelling
+          Project einddatum voorspellen
         </button>
+
+        {/* Cards under forecast button */}
+        {renderBudgetAndRunPeriodCards()}
       </div>
     );
   }
@@ -210,6 +447,9 @@ export default function ProjectForecastClient({ user, projectId, project }) {
           Bereken Voorspelling
         </button>
       )}
+
+      {/* Cards under forecast button */}
+      {renderBudgetAndRunPeriodCards()}
 
       {/* Loading State */}
       {loading && (

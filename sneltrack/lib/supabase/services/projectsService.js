@@ -266,7 +266,9 @@ export async function getProjectDetail(
   // Fetch additional fields directly from projects table since function doesn't return them yet
   const { data: projectData, error: projectError } = await supabaseServer
     .from("projects")
-    .select("due_date, start_date, capacity_per_week, priority, zip_code")
+    .select(
+      "due_date, start_date, end_date, capacity_per_week, priority, zip_code, budget_amount, currency"
+    )
     .eq("id", projectId)
     .single();
 
@@ -287,6 +289,9 @@ export async function getProjectDetail(
     is_owner: row.is_owner,
     due_date: projectData?.due_date || null,
     start_date: projectData?.start_date || null,
+    end_date: projectData?.end_date || null,
+    budget_amount: projectData?.budget_amount || null,
+    currency: projectData?.currency || "EUR",
     capacity_per_week: projectData?.capacity_per_week || null,
     priority: projectData?.priority || null,
     zip_code: projectData?.zip_code || null,
@@ -311,11 +316,14 @@ export async function getProjectDetail(
  * @param {Object} projectData - Project data object
  * @param {string} projectData.name - Project name (required)
  * @param {number|null} projectData.hourly_rate - Hourly rate
- * @param {number|null} projectData.budget_hours - Budget hours
+ * @param {number|null} projectData.budget_hours - Budget hours (time budget)
+ * @param {number|null} [projectData.budget_amount] - Budget amount for expenses (matches projects.budget_amount)
  * @param {boolean} projectData.is_shared - Whether project is shared
  * @param {boolean} projectData.is_default - Whether project is default
  * @param {string|null} projectData.due_date - Deadline date (ISO date string or null)
  * @param {string|null} projectData.start_date - Project start date (ISO date string or null)
+ * @param {string|null} [projectData.end_date] - Planned project end date (ISO date string or null)
+ * @param {string|null} [projectData.currency] - Currency code (ISO 4217, e.g. EUR)
  * @returns {Promise<Object>} Created project object
  */
 export async function createProject(userName, projectData) {
@@ -334,10 +342,13 @@ export async function createProject(userName, projectData) {
     owner_name: userName,
     hourly_rate: projectData.hourly_rate ?? null,
     budget_hours: projectData.budget_hours ?? null,
+    budget_amount: projectData.budget_amount ?? null,
     is_shared: projectData.is_shared ?? false,
     is_default: projectData.is_default ?? false,
     due_date: projectData.due_date || null,
     start_date: projectData.start_date || null,
+    end_date: projectData.end_date || null,
+    currency: projectData.currency || "EUR",
     created_at: new Date().toISOString(),
     modified_at: new Date().toISOString(),
   };
@@ -376,12 +387,15 @@ export async function createProject(userName, projectData) {
  * @param {string} [updates.name] - Project name
  * @param {number|null} [updates.hourly_rate] - Hourly rate
  * @param {number|null} [updates.budget_hours] - Budget hours
+ * @param {number|null} [updates.budget_amount] - Budget amount for expenses
  * @param {number|null} [updates.capacity_per_week] - Capacity per week in hours
  * @param {number|null} [updates.priority] - Priority level (1-5, 5=highest)
  * @param {string|null} [updates.zip_code] - Dutch postal code (1234AB format)
  * @param {boolean} [updates.is_default] - Whether project is default
  * @param {string|null} [updates.due_date] - Deadline date (ISO date string or null)
  * @param {string|null} [updates.start_date] - Project start date (ISO date string or null)
+ * @param {string|null} [updates.end_date] - Planned project end date (ISO date string or null)
+ * @param {string|null} [updates.currency] - Currency code (ISO 4217)
  * @returns {Promise<Object>} Updated project object
  */
 export async function updateProject(userName, projectId, updates) {
@@ -426,6 +440,9 @@ export async function updateProject(userName, projectId, updates) {
   if (updates.budget_hours !== undefined) {
     updateData.budget_hours = updates.budget_hours;
   }
+  if (updates.budget_amount !== undefined) {
+    updateData.budget_amount = updates.budget_amount;
+  }
   if (updates.capacity_per_week !== undefined) {
     updateData.capacity_per_week = updates.capacity_per_week;
   }
@@ -446,6 +463,12 @@ export async function updateProject(userName, projectId, updates) {
   }
   if (updates.start_date !== undefined) {
     updateData.start_date = updates.start_date || null;
+  }
+  if (updates.end_date !== undefined) {
+    updateData.end_date = updates.end_date || null;
+  }
+  if (updates.currency !== undefined) {
+    updateData.currency = updates.currency || "EUR";
   }
 
   const { data, error } = await supabaseServer

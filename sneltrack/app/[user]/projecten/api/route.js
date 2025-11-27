@@ -247,6 +247,9 @@ function buildProjectUpdates(body) {
   if (body.budget_hours !== undefined) {
     updates.budget_hours = body.budget_hours;
   }
+  if (body.budget_amount !== undefined) {
+    updates.budget_amount = body.budget_amount;
+  }
   if (body.capacity_per_week !== undefined) {
     updates.capacity_per_week = body.capacity_per_week;
   }
@@ -261,6 +264,9 @@ function buildProjectUpdates(body) {
   }
   if (body.start_date !== undefined) {
     updates.start_date = body.start_date || null;
+  }
+   if (body.end_date !== undefined) {
+    updates.end_date = body.end_date || null;
   }
   if (body.is_default !== undefined) {
     updates.is_default = body.is_default === true;

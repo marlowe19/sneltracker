@@ -56,6 +56,9 @@ export default function ProjectDetailClient({
   const [priority, setPriority] = useState(
     project?.priority ? String(project.priority) : ""
   );
+  const [budgetAmount, setBudgetAmount] = useState(
+    project?.budget_amount ? String(project.budget_amount) : ""
+  );
   const [zipCode, setZipCode] = useState(project?.zip_code || "");
   const [zipCodeError, setZipCodeError] = useState(null);
   const [deadline, setDeadline] = useState(
@@ -100,6 +103,9 @@ export default function ProjectDetailClient({
         project.capacity_per_week ? String(project.capacity_per_week) : ""
       );
       setPriority(project.priority ? String(project.priority) : "");
+      setBudgetAmount(
+        project.budget_amount ? String(project.budget_amount) : ""
+      );
       setZipCode(project.zip_code || "");
       setZipCodeError(null);
       setDeadline(
@@ -260,6 +266,7 @@ export default function ProjectDetailClient({
         name: name.trim(),
         hourly_rate: hourlyRate ? parseFloat(hourlyRate) : null,
         budget_hours: budgetHours ? parseFloat(budgetHours) : null,
+        budget_amount: budgetAmount ? parseFloat(budgetAmount) : null,
         capacity_per_week: capacity ? parseFloat(capacity) : null,
         priority: priority ? parseInt(priority, 10) : null,
         zip_code:
@@ -515,6 +522,31 @@ export default function ProjectDetailClient({
                 }`}
                 placeholder="Projectnaam"
               />
+            </div>
+
+            <div>
+              <label
+                htmlFor="budgetAmount"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Begroting uitgaven (EUR)
+              </label>
+              <input
+                type="number"
+                id="budgetAmount"
+                value={budgetAmount}
+                onChange={(e) => setBudgetAmount(e.target.value)}
+                step="0.01"
+                min="0"
+                disabled={!canEdit}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-base ${
+                  !canEdit ? "bg-gray-100 cursor-not-allowed" : ""
+                }`}
+                placeholder="0.00"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Gebruik deze begroting om uitgaven voor dit project te volgen.
+              </p>
             </div>
 
             <div>
