@@ -1,0 +1,47 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Next.js: debug server-side",
+            "runtimeExecutable": "${env:HOME}/.nvm/versions/node/v20.13.1/bin/node",
+            "runtimeArgs": ["${workspaceFolder}/sneltrack/node_modules/.bin/next", "dev"],
+            "cwd": "${workspaceFolder}/sneltrack",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "env": {
+                "NODE_ENV": "development"
+            },
+            "serverReadyAction": {
+                "pattern": "- Local:.+(https?://.+)",
+                "uriFormat": "%s",
+                "action": "debugWithChrome"
+            }
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Next.js: debug full stack",
+            "runtimeExecutable": "${env:HOME}/.nvm/versions/node/v20.13.1/bin/node",
+            "runtimeArgs": ["${workspaceFolder}/sneltrack/node_modules/.bin/next", "dev"],
+            "cwd": "${workspaceFolder}/sneltrack",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "env": {
+                "NODE_ENV": "development"
+            },
+            "serverReadyAction": {
+                "pattern": "- Local:.+(https?://.+)",
+                "uriFormat": "%s",
+                "action": "debugWithChrome"
+            },
+            "console": "integratedTerminal"
+        }
+    ]
+}
