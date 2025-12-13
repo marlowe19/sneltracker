@@ -7,14 +7,26 @@ import { auth0 } from "@/lib/auth/auth0";
 
 export const dynamic = "force-dynamic";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let openaiInstance = null;
 
-async function generatePlanning(weekInput) {
+function getOpenAIClient() {
+  if (openaiInstance) {
+    return openaiInstance;
+  }
+
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY environment variable is not set");
   }
+
+  openaiInstance = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+
+  return openaiInstance;
+}
+
+async function generatePlanning(weekInput) {
+  const openai = getOpenAIClient();
   console.log(JSON.stringify(weekInput, null, 2));
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini"; // Note: Set OPENAI_MODEL=gpt-5.1 or another model name if you have access
 
