@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import TimerSectionWrapperClient from "../[user]/TimerSectionWrapperClient";
+import TimerSectionWrapperClient from "../my/TimerSectionWrapperClient";
 
 export default function TimerPage() {
   const [user, setUser] = useState("marlowe");

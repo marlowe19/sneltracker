@@ -88,4 +88,4 @@ export const DELETE = auth0.withApiAuthRequired(async (req, context) => {
       { status: 500 }
     );
   }
-}
+});

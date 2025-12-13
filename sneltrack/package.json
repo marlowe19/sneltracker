@@ -16,6 +16,7 @@
     "backup:firebase:local": "ENV_FILE=.env.local node scripts/backup-firebase.mjs"
   },
   "dependencies": {
+    "@auth0/nextjs-auth0": "^4.13.3",
     "@carbon/icons-react": "^11.70.0",
     "@date-fns/utc": "^2.1.1",
     "@supabase/supabase-js": "^2.80.0",

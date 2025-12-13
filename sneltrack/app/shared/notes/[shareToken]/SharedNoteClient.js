@@ -1,6 +1,6 @@
 "use client";
 
-import NoteClient from "@/app/[user]/notes/[noteId]/NoteClient";
+import NoteClient from "@/app/my/notes/[noteId]/NoteClient";
 
 export default function SharedNoteClient({
   shareToken,
