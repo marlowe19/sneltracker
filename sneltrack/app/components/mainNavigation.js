@@ -8,66 +8,83 @@ import {
   Notebook,
   ChartBar,
   ChartColumnFloating,
+  User,
 } from "@carbon/icons-react";
 
 export default function MainNavigation() {
   const pathname = usePathname();
-  // Extract user from pathname (first segment after root)
-  const pathSegments = pathname?.split("/").filter(Boolean) || [];
-  const user = pathSegments[0] || "";
+  // Determine active route
+  const isActiveRoute = (route) => {
+    return pathname === route || pathname?.startsWith(`${route}/`);
+  };
 
-  if (!user) {
-    return null;
-  }
+  const getLinkClasses = (route) => {
+    const isActive = isActiveRoute(route);
+    return `flex-1 inline-flex flex-col justify-center items-center`;
+  };
 
-  const encodedUser = encodeURIComponent(user);
+  const getIconClasses = (route) => {
+    const isActive = isActiveRoute(route);
+    return isActive
+      ? "text-Color-Solids-color-solid-primary"
+      : "text-neutral-900";
+  };
+
+  const getTextClasses = (route) => {
+    const isActive = isActiveRoute(route);
+    return isActive
+      ? "justify-end text-Color-Solids-color-solid-primary text-[10px] font-medium leading-6"
+      : "justify-end text-black text-[10px] font-medium leading-6";
+  };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
       <div
         data-type="SnelTracker"
         className="w-full bg-neutral-100 border-t border-[#E2E2E2] inline-flex flex-col justify-start items-start overflow-hidden"
       >
         <div className="w-full p-2 bg-white inline-flex justify-center items-end">
-          <Link
-            href={`/${encodedUser}`}
-            prefetch={false}
-            className="flex-1 inline-flex flex-col justify-center items-center"
-          >
-            <Time size={24} className="text-Color-Solids-color-solid-primary" />
-            <div className="justify-end text-Color-Solids-color-solid-primary text-[10px] font-medium leading-6">
-              Timers
-            </div>
+          <Link href="/my" prefetch={false} className={getLinkClasses("/my")}>
+            <Time size={24} className={getIconClasses("/my")} />
+            <div className={getTextClasses("/my")}>Timers</div>
           </Link>
           <Link
-            href={`/${encodedUser}/projecten`}
+            href="/my/projecten"
             prefetch={false}
-            className="flex-1 inline-flex flex-col justify-center items-center"
+            className={getLinkClasses("/my/projecten")}
           >
-            <Folder size={24} className="text-neutral-900" />
-            <div className="justify-end text-black text-[10px] font-medium leading-6">
-              Projecten
-            </div>
+            <Folder size={24} className={getIconClasses("/my/projecten")} />
+            <div className={getTextClasses("/my/projecten")}>Projecten</div>
           </Link>
           <Link
-            href={`/${encodedUser}/notes`}
+            href="/my/notes"
             prefetch={false}
-            className="flex-1 inline-flex flex-col justify-center items-center"
+            className={getLinkClasses("/my/notes")}
           >
-            <Notebook size={24} className="text-neutral-900" />
-            <div className="justify-end text-black text-[10px] font-medium leading-6">
-              Notites
-            </div>
+            <Notebook size={24} className={getIconClasses("/my/notes")} />
+            <div className={getTextClasses("/my/notes")}>Notites</div>
           </Link>
           <Link
-            href={`/${encodedUser}/reports`}
+            href="/my/reports"
             prefetch={false}
-            className="flex-1 inline-flex flex-col justify-center items-center"
+            className={getLinkClasses("/my/reports")}
           >
-            <ChartColumnFloating size={24} className="text-neutral-900" />
-            <div className="justify-end text-black text-[10px] font-medium leading-6">
-              Reports
-            </div>
+            <ChartColumnFloating
+              size={24}
+              className={getIconClasses("/my/reports")}
+            />
+            <div className={getTextClasses("/my/reports")}>Reports</div>
+          </Link>
+          <Link
+            href="/my/profile"
+            prefetch={false}
+            className={getLinkClasses("/my/profile")}
+          >
+            <User size={24} className={getIconClasses("/my/profile")} />
+            <div className={getTextClasses("/my/profile")}>Profiel</div>
           </Link>
         </div>
       </div>

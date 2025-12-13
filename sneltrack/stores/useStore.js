@@ -55,9 +55,7 @@ export const useStore = create(
         set({ loadingEntries: true, entriesError: null });
         try {
           const res = await fetch(
-            `/${encodeURIComponent(
-              user
-            )}/api/week-entries?weekStart=${weekStart}&weekEnd=${weekEnd}`
+            `/my/api/week-entries?weekStart=${weekStart}&weekEnd=${weekEnd}`
           );
           if (!res.ok) throw new Error("Failed to fetch week entries");
           const data = await res.json();
@@ -76,9 +74,7 @@ export const useStore = create(
         // This allows the modal to open even if week entries are still loading
         try {
           const dateStr = formatLocalDate(dayDate);
-          const res = await fetch(
-            `/${encodeURIComponent(user)}/api/day-entries?dayDate=${dateStr}`
-          );
+          const res = await fetch(`/my/api/day-entries?dayDate=${dateStr}`);
           if (!res.ok) throw new Error("Failed to fetch day entries");
           const data = await res.json();
           // Merge with existing entries, avoiding duplicates
@@ -181,7 +177,7 @@ export const useStore = create(
 
         set({ loadingProjects: true, projectsError: null });
         try {
-          const res = await fetch(`/${encodeURIComponent(user)}/projecten/api`);
+          const res = await fetch(`/my/projecten/api`);
           if (!res.ok) throw new Error("Failed to fetch projects");
           const data = await res.json();
           set({ projects: data.projects || [], loadingProjects: false });
@@ -219,9 +215,7 @@ export const useStore = create(
         set({ loadingExpenses: true, expensesError: null });
         try {
           const dateStr = formatLocalDate(dayDate);
-          const res = await fetch(
-            `/${encodeURIComponent(user)}/api/day-expenses?dayDate=${dateStr}`
-          );
+          const res = await fetch(`/my/api/day-expenses?dayDate=${dateStr}`);
           if (!res.ok) throw new Error("Failed to fetch day expenses");
           const data = await res.json();
           set({ expenses: data.expenses || [], loadingExpenses: false });
@@ -240,9 +234,7 @@ export const useStore = create(
         set({ loadingWeekExpenses: true, weekExpensesError: null });
         try {
           const res = await fetch(
-            `/${encodeURIComponent(
-              user
-            )}/expenses?weekStart=${weekStart}&weekEnd=${weekEnd}`
+            `my/expenses?weekStart=${weekStart}&weekEnd=${weekEnd}`
           );
           if (!res.ok) throw new Error("Failed to fetch week expenses");
           const data = await res.json();
