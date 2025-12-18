@@ -6,6 +6,7 @@
 
 import { supabaseServer } from "@/lib/supabaseServer";
 import { formatDateForAPI } from "@/lib/dateRangeUtils";
+import { lookupUserIdByUsername } from "./projectsService";
 
 /**
  * Looks up a Supabase project UUID by Firestore project ID
@@ -33,13 +34,14 @@ async function lookupProjectId(projectId) {
  * Maps expense data from Supabase row to client format
  * Returns both project_id (UUID) and project (Firestore ID) for compatibility
  *
- * @param {Object} row - Supabase expense row
+ * @param {Object} row - Supabase expense row (may include joined users data)
  * @returns {Object} Expense in client format
  */
 function mapExpenseToClient(row) {
   return {
     id: row.id, // Supabase UUID
     user_name: row.user_name,
+    user_display_name: row.users?.name ?? null, // ✅ User's display name from users table
     project: row.firestore_project_id ?? null, // Firestore project ID for client compatibility
     project_id: row.project_id ?? null, // Supabase project UUID
     name: row.name,
@@ -80,9 +82,14 @@ export async function create(
   if (!projectId) {
     throw new Error(`Project not found: ${project}`);
   }
+
+  // Look up user_id from user_name
+  const userId = await lookupUserIdByUsername(userName);
+
   const date = dayDate.toISOString();
   const expenseData = {
     user_name: userName,
+    user_id: userId,
     project_id: projectId,
     firestore_project_id: project, // Store Firestore ID for reference
     name: name.trim(),
@@ -122,7 +129,7 @@ export async function getDayExpenses(userName, dayDate) {
 
   const { data, error } = await supabaseServer
     .from("expenses")
-    .select("*")
+    .select("*, users!user_id(name)") // ✅ Join with users table on user_id FK
     .eq("user_name", userName)
     .eq("date", dateString) // DATE column, so equality on YYYY-MM-DD is enough
     .order("date", { ascending: false });
@@ -151,7 +158,7 @@ export async function getWeekExpenses(userName, weekStart, weekEnd) {
 
   const { data, error } = await supabaseServer
     .from("expenses")
-    .select("*")
+    .select("*, users!user_id(name)") // ✅ Join with users table on user_id FK
     .eq("user_name", userName)
     .gte("date", weekStartDate)
     .lte("date", weekEndDate)

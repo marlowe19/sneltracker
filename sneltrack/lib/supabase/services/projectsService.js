@@ -14,7 +14,7 @@ import { fireAndForget, logError, toIsoString } from "./base";
  * @param {string} username - Username to look up
  * @returns {Promise<string|null>} User UUID or null if not found
  */
-async function lookupUserIdByUsername(username) {
+export async function lookupUserIdByUsername(username) {
   if (!username) return null;
 
   const { data, error } = await supabaseServer
@@ -25,6 +25,37 @@ async function lookupUserIdByUsername(username) {
 
   if (!error && data?.id) {
     return data.id;
+  }
+
+  return null;
+}
+
+export async function lookupUserByEmail(email) {
+  if (!email) return null;
+  const { data, error } = await supabaseServer
+    .from("users")
+    .select("id, name")
+    .eq("email", email)
+    .single();
+
+  if (!error && data?.id) {
+    return data;
+  }
+
+  return null;
+}
+
+export async function lookupUserByUsername(username) {
+  if (!username) return null;
+
+  const { data, error } = await supabaseServer
+    .from("users")
+    .select("id, name")
+    .eq("user_name", username)
+    .single();
+
+  if (!error && data?.id) {
+    return data;
   }
 
   return null;
@@ -244,7 +275,8 @@ export async function getProjectDetail(
   startDate = null,
   endDate = null
 ) {
-  const { data, error } = await supabaseServer.rpc("get_project_detail_v2", {
+  const { data, error } = await supabaseServer.rpc("get_project_detail_v3", {
+    // ✅ Updated to v3 for user_display_name
     p_user_name: userName,
     p_project_id: projectId,
     p_start_date: startDate ? startDate.toISOString() : null,

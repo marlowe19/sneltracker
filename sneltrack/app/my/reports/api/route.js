@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export const GET = auth0.withApiAuthRequired(async (req) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const url = new URL(req.url);
     const rangeType = url.searchParams.get("rangeType");
     const referenceDateParam = url.searchParams.get("referenceDate");

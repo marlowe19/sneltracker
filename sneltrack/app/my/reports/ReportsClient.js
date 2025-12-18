@@ -553,8 +553,6 @@ export default function ReportsClient() {
     return null;
   }
 
-  const encodedUser = encodeURIComponent(userName);
-
   return (
     <main className="flex flex-col min-h-screen">
       <div className="flex items-center justify-between py-4">

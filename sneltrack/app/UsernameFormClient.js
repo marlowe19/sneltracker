@@ -11,7 +11,7 @@ export default function UsernameFormClient() {
     e.preventDefault();
     const trimmedUsername = username.trim();
     if (trimmedUsername) {
-      router.push(`/${encodeURIComponent(trimmedUsername)}`);
+      router.push(`/my`);
     }
   }
 

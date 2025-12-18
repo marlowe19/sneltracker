@@ -69,18 +69,15 @@ export default function MembersListClient({
     setError(null);
 
     try {
-      const res = await fetch(
-        `/${encodeURIComponent(user)}/projecten/api?action=updateMemberRate`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectId,
-            memberName,
-            hourly_rate: editRateValue ? parseFloat(editRateValue) : null,
-          }),
-        }
-      );
+      const res = await fetch(`/my/projecten/api?action=updateMemberRate`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          memberName,
+          hourly_rate: editRateValue ? parseFloat(editRateValue) : null,
+        }),
+      });
 
       if (!res.ok) {
         const data = await res.json();
@@ -124,23 +121,18 @@ export default function MembersListClient({
     setError(null);
 
     try {
-      const res = await fetch(
-        `/${encodeURIComponent(
-          user
-        )}/projecten/api?action=updateMemberCapacity`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectId,
-            memberName,
-            capacity_per_week:
-              editCapacityValue && editCapacityValue.trim() !== ""
-                ? parseFloat(editCapacityValue)
-                : null,
-          }),
-        }
-      );
+      const res = await fetch(`/my/projecten/api?action=updateMemberCapacity`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          memberName,
+          capacity_per_week:
+            editCapacityValue && editCapacityValue.trim() !== ""
+              ? parseFloat(editCapacityValue)
+              : null,
+        }),
+      });
 
       if (!res.ok) {
         const data = await res.json();
@@ -178,7 +170,7 @@ export default function MembersListClient({
 
     try {
       const res = await fetch(
-        `/${encodeURIComponent(memberName)}/api/calendar/capacity`
+        `/my/api/calendar/capacity?memberName=${memberName}`
       );
 
       if (!res.ok) {

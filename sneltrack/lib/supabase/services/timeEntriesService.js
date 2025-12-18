@@ -6,6 +6,10 @@
 
 import { supabaseServer } from "@/lib/supabaseServer";
 import { fireAndForget, logError, toIsoString } from "./base";
+import {
+  lookupUserIdByUsername,
+  lookupUserByUsername,
+} from "./projectsService";
 
 /**
  * Looks up a Supabase project UUID by Firestore project ID
@@ -159,11 +163,13 @@ async function insertEntryWithProjectInfo(entryData, userName) {
       isProjectMember = accessInfo.is_project_member;
     }
   }
-
+  // Look up user_id from user_name
+  const userData = await lookupUserByUsername(userName);
   // Return entry in the same format as getDayEntries
   return {
     id: insertedEntry.id, // Supabase UUID
     user_name: insertedEntry.user_name,
+    user_display_name: userData?.name ?? null,
     start_time: insertedEntry.start_time,
     end_time: insertedEntry.end_time,
     duration_ms: insertedEntry.duration_ms ?? null,
@@ -539,7 +545,7 @@ export async function getDayEntries(userName, dayDate) {
   // what the query needs to do is get all the entries for the user for the given day.
   // if a user is the owner of a project they should see all the entries for the project for the given day.
 
-  const { data, error } = await supabaseServer.rpc("get_day_entries", {
+  const { data, error } = await supabaseServer.rpc("get_day_entries_v2", {
     p_user_name: userName,
     p_day_date: dateStr,
   });
@@ -553,9 +559,11 @@ export async function getDayEntries(userName, dayDate) {
   return (data || []).map((row) => ({
     id: row.id, // Use Supabase UUID as the entry ID
     user_name: row.user_name,
+    user_display_name: row.user_display_name ?? null, // ✅ User's display name from users table
     start_time: row.start_time,
     end_time: row.end_time,
     duration_ms: row.duration_ms ?? null,
+    duration_hours: row.duration_hours ?? null, // ✅ Pre-calculated hours
     hourly_rate: row.hourly_rate ?? null,
     project: row.project ?? null, // Firestore project ID (still used for project reference)
     project_id: row.project_id ?? null, // ✅ Supabase project UUID (for dropdowns)
@@ -751,9 +759,13 @@ export async function createEntry(
   const { supabaseProjectId, firestoreProjectId, finalHourlyRate } =
     await resolveProjectAndRate(userName, project, hourlyRate);
 
+  // Look up user_id from user_name
+  const userId = await lookupUserIdByUsername(userName);
+
   // Prepare entry data
   const entryData = {
     user_name: userName,
+    user_id: userId,
     start_time: dayStart.toISOString(),
     end_time: finalEndTime ? finalEndTime.toISOString() : null,
     duration_ms:
@@ -797,9 +809,13 @@ export async function startEntry(userName, hourlyRate = null, project = null) {
   const { supabaseProjectId, firestoreProjectId, finalHourlyRate } =
     await resolveProjectAndRate(userName, project, hourlyRate);
 
+  // Look up user_id from user_name
+  const userId = await lookupUserIdByUsername(userName);
+
   // Prepare entry data
   const entryData = {
     user_name: userName,
+    user_id: userId,
     start_time: now.toISOString(),
     end_time: null,
     duration_ms: null,

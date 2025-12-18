@@ -35,7 +35,7 @@ export const dynamic = "force-dynamic";
 export const GET = auth0.withApiAuthRequired(async (req) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const url = new URL(req.url);
     const projectId = url.searchParams.get("projectId");
     const stats = url.searchParams.get("stats") === "true";
@@ -90,7 +90,7 @@ export const GET = auth0.withApiAuthRequired(async (req) => {
 export const POST = auth0.withApiAuthRequired(async (req) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const body = await req.json();
     const url = new URL(req.url);
     const action = url.searchParams.get("action");
@@ -109,6 +109,16 @@ export const POST = auth0.withApiAuthRequired(async (req) => {
       if (!projectDetail) {
         return NextResponse.json(
           { error: "Project not found" },
+          { status: 404 }
+        );
+      }
+      // check if users exists in table based on the email and return the user by email
+
+      //lookup user by email
+      const user = await lookupUserByEmail(memberName);
+      if (!user) {
+        return NextResponse.json(
+          { error: "Gebruiker niet gevonden" },
           { status: 404 }
         );
       }
@@ -281,7 +291,7 @@ function buildProjectUpdates(body) {
 export const PATCH = auth0.withApiAuthRequired(async (req) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const body = await req.json();
     const url = new URL(req.url);
     const action = url.searchParams.get("action");
@@ -417,7 +427,7 @@ export const PATCH = auth0.withApiAuthRequired(async (req) => {
 export const DELETE = auth0.withApiAuthRequired(async (req) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const url = new URL(req.url);
     const projectId = url.searchParams.get("id");
     const action = url.searchParams.get("action");

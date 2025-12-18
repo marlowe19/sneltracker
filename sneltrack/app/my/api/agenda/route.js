@@ -184,7 +184,7 @@ Geef ALLEEN de JSON terug, zonder markdown, zonder uitleg.
 export const GET = auth0.withApiAuthRequired(async (req, context) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
 
     if (!user) {
       return NextResponse.json({ error: "user is required" }, { status: 400 });
@@ -262,7 +262,7 @@ export const GET = auth0.withApiAuthRequired(async (req, context) => {
 export const POST = auth0.withApiAuthRequired(async (req, context) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
 
     if (!user) {
       return NextResponse.json({ error: "user is required" }, { status: 400 });

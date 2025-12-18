@@ -13,7 +13,7 @@ export default async function NoteDetailPage({ params, request }) {
   if (!session?.user) {
     redirect("/auth/login");
   }
-  const user = session.user.nickname;
+  const user = session.user.sub;
   const { noteId } = await params;
 
   // Fetch note and items from Supabase

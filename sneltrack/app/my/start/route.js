@@ -4,7 +4,7 @@ import { auth0 } from "@/lib/auth/auth0";
 
 export const GET = auth0.withApiAuthRequired(async (req, context) => {
   const session = await auth0.getSession(req);
-  const user = session.user.nickname;
+  const user = session.user.sub;
   const url = new URL(req.url);
   const rate = url.searchParams.get("rate");
   const project = url.searchParams.get("project");
@@ -20,7 +20,7 @@ export const GET = auth0.withApiAuthRequired(async (req, context) => {
 
 export const POST = auth0.withApiAuthRequired(async (req, context) => {
   const session = await auth0.getSession(req);
-  const user = session.user.nickname;
+  const user = session.user.sub;
   const url = new URL(req.url);
   const rate = url.searchParams.get("rate");
   const project = url.searchParams.get("project");

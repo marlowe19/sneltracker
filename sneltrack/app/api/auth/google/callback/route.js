@@ -12,7 +12,8 @@ export async function GET(req) {
 
     if (error) {
       return NextResponse.redirect(
-        new URL(`/${encodeURIComponent(state || "")}?error=google_auth_cancelled`, req.url)
+        new URL(`/my?error=google_auth_cancelled`, req.url),
+        302
       );
     }
 
@@ -28,22 +29,13 @@ export async function GET(req) {
 
     // Redirect back to user's page with success message
     return NextResponse.redirect(
-      new URL(`/${encodeURIComponent(state)}?google_calendar_connected=true`, req.url)
+      new URL(`/my?google_calendar_connected=true`, req.url)
     );
   } catch (error) {
     console.error("Error in OAuth callback:", error);
     const state = new URL(req.url).searchParams.get("state");
     return NextResponse.redirect(
-      new URL(
-        `/${encodeURIComponent(state || "")}?error=google_auth_failed`,
-        req.url
-      )
+      new URL(`/my?error=google_auth_failed`, req.url)
     );
   }
 }
-
-
-
-
-
-

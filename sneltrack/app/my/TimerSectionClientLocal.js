@@ -55,14 +55,11 @@ export default function TimerSectionClientLocal({ user }) {
       // Update active entry
       async function updateEntryProject() {
         try {
-          const res = await fetch(
-            `/${encodeURIComponent(user)}/entries/${entryId}`,
-            {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ project: newProjectId || null }),
-            }
-          );
+          const res = await fetch(`/my/entries/${entryId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ project: newProjectId || null }),
+          });
           if (res.ok) {
             startTransition(() => router.refresh());
           }
@@ -76,10 +73,7 @@ export default function TimerSectionClientLocal({ user }) {
 
   async function handleStart(timer) {
     try {
-      const url = new URL(
-        `/${encodeURIComponent(user)}/start`,
-        window.location.origin
-      );
+      const url = new URL(`/my/start`, window.location.origin);
       if (timer.projectId) {
         url.searchParams.set("project", timer.projectId);
       }
@@ -96,7 +90,7 @@ export default function TimerSectionClientLocal({ user }) {
     const stopTime = new Date().toISOString();
     setStoppedTimer(entry.id, stopTime);
     try {
-      const response = await fetch(`/${encodeURIComponent(user)}/stop`, {
+      const response = await fetch(`/my/stop`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ entryId: entry.id }),

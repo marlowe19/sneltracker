@@ -8,7 +8,7 @@ import { auth0 } from "@/lib/auth/auth0";
 export const PATCH = auth0.withApiAuthRequired(async (req, context) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const { id } = await context.params;
     const body = await req.json();
 
@@ -68,7 +68,7 @@ export const PATCH = auth0.withApiAuthRequired(async (req, context) => {
 export const DELETE = auth0.withApiAuthRequired(async (req, context) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const { id } = await context.params;
 
     // Validate required fields

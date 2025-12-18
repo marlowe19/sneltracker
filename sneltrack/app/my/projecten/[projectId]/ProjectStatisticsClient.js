@@ -246,7 +246,9 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
                       }}
                     />
                     <div className="flex flex-col text-xs text-gray-700">
-                      <div className="font-medium">{member.user_name}</div>
+                      <div className="font-medium">
+                        {member.user_display_name}
+                      </div>
                       <div className="text-gray-600">
                         {formatHours(member.totalHours)}
                         {project.hourly_rate && (
@@ -342,7 +344,9 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
                       }}
                     />
                     <div className="flex flex-col text-xs text-gray-700">
-                      <div className="font-medium">{member.user_name}</div>
+                      <div className="font-medium">
+                        {member.user_display_name}
+                      </div>
                       <div className="text-gray-600">
                         {formatHours(member.totalHours)}
                         {project.hourly_rate && (

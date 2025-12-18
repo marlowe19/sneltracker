@@ -39,6 +39,48 @@ export const useStore = create(
       stoppedTimers: {},
       pendingTimers: [],
 
+      // ========== User State ==========
+      userDisplayName: null,
+      loadingUserDisplayName: false,
+      userDisplayNameError: null,
+
+      // ========== User Actions ==========
+      fetchUserDisplayName: async () => {
+        const currentState = get();
+        // Prevent concurrent fetches
+        if (currentState.loadingUserDisplayName) {
+          return;
+        }
+
+        // If we already have the display name, don't fetch again
+        if (currentState.userDisplayName) {
+          return;
+        }
+
+        set({ loadingUserDisplayName: true, userDisplayNameError: null });
+        try {
+          const res = await fetch(`/my/api/user`);
+          if (!res.ok) {
+            if (res.status === 404) {
+              // User not found - set display name to null
+              set({ userDisplayName: null, loadingUserDisplayName: false });
+              return;
+            }
+            throw new Error("Failed to fetch user display name");
+          }
+          const data = await res.json();
+          set({
+            userDisplayName: data.user?.display_name || null,
+            loadingUserDisplayName: false,
+          });
+        } catch (error) {
+          set({
+            userDisplayNameError: error.message,
+            loadingUserDisplayName: false,
+          });
+        }
+      },
+
       // ========== Entries Actions ==========
       // Hydrate active entries from server (initial load)
       hydrateActiveEntries: (serverActiveEntries) => {

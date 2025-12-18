@@ -170,10 +170,7 @@ export default function CalendarViewClient({
         const startIso = start.toISOString().split("T")[0];
         const endIso = end.toISOString().split("T")[0];
 
-        const url = new URL(
-          `/${encodeURIComponent(user)}/notes/api`,
-          window.location.origin
-        );
+        const url = new URL(`/my/notes/api`, window.location.origin);
         url.searchParams.set("startDate", startIso);
         url.searchParams.set("endDate", endIso);
 

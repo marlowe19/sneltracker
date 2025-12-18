@@ -32,10 +32,7 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
     }
 
     try {
-      const url = new URL(
-        `/${encodeURIComponent(user)}/${action}`,
-        window.location.origin
-      );
+      const url = new URL(`/my/${action}`, window.location.origin);
       if (action === "start" && selectedProjectId) {
         url.searchParams.set("project", selectedProjectId);
       }

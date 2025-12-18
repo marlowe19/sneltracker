@@ -17,7 +17,7 @@ import { supabaseServer } from "@/lib/supabaseServer";
  */
 export async function getUserProjectReports(userName, startDate, endDate) {
   const { data, error } = await supabaseServer.rpc(
-    "get_user_project_reports_v2",
+    "get_user_project_reports_v3", // ✅ Updated to v3 for user_display_name
     {
       p_user_name: userName,
       p_start_date: startDate.toISOString(),
@@ -60,6 +60,7 @@ export async function getUserProjectReports(userName, startDate, endDate) {
       : row.project_hourly_rate,
     totalExpenses: Number(row.total_expenses),
     // Include member breakdowns (empty array for non-owner or non-shared projects)
+    // Members now include user_display_name from v3
     members: Array.isArray(row.members) ? row.members : [],
   }));
 }

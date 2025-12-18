@@ -6,23 +6,30 @@ import {
   clearLocalEntries,
   getLocalEntryCount,
 } from "@/lib/localStorage/localTimerService";
+import { useStore } from "@/stores/useStore";
 
 /**
  * SyncOnLoginClient - Syncs local entries to Supabase when user is logged in
- * 
+ *
  * This component should be placed on the user's main page.
  * It checks for local entries on mount and syncs them to the user's account.
  */
 export default function SyncOnLoginClient({ user }) {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
+  const fetchUserDisplayName = useStore((state) => state.fetchUserDisplayName);
+
+  // Fetch user display name on mount
+  useEffect(() => {
+    fetchUserDisplayName();
+  }, [fetchUserDisplayName]);
 
   useEffect(() => {
     async function syncLocalEntries() {
       // Check if there are local entries to sync
       const localEntries = getLocalEntries();
-      const stoppedEntries = localEntries.filter(e => !e.is_running);
-      
+      const stoppedEntries = localEntries.filter((e) => !e.is_running);
+
       if (stoppedEntries.length === 0) {
         return;
       }
@@ -30,14 +37,11 @@ export default function SyncOnLoginClient({ user }) {
       setSyncing(true);
 
       try {
-        const response = await fetch(
-          `/${encodeURIComponent(user)}/api/sync-entries`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ entries: stoppedEntries }),
-          }
-        );
+        const response = await fetch(`/my/api/sync-entries`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entries: stoppedEntries }),
+        });
 
         if (response.ok) {
           const result = await response.json();
@@ -46,7 +50,7 @@ export default function SyncOnLoginClient({ user }) {
             synced: result.synced.length,
             failed: result.failed.length,
           });
-          
+
           // Clear local entries after successful sync
           // Only clear stopped entries that were synced
           if (result.synced.length > 0) {
@@ -86,9 +90,9 @@ export default function SyncOnLoginClient({ user }) {
 
   if (syncResult?.success && syncResult.synced > 0) {
     return (
-      <SyncSuccessToast 
-        count={syncResult.synced} 
-        onClose={() => setSyncResult(null)} 
+      <SyncSuccessToast
+        count={syncResult.synced}
+        onClose={() => setSyncResult(null)}
       />
     );
   }
@@ -124,4 +128,3 @@ function SyncSuccessToast({ count, onClose }) {
     </div>
   );
 }
-

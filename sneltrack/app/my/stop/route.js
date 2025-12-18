@@ -25,7 +25,7 @@ async function performStop(user, entryId = null) {
 
 export const GET = auth0.withApiAuthRequired(async (_req, context) => {
   const session = await auth0.getSession(_req);
-  const user = session.user.nickname;
+  const user = session.user.sub;
   const url = new URL(_req.url);
   const entryId = url.searchParams.get("entryId");
   await performStop(user, entryId || null);
@@ -37,7 +37,7 @@ export const GET = auth0.withApiAuthRequired(async (_req, context) => {
 
 export const POST = auth0.withApiAuthRequired(async (req, context) => {
   const session = await auth0.getSession(req);
-  const user = session.user.nickname;
+  const user = session.user.sub;
   const body = await req.json().catch(() => ({}));
   const entryId = body.entryId || null;
   const result = await performStop(user, entryId);

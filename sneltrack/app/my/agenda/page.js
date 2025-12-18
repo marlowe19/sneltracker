@@ -18,8 +18,6 @@ export default function AgendaPage() {
     return null;
   }
 
-  const encodedUser = encodeURIComponent(userName);
-
   // Generate consistent colors for projects
   const projectColors = useMemo(() => {
     if (!data?.planning) return {};
@@ -58,7 +56,7 @@ export default function AgendaPage() {
     setData(null);
 
     try {
-      const response = await fetch(`/${encodedUser}/api/agenda`, {
+      const response = await fetch(`/my/api/agenda`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

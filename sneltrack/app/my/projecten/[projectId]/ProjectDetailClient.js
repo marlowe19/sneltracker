@@ -163,9 +163,7 @@ export default function ProjectDetailClient({
   }
 
   function handleConnectCalendar() {
-    const authUrl = `/api/auth/google/authorize?user=${encodeURIComponent(
-      user
-    )}`;
+    const authUrl = `/api/auth/google/authorize?user=my`;
     window.location.href = authUrl;
   }
 

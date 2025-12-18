@@ -75,7 +75,7 @@ export default async function ProjectenPage({ params, request }) {
   if (!session?.user) {
     redirect("/auth/login");
   }
-  const user = session.user.nickname;
+  const user = session.user.sub;
 
   return (
     <Suspense fallback={<ProjectsLoading user={user} />}>

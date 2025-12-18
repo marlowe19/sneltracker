@@ -116,6 +116,7 @@ export default function DayEntriesListClient({
   const replaceTempExpense = useStore((state) => state.replaceTempExpense);
   const deleteExpense = useStore((state) => state.deleteExpense);
   const expenses = useStore((state) => state.expenses);
+  const userDisplayName = useStore((state) => state.userDisplayName);
 
   const [localEntries, setLocalEntries] = useState([]);
   const [localExpenses, setLocalExpenses] = useState([]);
@@ -152,9 +153,7 @@ export default function DayEntriesListClient({
     try {
       setLoadingEntries(true);
       const dateStr = formatLocalDate(dayDate);
-      const res = await fetch(
-        `/${encodeURIComponent(user)}/api/day-entries?dayDate=${dateStr}`
-      );
+      const res = await fetch(`/my/api/day-entries?dayDate=${dateStr}`);
       if (!res.ok) throw new Error("Failed to fetch day entries");
       const data = await res.json();
       const mappedEntries = (data.entries || []).map(mapEntryToEditable);
@@ -263,10 +262,7 @@ export default function DayEntriesListClient({
         const day = String(selectedDate.getDate()).padStart(2, "0");
         const dueDate = `${year}-${month}-${day}`;
 
-        const url = new URL(
-          `/${encodeURIComponent(user)}/notes/api`,
-          window.location.origin
-        );
+        const url = new URL(`/my/notes/api`, window.location.origin);
         url.searchParams.set("dueDate", dueDate);
 
         const res = await fetch(url);
@@ -309,9 +305,7 @@ export default function DayEntriesListClient({
               // Fetch members only to check membership status
               try {
                 const res = await fetch(
-                  `/${encodeURIComponent(
-                    user
-                  )}/projecten/api?action=members&projectId=${value}`
+                  `/my/projecten/api?action=members&projectId=${value}`
                 );
                 const data = await res.json();
                 const members = data.members || [];
@@ -464,6 +458,7 @@ export default function DayEntriesListClient({
     const newEntry = {
       id: tempId,
       user_name: user,
+      user_display_name: userDisplayName || null,
       start_time: null,
       end_time: null,
       duration_ms: null,
@@ -497,6 +492,7 @@ export default function DayEntriesListClient({
     const newExpense = {
       id: tempId,
       user_name: user,
+      user_display_name: userDisplayName || null,
       project: null,
       name: "",
       price: null,
@@ -620,7 +616,7 @@ export default function DayEntriesListClient({
             updates.billable = entry.billable_editable;
           }
 
-          const response = await fetch(`/${encodeURIComponent(user)}/entries`, {
+          const response = await fetch(`/my/entries`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -769,14 +765,11 @@ export default function DayEntriesListClient({
         }
 
         if (Object.keys(updates).length > 0) {
-          const response = await fetch(
-            `/${encodeURIComponent(user)}/entries/${entry.id}`,
-            {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(updates),
-            }
-          );
+          const response = await fetch(`/my/entries/${entry.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updates),
+          });
 
           if (!response.ok) {
             const errorData = await response.json();
@@ -815,21 +808,18 @@ export default function DayEntriesListClient({
             throw new Error("Price is required for expense");
           }
 
-          const response = await fetch(
-            `/${encodeURIComponent(user)}/expenses`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                dayDate: getCurrentDate(selectedDate),
-                project: expense.project_editable,
-                name: expense.name_editable.trim(),
-                price: parseFloat(expense.price_editable),
-                includes_vat: expense.includes_vat_editable ?? false,
-                expense_type: "materials",
-              }),
-            }
-          );
+          const response = await fetch(`/my/expenses`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              dayDate: getCurrentDate(selectedDate),
+              project: expense.project_editable,
+              name: expense.name_editable.trim(),
+              price: parseFloat(expense.price_editable),
+              includes_vat: expense.includes_vat_editable ?? false,
+              expense_type: "materials",
+            }),
+          });
 
           if (!response.ok) {
             const errorData = await response.json();
@@ -884,14 +874,11 @@ export default function DayEntriesListClient({
         }
 
         if (Object.keys(updates).length > 0) {
-          const response = await fetch(
-            `/${encodeURIComponent(user)}/expenses/${expense.id}`,
-            {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(updates),
-            }
-          );
+          const response = await fetch(`/my/expenses/${expense.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updates),
+          });
 
           if (!response.ok) {
             const errorData = await response.json();
@@ -1034,7 +1021,7 @@ export default function DayEntriesListClient({
           updates.billable = entry.billable_editable;
         }
 
-        const response = await fetch(`/${encodeURIComponent(user)}/entries`, {
+        const response = await fetch(`/my/entries`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1215,14 +1202,11 @@ export default function DayEntriesListClient({
         }
 
         if (Object.keys(updates).length > 0) {
-          const response = await fetch(
-            `/${encodeURIComponent(user)}/entries/${entry.id}`,
-            {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(updates),
-            }
-          );
+          const response = await fetch(`/my/entries/${entry.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updates),
+          });
 
           if (!response.ok) {
             const errorData = await response.json();
@@ -1309,7 +1293,7 @@ export default function DayEntriesListClient({
           throw new Error("Price is required for expense");
         }
 
-        const response = await fetch(`/${encodeURIComponent(user)}/expenses`, {
+        const response = await fetch(`/my/expenses`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1402,14 +1386,11 @@ export default function DayEntriesListClient({
         }
 
         if (Object.keys(updates).length > 0) {
-          const response = await fetch(
-            `/${encodeURIComponent(user)}/expenses/${expense.id}`,
-            {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(updates),
-            }
-          );
+          const response = await fetch(`/my/expenses/${expense.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updates),
+          });
 
           if (!response.ok) {
             const errorData = await response.json();
@@ -1473,12 +1454,9 @@ export default function DayEntriesListClient({
     setError(null);
 
     try {
-      const response = await fetch(
-        `/${encodeURIComponent(user)}/entries/${entryId}`,
-        {
-          method: "DELETE",
-        }
-      );
+      const response = await fetch(`/my/entries/${entryId}`, {
+        method: "DELETE",
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -1511,12 +1489,9 @@ export default function DayEntriesListClient({
     setError(null);
 
     try {
-      const response = await fetch(
-        `/${encodeURIComponent(user)}/expenses/${expenseId}`,
-        {
-          method: "DELETE",
-        }
-      );
+      const response = await fetch(`/my/expenses/${expenseId}`, {
+        method: "DELETE",
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -1789,7 +1764,7 @@ export default function DayEntriesListClient({
                               : "bg-blue-100 text-blue-700"
                           }`}
                         >
-                          {entry.user_name || user}
+                          {entry.user_display_name || entry.user_name || user}
                         </span>
                         <button
                           // onClick={() => handleToggleExpand(entry.id)}
@@ -2284,7 +2259,7 @@ export default function DayEntriesListClient({
                                 : "bg-blue-100 text-blue-700"
                             }`}
                           >
-                            {expense.user_name || user}
+                            {expense.user_display_name}
                           </span>
                         </div>
                         <div className="flex justify-end">
@@ -2533,7 +2508,7 @@ export default function DayEntriesListClient({
                 return (
                   <Link
                     key={note.id}
-                    href={`/${encodeURIComponent(user)}/notes/${note.id}`}
+                    href={`/my/notes/${note.id}`}
                     className="block bg-white rounded-lg p-4 hover:bg-gray-50 transition-colors"
                   >
                     <div className="flex items-start justify-between">

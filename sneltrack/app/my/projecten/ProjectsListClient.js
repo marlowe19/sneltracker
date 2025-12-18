@@ -82,10 +82,7 @@ export default function ProjectsListClient({ user, initialProjects }) {
   async function handleCopyLink(e, projectId) {
     e.stopPropagation(); // Prevent triggering project edit modal
 
-    const url = new URL(
-      `/${encodeURIComponent(user)}/start`,
-      window.location.origin
-    );
+    const url = new URL(`/my/start`, window.location.origin);
     url.searchParams.set("project", projectId);
 
     try {
