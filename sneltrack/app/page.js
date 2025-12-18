@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth0 } from "@/lib/auth/auth0";
 import AnonymousTimerClient from "./components/AnonymousTimerClient";
+import TimerActionHandler from "./components/TimerActionHandler";
 
 export default async function Home({ request }) {
   // Check if user is logged in
@@ -14,6 +15,7 @@ export default async function Home({ request }) {
   // If not logged in, show anonymous timer page
   return (
     <main className="flex flex-col pt-4">
+      <TimerActionHandler />
       <div className="flex items-center gap-2 justify-start p-4">
         <img
           src="/icon-SO.svg"
