@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   startLocalTimer,
@@ -12,7 +12,7 @@ import {
  * Client component that handles URL action parameters for starting/stopping local timers
  * Used on the root page when user is not authenticated
  */
-export default function TimerActionHandler() {
+function TimerActionHandlerInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -33,4 +33,12 @@ export default function TimerActionHandler() {
   }, [searchParams, router]);
 
   return null; // This component doesn't render anything
+}
+
+export default function TimerActionHandler() {
+  return (
+    <Suspense fallback={null}>
+      <TimerActionHandlerInner />
+    </Suspense>
+  );
 }
