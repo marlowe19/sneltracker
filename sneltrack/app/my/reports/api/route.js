@@ -132,9 +132,23 @@ export const GET = auth0.withApiAuthRequired(async (req) => {
       { totalBillableHours: 0, totalUnbillableHours: 0, totalBillableAmount: 0 }
     );
 
+    // Build filters object for storage/regeneration
+    const filters = {
+      rangeType: rangeType || null,
+      referenceDate: referenceDateParam || null,
+      customStartDate: startDateParam || null,
+      customEndDate: endDateParam || null,
+      selectedProjectIds: projectIdsParam
+        ? projectIdsParam.split(",").filter(Boolean)
+        : [],
+      billableFilter: billableFilterParam || "both",
+      includeExpenses: includeExpenses,
+    };
+
     return NextResponse.json({
       projects: enrichedProjects,
       totals,
+      filters,
     });
   } catch (error) {
     console.error("Error fetching reports:", error);

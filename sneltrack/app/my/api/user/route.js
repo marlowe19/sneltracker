@@ -37,3 +37,4 @@ export const GET = auth0.withApiAuthRequired(async (request) => {
     );
   }
 });
+

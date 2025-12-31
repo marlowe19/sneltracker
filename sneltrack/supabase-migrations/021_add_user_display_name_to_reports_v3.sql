@@ -176,3 +176,4 @@ Version 3 changes:
 - Uses optimized UUID join on user_id for better performance
 
 Safe deployment: v2 remains available for backward compatibility.';
+

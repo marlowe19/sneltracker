@@ -5,7 +5,12 @@
  */
 
 import { supabaseServer } from "@/lib/supabaseServer";
-import { formatDateForAPI } from "@/lib/dateRangeUtils";
+import {
+  formatDateForAPI,
+  getWeekBoundsUTC,
+  getMonthBoundsUTC,
+  getQuarterBoundsUTC,
+} from "@/lib/dateRangeUtils";
 import { lookupUserIdByUsername } from "./projectsService";
 
 /**
@@ -171,6 +176,93 @@ export async function getWeekExpenses(userName, weekStart, weekEnd) {
 
   // Map results
   return (data || []).map(mapExpenseToClient);
+}
+
+/**
+ * Get expenses matching stored report filters
+ * Reconstructs the exact query that generated the report
+ *
+ * @param {string} userName - Username to get expenses for
+ * @param {Object} filters - Report filters object
+ * @returns {Promise<Array>} Array of expenses with billing_status
+ */
+export async function getExpensesByReportFilters(userName, filters) {
+  if (!filters) {
+    throw new Error("Filters are required");
+  }
+
+  let query = supabaseServer
+    .from("expenses")
+    .select(
+      `
+      *,
+      users!user_id(name),
+      projects:project_id (
+        id,
+        name,
+        owner_name,
+        is_shared
+      )
+    `
+    )
+    .eq("user_name", userName);
+
+  // Apply date range filter
+  let startDate, endDate;
+  if (filters.customStartDate && filters.customEndDate) {
+    startDate = formatDateForAPI(filters.customStartDate);
+    endDate = formatDateForAPI(filters.customEndDate);
+  } else if (filters.rangeType && filters.referenceDate) {
+    const refDate = new Date(filters.referenceDate);
+
+    if (filters.rangeType === "week") {
+      const bounds = getWeekBoundsUTC(refDate);
+      startDate = formatDateForAPI(bounds.start);
+      endDate = formatDateForAPI(bounds.end);
+    } else if (filters.rangeType === "month") {
+      const bounds = getMonthBoundsUTC(refDate);
+      startDate = formatDateForAPI(bounds.start);
+      endDate = formatDateForAPI(bounds.end);
+    } else if (filters.rangeType === "quarter") {
+      const bounds = getQuarterBoundsUTC(refDate);
+      startDate = formatDateForAPI(bounds.start);
+      endDate = formatDateForAPI(bounds.end);
+    }
+  }
+
+  if (startDate && endDate) {
+    query = query.gte("date", startDate);
+    query = query.lte("date", endDate);
+  }
+
+  // Apply project filter
+  if (
+    filters.selectedProjectIds &&
+    Array.isArray(filters.selectedProjectIds) &&
+    filters.selectedProjectIds.length > 0
+  ) {
+    query = query.in("project_id", filters.selectedProjectIds);
+  }
+
+  // Note: Expenses don't have a billable filter, so we skip that
+
+  query = query.order("date", { ascending: false });
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Error fetching expenses by report filters:", error);
+    throw error;
+  }
+
+  // Map results to include billing_status
+  return (data || []).map((row) => {
+    const expense = mapExpenseToClient(row);
+    return {
+      ...expense,
+      billing_status: row.billing_status ?? "draft",
+    };
+  });
 }
 
 /**

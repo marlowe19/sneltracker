@@ -10,6 +10,11 @@ import {
   lookupUserIdByUsername,
   lookupUserByUsername,
 } from "./projectsService";
+import {
+  getWeekBoundsUTC,
+  getMonthBoundsUTC,
+  getQuarterBoundsUTC,
+} from "@/lib/dateRangeUtils";
 
 /**
  * Looks up a Supabase project UUID by Firestore project ID
@@ -504,6 +509,123 @@ export async function deleteEntry(userName, entryId) {
  *
  * @param {Object} entry - Firestore entry object
  */
+/**
+ * Get time entries matching stored report filters
+ * Reconstructs the exact query that generated the report
+ *
+ * @param {string} userName - Username to get entries for
+ * @param {Object} filters - Report filters object
+ * @returns {Promise<Array>} Array of time entries with billing_status
+ */
+export async function getTimeEntriesByReportFilters(userName, filters) {
+  if (!filters) {
+    throw new Error("Filters are required");
+  }
+
+  let query = supabaseServer
+    .from("time_entries")
+    .select(
+      `
+      id,
+      user_name,
+      start_time,
+      end_time,
+      duration_ms,
+      hourly_rate,
+      project_id,
+      firestore_project_id,
+      billable,
+      billing_status,
+      created_at,
+      modified_at,
+      projects:project_id (
+        id,
+        name,
+        owner_name,
+        is_shared
+      )
+    `
+    )
+    .eq("user_name", userName);
+
+  // Apply date range filter
+  let startDate, endDate;
+  if (filters.customStartDate && filters.customEndDate) {
+    startDate = new Date(filters.customStartDate);
+    endDate = new Date(filters.customEndDate);
+    // Set end date to end of day
+    endDate.setHours(23, 59, 59, 999);
+  } else if (filters.rangeType && filters.referenceDate) {
+    const refDate = new Date(filters.referenceDate);
+
+    if (filters.rangeType === "week") {
+      const bounds = getWeekBoundsUTC(refDate);
+      startDate = bounds.start;
+      endDate = bounds.end;
+    } else if (filters.rangeType === "month") {
+      const bounds = getMonthBoundsUTC(refDate);
+      startDate = bounds.start;
+      endDate = bounds.end;
+    } else if (filters.rangeType === "quarter") {
+      const bounds = getQuarterBoundsUTC(refDate);
+      startDate = bounds.start;
+      endDate = bounds.end;
+    }
+  }
+
+  if (startDate && endDate) {
+    query = query.gte("start_time", startDate.toISOString());
+    query = query.lt("start_time", endDate.toISOString());
+  }
+
+  // Apply project filter
+  if (
+    filters.selectedProjectIds &&
+    Array.isArray(filters.selectedProjectIds) &&
+    filters.selectedProjectIds.length > 0
+  ) {
+    query = query.in("project_id", filters.selectedProjectIds);
+  }
+
+  // Apply billable filter
+  if (filters.billableFilter === "billable") {
+    query = query.eq("billable", true);
+  } else if (filters.billableFilter === "non-billable") {
+    query = query.eq("billable", false);
+  }
+  // If "both", no filter applied
+
+  query = query.order("start_time", { ascending: false });
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Error fetching time entries by report filters:", error);
+    throw error;
+  }
+
+  // Map results to include project info and billing_status
+  return (data || []).map((row) => {
+    const project = row.projects;
+    return {
+      id: row.id,
+      user_name: row.user_name,
+      start_time: row.start_time,
+      end_time: row.end_time,
+      duration_ms: row.duration_ms ?? null,
+      hourly_rate: row.hourly_rate ?? null,
+      project: row.firestore_project_id ?? null,
+      project_id: row.project_id ?? null,
+      project_name: project?.name ?? null,
+      billable: row.billable ?? true,
+      billing_status: row.billing_status ?? "draft",
+      created_at: row.created_at,
+      modified_at: row.modified_at,
+      isProjectOwner: project ? project.owner_name === userName : false,
+    };
+  });
+}
+
 export function upsert(entry) {
   fireAndForget(
     async () => {

@@ -1,20 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
-import BackButtonClient from "../projecten/[projectId]/BackButtonClient";
+import { useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import BackButtonClient from "../../../projecten/[projectId]/BackButtonClient";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import {
-  DateRangeProvider,
-  CustomDateRangeSelector,
-  useDateRangeContext,
-} from "../components/DateRangeProvider";
-import { getWeekBounds, getMonthBounds, getQuarterBounds } from "@/lib/time";
-import { formatDateForAPI } from "@/lib/dateRangeUtils";
+import { useDateRangeContext } from "../../../components/DateRangeProvider";
+import PieChartCarousel from "../../PieChartCarousel";
 import { HOURLY_RATE_BREAKDOWN } from "@/lib/hourlyRateBreakdown";
-import PieChartCarousel from "./PieChartCarousel";
-import SaveReportModal from "./SaveReportModal";
-import StoredReportsTab from "./StoredReportsTab";
+import ReportItemsManager from "./ReportItemsManager";
 
 function formatMoney(amount) {
   return new Intl.NumberFormat("nl-NL", {
@@ -32,6 +25,84 @@ function formatHours(totalHours) {
     return `${minutes}m`;
   }
   return minutes > 0 ? `${hours}u ${minutes}m` : `${hours}u`;
+}
+
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  return new Intl.DateTimeFormat("nl-NL", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatDateShort(dateString) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  return new Intl.DateTimeFormat("nl-NL", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(date);
+}
+
+function formatFilters(filters) {
+  if (!filters || Object.keys(filters).length === 0) {
+    return null;
+  }
+
+  const parts = [];
+
+  // Date range
+  if (filters.customStartDate && filters.customEndDate) {
+    parts.push(
+      `Periode: ${formatDateShort(filters.customStartDate)} - ${formatDateShort(
+        filters.customEndDate
+      )}`
+    );
+  } else if (filters.rangeType && filters.referenceDate) {
+    const rangeTypeLabels = {
+      week: "Week",
+      month: "Maand",
+      quarter: "Kwartaal",
+    };
+    const label = rangeTypeLabels[filters.rangeType] || filters.rangeType;
+    const refDate = formatDateShort(filters.referenceDate);
+    parts.push(`${label}: ${refDate}`);
+  }
+
+  // Projects filter
+  if (filters.selectedProjectIds && filters.selectedProjectIds.length > 0) {
+    parts.push(
+      `${filters.selectedProjectIds.length} ${
+        filters.selectedProjectIds.length === 1 ? "project" : "projecten"
+      } geselecteerd`
+    );
+  } else {
+    parts.push("Alle projecten");
+  }
+
+  // Billable filter
+  const billableLabels = {
+    billable: "Alleen factureerbaar",
+    "non-billable": "Alleen niet factureerbaar",
+    both: "Factureerbaar en niet factureerbaar",
+  };
+  parts.push(
+    billableLabels[filters.billableFilter] ||
+      "Factureerbaar en niet factureerbaar"
+  );
+
+  // Include expenses
+  parts.push(
+    filters.includeExpenses !== false
+      ? "Uitgaven inbegrepen"
+      : "Uitgaven uitgesloten"
+  );
+
+  return parts;
 }
 
 // Color palette for pie chart
@@ -162,7 +233,6 @@ function CategoryBreakdownPieChart({ totals }) {
               cy="50%"
               labelLine={true}
               label={({ percentage, amount }) => {
-                // Only show label if slice is large enough (e.g., > 5%)
                 if (percentage > 5) {
                   return `€${amount.toFixed(1)}`;
                 }
@@ -360,142 +430,70 @@ function ProjectCard({ project, user }) {
   );
 }
 
-function ReportsContent({ onReportDataReady }) {
+export default function StoredReportDetailClient({ report, userName }) {
+  const router = useRouter();
   const pathname = usePathname();
-  const pathSegments = pathname?.split("/").filter(Boolean) || [];
-  const userName = pathSegments[0] || "";
-  const {
-    rangeType,
-    referenceDate,
-    customStartDate,
-    customEndDate,
-    selectedProjectIds,
-    billableFilter,
-    includeExpenses,
-  } = useDateRangeContext();
-  const [projects, setProjects] = useState([]);
-  const [totals, setTotals] = useState({
+  const { handleRangeChange } = useDateRangeContext();
+  const [deleting, setDeleting] = useState(false);
+
+  const reportData = report.report_data || {};
+  const projects = reportData.projects || [];
+  const totals = reportData.totals || {
     totalBillableHours: 0,
     totalUnbillableHours: 0,
     totalBillableAmount: 0,
-  });
-  const [filters, setFilters] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  };
+  const filters = reportData.filters || {};
 
-  useEffect(() => {
-    async function fetchReports() {
-      if (!userName) return;
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const url = new URL(`/my/reports/api`, window.location.origin);
-
-        // Calculate date range bounds - allow no dates (will default to all time)
-        let startDate, endDate;
-        let hasDateRange = false;
-
-        // Check if custom date range is provided
-        if (customStartDate && customEndDate) {
-          startDate = customStartDate;
-          endDate = customEndDate;
-          hasDateRange = true;
-        } else if (rangeType === "week") {
-          const bounds = getWeekBounds(referenceDate);
-          startDate = bounds.start;
-          endDate = bounds.end;
-          hasDateRange = true;
-        } else if (rangeType === "month") {
-          const bounds = getMonthBounds(referenceDate);
-          startDate = bounds.start;
-          endDate = bounds.end;
-          hasDateRange = true;
-        } else if (rangeType === "quarter") {
-          const bounds = getQuarterBounds(referenceDate);
-          startDate = bounds.start;
-          endDate = bounds.end;
-          hasDateRange = true;
-        }
-
-        // Use startDate/endDate for custom ranges, otherwise use rangeType/referenceDate
-        // If no dates, don't send date parameters (API will default to all time)
-        if (hasDateRange) {
-          if (customStartDate && customEndDate) {
-            url.searchParams.set("startDate", formatDateForAPI(startDate));
-            url.searchParams.set("endDate", formatDateForAPI(endDate));
-          } else {
-            url.searchParams.set("rangeType", rangeType);
-            url.searchParams.set(
-              "referenceDate",
-              formatDateForAPI(referenceDate)
-            );
-          }
-        }
-
-        // Add filter parameters
-        // Empty array means "all projects", so we don't send the parameter
-        if (selectedProjectIds && selectedProjectIds.length > 0) {
-          url.searchParams.set("projectIds", selectedProjectIds.join(","));
-        }
-        if (billableFilter && billableFilter !== "both") {
-          url.searchParams.set("billableFilter", billableFilter);
-        }
-        if (!includeExpenses) {
-          url.searchParams.set("includeExpenses", "false");
-        }
-
-        const res = await fetch(url);
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(
-            errorData.error || `Failed to fetch reports (${res.status})`
-          );
-        }
-
-        const data = await res.json();
-        setProjects(data.projects || []);
-        setTotals(
-          data.totals || {
-            totalBillableHours: 0,
-            totalUnbillableHours: 0,
-            totalBillableAmount: 0,
-          }
-        );
-        setFilters(data.filters || null);
-        
-        // Notify parent component that report data is ready
-        if (onReportDataReady) {
-          onReportDataReady({
-            projects: data.projects || [],
-            totals: data.totals || {
-              totalBillableHours: 0,
-              totalUnbillableHours: 0,
-              totalBillableAmount: 0,
-            },
-            filters: data.filters || null,
-          });
-        }
-      } catch (err) {
-        console.error("Error fetching reports:", err);
-        setError(err.message || "Failed to load reports");
-      } finally {
-        setLoading(false);
-      }
+  const handleDelete = async () => {
+    if (!confirm("Weet je zeker dat je dit rapport wilt verwijderen?")) {
+      return;
     }
 
-    fetchReports();
-  }, [
-    userName,
-    rangeType,
-    referenceDate,
-    customStartDate,
-    customEndDate,
-    selectedProjectIds,
-    billableFilter,
-    includeExpenses,
-  ]);
+    setDeleting(true);
+    try {
+      const res = await fetch(`/my/reports/stored/api?id=${report.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        throw new Error("Failed to delete report");
+      }
+      router.push(pathname.replace(/\/stored\/[^/]+$/, ""));
+    } catch (err) {
+      console.error("Error deleting report:", err);
+      alert("Fout bij verwijderen van rapport");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleApplyFilters = () => {
+    const referenceDate = filters.referenceDate
+      ? new Date(filters.referenceDate)
+      : new Date();
+    const customStartDate = filters.customStartDate
+      ? new Date(filters.customStartDate)
+      : null;
+    const customEndDate = filters.customEndDate
+      ? new Date(filters.customEndDate)
+      : null;
+
+    handleRangeChange(
+      filters.rangeType || "week",
+      referenceDate,
+      customStartDate,
+      customEndDate,
+      {
+        selectedProjectIds: filters.selectedProjectIds || [],
+        billableFilter: filters.billableFilter || "both",
+        includeExpenses: filters.includeExpenses !== false,
+      }
+    );
+
+    // Navigate to main reports page
+    const basePath = pathname.replace(/\/stored\/[^/]+$/, "") || "/my/reports";
+    router.push(basePath);
+  };
 
   // Build cards array for carousel
   const cards = [];
@@ -522,164 +520,92 @@ function ReportsContent({ onReportDataReady }) {
     });
   }
 
-  if (!userName) {
-    return null;
-  }
-
-  return (
-    <section className="flex-1 mb-20">
-      {loading ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="text-sm text-gray-600">Laden...</div>
-        </div>
-      ) : error ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="text-sm text-red-600">{error}</div>
-        </div>
-      ) : projects.length === 0 ? (
-        <div className="flex items-center justify-center py-8">
-          <div className="text-center">
-            <p className="text-lg text-gray-600">
-              Geen projecten met data in deze periode
-            </p>
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* Carousel with Pie Chart Cards */}
-          {cards.length > 0 && <PieChartCarousel cards={cards} />}
-
-          {/* Project List */}
-          <div className="px-4 space-y-3">
-            {projects.map((project) => (
-              <ProjectCard key={project.id} project={project} user={userName} />
-            ))}
-          </div>
-        </>
-      )}
-    </section>
-  );
-}
-
-export default function ReportsClient() {
-  const pathname = usePathname();
-  const pathSegments = pathname?.split("/").filter(Boolean) || [];
-  const userName = pathSegments[0] || "";
-  const [activeTab, setActiveTab] = useState("current");
-  const [showSaveModal, setShowSaveModal] = useState(false);
-  const [currentReportData, setCurrentReportData] = useState(null);
-  const [saving, setSaving] = useState(false);
-
-  if (!userName) {
-    return null;
-  }
-
-  const handleSaveReport = async (name, description) => {
-    if (!currentReportData) {
-      alert("Geen rapport data beschikbaar om op te slaan");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const res = await fetch("/my/reports/stored/api", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name,
-          description,
-          reportData: currentReportData,
-        }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to save report");
-      }
-
-      setShowSaveModal(false);
-      // Switch to stored reports tab to show the newly saved report
-      setActiveTab("stored");
-    } catch (err) {
-      console.error("Error saving report:", err);
-      alert(`Fout bij opslaan: ${err.message}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
     <main className="flex flex-col min-h-screen">
       <div className="flex items-center justify-between py-4">
         <BackButtonClient />
-        <h1 className="text-lg font-bold text-gray-900">Reports</h1>
-        <div className="w-16"></div> {/* Spacer for centering */}
+        <h1 className="text-lg font-bold text-gray-900">Opgeslagen Rapport</h1>
+        <div className="w-16"></div>
       </div>
-      <section>
-        {/* Date Range Provider wraps only the components that need it */}
-        <DateRangeProvider>
-          {/* Date Range Selector - at the top, above project name */}
-          <div className="mb-6">
-            <CustomDateRangeSelector />
+      <section className="px-4 mb-20">
+        {/* Report Metadata */}
+        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+          <h2 className="text-base font-semibold text-gray-900 mb-2">
+            {report.name}
+          </h2>
+          {report.description && (
+            <p className="text-sm text-gray-600 mb-2">{report.description}</p>
+          )}
+          <p className="text-xs text-gray-500 mb-3">
+            Opgeslagen op {formatDate(report.created_at)}
+          </p>
+
+          {/* Filters used when report was saved */}
+          {(() => {
+            const filterList = formatFilters(filters);
+            return filterList && filterList.length > 0 ? (
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <p className="text-xs font-medium text-gray-700 mb-2">
+                  Filters gebruikt bij opslaan:
+                </p>
+                <div className="space-y-1">
+                  {filterList.map((filterText, index) => (
+                    <p key={index} className="text-xs text-gray-600">
+                      • {filterText}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ) : null;
+          })()}
+
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={handleApplyFilters}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Filters toepassen
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors disabled:opacity-50"
+            >
+              {deleting ? "Verwijderen..." : "Verwijderen"}
+            </button>
           </div>
 
-          {/* Tab Navigation */}
-          <div className="mb-4 px-4">
-            <div className="flex gap-2 border-b border-gray-200">
-              <button
-                onClick={() => setActiveTab("current")}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === "current"
-                    ? "text-blue-600 border-b-2 border-blue-600"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Huidig Rapport
-              </button>
-              <button
-                onClick={() => setActiveTab("stored")}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === "stored"
-                    ? "text-blue-600 border-b-2 border-blue-600"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Opgeslagen Rapporten
-              </button>
+          {/* Report Items Manager */}
+          <ReportItemsManager reportId={report.id} filters={filters} />
+        </div>
+
+        {/* Report Content */}
+        {projects.length === 0 ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <p className="text-lg text-gray-600">
+                Geen projecten in dit rapport
+              </p>
             </div>
           </div>
+        ) : (
+          <>
+            {/* Carousel with Pie Chart Cards */}
+            {cards.length > 0 && <PieChartCarousel cards={cards} />}
 
-          {/* Tab Content */}
-          {activeTab === "current" && (
-            <>
-              {/* Save Report Button */}
-              {currentReportData && (
-                <div className="px-4 mb-4">
-                  <button
-                    onClick={() => setShowSaveModal(true)}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
-                  >
-                    Rapport opslaan
-                  </button>
-                </div>
-              )}
-              <ReportsContent onReportDataReady={setCurrentReportData} />
-            </>
-          )}
-
-          {activeTab === "stored" && <StoredReportsTab userName={userName} />}
-        </DateRangeProvider>
+            {/* Project List */}
+            <div className="space-y-3 mt-6">
+              {projects.map((project) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  user={userName}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </section>
-
-      {/* Save Report Modal */}
-      <SaveReportModal
-        isOpen={showSaveModal}
-        onClose={() => setShowSaveModal(false)}
-        onSave={handleSaveReport}
-        loading={saving}
-      />
     </main>
   );
 }
