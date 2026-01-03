@@ -626,6 +626,81 @@ export async function getTimeEntriesByReportFilters(userName, filters) {
   });
 }
 
+/**
+ * Get time entries for a specific project
+ * Reuses query structure from getTimeEntriesByReportFilters()
+ * 
+ * @param {string} userName - Username to get entries for
+ * @param {string} projectId - Project UUID
+ * @param {boolean} isOwner - Whether the user is the project owner
+ * @returns {Promise<Array>} Array of time entries with billing_status, project_name, and user_display_name
+ */
+export async function getTimeEntriesByProjectId(userName, projectId, isOwner) {
+  let query = supabaseServer
+    .from("time_entries")
+    .select(
+      `
+      id,
+      user_name,
+      start_time,
+      end_time,
+      duration_ms,
+      hourly_rate,
+      project_id,
+      firestore_project_id,
+      billable,
+      billing_status,
+      created_at,
+      modified_at,
+      users!user_id(name),
+      projects:project_id (
+        id,
+        name,
+        owner_name,
+        is_shared
+      )
+    `
+    )
+    .eq("project_id", projectId);
+
+  // Conditional filtering: owners see all entries, members see only their own
+  if (!isOwner) {
+    query = query.eq("user_name", userName);
+  }
+
+  query = query.order("start_time", { ascending: false });
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Error fetching time entries by project ID:", error);
+    throw error;
+  }
+
+  // Map results to include project info, billing_status, and user_display_name
+  return (data || []).map((row) => {
+    const project = row.projects;
+    const user = row.users;
+    return {
+      id: row.id,
+      user_name: row.user_name,
+      user_display_name: user?.name ?? null,
+      start_time: row.start_time,
+      end_time: row.end_time,
+      duration_ms: row.duration_ms ?? null,
+      hourly_rate: row.hourly_rate ?? null,
+      project: row.firestore_project_id ?? null,
+      project_id: row.project_id ?? null,
+      project_name: project?.name ?? null,
+      billable: row.billable ?? true,
+      billing_status: row.billing_status ?? "draft",
+      created_at: row.created_at,
+      modified_at: row.modified_at,
+      isProjectOwner: project ? project.owner_name === userName : false,
+    };
+  });
+}
+
 export function upsert(entry) {
   fireAndForget(
     async () => {

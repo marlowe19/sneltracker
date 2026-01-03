@@ -4,7 +4,7 @@ import {
   getProjectDetail,
   getProjectVelocity,
 } from "@/lib/supabase/services/projectsService";
-import { expensesService } from "@/lib/supabase/services";
+import { expensesService, timeEntriesService } from "@/lib/supabase/services";
 import { auth0 } from "@/lib/auth/auth0";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +26,34 @@ export const GET = auth0.withApiAuthRequired(async (req, context) => {
         projectId
       );
       return NextResponse.json(summary);
+    }
+
+    if (action === "entries") {
+      // Get project detail to check ownership
+      const projectDetail = await getProjectDetail(user, projectId);
+      if (!projectDetail) {
+        return NextResponse.json(
+          { error: "Project not found or access denied" },
+          { status: 404 }
+        );
+      }
+
+      const isOwner = projectDetail.is_owner;
+
+      // Fetch time entries and expenses for the project
+      const [timeEntries, expenses] = await Promise.all([
+        timeEntriesService.getTimeEntriesByProjectId(
+          user,
+          projectId,
+          isOwner
+        ),
+        expensesService.getExpensesByProjectId(user, projectId, isOwner),
+      ]);
+
+      return NextResponse.json({
+        timeEntries,
+        expenses,
+      });
     }
 
     // Prefer startDate/endDate if provided (avoids timezone recalculation issues)

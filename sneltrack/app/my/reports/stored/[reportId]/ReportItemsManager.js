@@ -247,8 +247,8 @@ export default function ReportItemsManager({ reportId, filters }) {
 
               {/* Bulk Actions */}
               {currentItems.length > 0 && (
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg flex items-center gap-4">
-                  <div className="flex items-center gap-2">
+                <div className="mb-4 p-3 bg-gray-50 rounded-lg flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                  <div className="flex items-center gap-2 shrink-0">
                     <input
                       type="checkbox"
                       checked={allSelected}
@@ -259,18 +259,18 @@ export default function ReportItemsManager({ reportId, filters }) {
                       }
                       className="w-4 h-4 text-blue-600 rounded"
                     />
-                    <span className="text-sm text-gray-700">
+                    <span className="text-sm text-gray-700 whitespace-nowrap">
                       {allSelected
                         ? "Alles deselecteren"
                         : `Alles selecteren (${selectedCount} geselecteerd)`}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 flex-1">
-                    <label className="text-sm text-gray-700">Status:</label>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <label className="text-sm text-gray-700 shrink-0">Status:</label>
                     <select
                       value={selectedStatus}
                       onChange={(e) => setSelectedStatus(e.target.value)}
-                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-0"
                     >
                       {Object.entries(STATUS_LABELS).map(([value, label]) => (
                         <option key={value} value={value}>
@@ -281,7 +281,7 @@ export default function ReportItemsManager({ reportId, filters }) {
                     <button
                       onClick={handleBulkUpdate}
                       disabled={selectedCount === 0 || updating}
-                      className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0 whitespace-nowrap"
                     >
                       {updating ? "Bijwerken..." : "Toepassen"}
                     </button>

@@ -7,6 +7,7 @@ import MembersListClient from "../MembersListClient";
 import ProjectNotesClient from "./ProjectNotesClient";
 import CalendarViewClient from "@/app/my/components/CalendarViewClient";
 import ProjectForecastClient from "./ProjectForecastClient";
+import ProjectEntriesListClient from "./ProjectEntriesListClient";
 
 function formatMoney(amount) {
   if (!amount && amount !== 0) return "";
@@ -41,6 +42,10 @@ export default function ProjectDetailClient({
   const [members, setMembers] = useState(initialMembers);
   const [activeTab, setActiveTab] = useState("statistieken");
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
+  const [timeEntriesCount, setTimeEntriesCount] = useState(0);
+  const [expensesCount, setExpensesCount] = useState(0);
+  const [entriesData, setEntriesData] = useState(null);
+  const [entriesLoading, setEntriesLoading] = useState(false);
 
   // Settings form state
   const [name, setName] = useState(project?.name || "");
@@ -144,6 +149,54 @@ export default function ProjectDetailClient({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  // Fetch entries data once when component mounts or projectId changes
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchEntriesData() {
+      setEntriesLoading(true);
+      // Reset data before fetching new data
+      setEntriesData(null);
+      setTimeEntriesCount(0);
+      setExpensesCount(0);
+      
+      try {
+        const res = await fetch(
+          `/my/projecten/${projectId}/api?action=entries`
+        );
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          // Debug: log the fetched data
+          if (process.env.NODE_ENV === "development") {
+            console.log("Fetched entries data:", data);
+          }
+          setEntriesData(data);
+          setTimeEntriesCount(data.timeEntries?.length || 0);
+          setExpensesCount(data.expenses?.length || 0);
+        }
+      } catch (err) {
+        console.error("Error fetching entry data:", err);
+      } finally {
+        if (isMounted) {
+          setEntriesLoading(false);
+        }
+      }
+    }
+
+    fetchEntriesData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [projectId]); // Only fetch when projectId changes
+
+  // Reset entries data when projectId changes
+  useEffect(() => {
+    setEntriesData(null);
+    setTimeEntriesCount(0);
+    setExpensesCount(0);
+  }, [projectId]);
 
   async function checkCalendarStatus() {
     setCheckingCalendar(true);
@@ -436,6 +489,28 @@ export default function ProjectDetailClient({
         >
           Notities
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("timeEntries")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "timeEntries"
+              ? "border-[#008eff] text-[#008eff]"
+              : "border-transparent text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          Tijdregistraties {timeEntriesCount > 0 && `(${timeEntriesCount})`}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("expenses")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "expenses"
+              ? "border-[#008eff] text-[#008eff]"
+              : "border-transparent text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          Uitgaven {expensesCount > 0 && `(${expensesCount})`}
+        </button>
         {isShared && (
           <button
             type="button"
@@ -470,6 +545,30 @@ export default function ProjectDetailClient({
             user={user}
             projectId={projectId}
             project={project}
+          />
+        </div>
+      )}
+
+      {activeTab === "timeEntries" && (
+        <div className="mb-4">
+          <ProjectEntriesListClient
+            user={user}
+            projectId={projectId}
+            type="timeEntries"
+            data={entriesData}
+            loading={entriesLoading}
+          />
+        </div>
+      )}
+
+      {activeTab === "expenses" && (
+        <div className="mb-4">
+          <ProjectEntriesListClient
+            user={user}
+            projectId={projectId}
+            type="expenses"
+            data={entriesData}
+            loading={entriesLoading}
           />
         </div>
       )}

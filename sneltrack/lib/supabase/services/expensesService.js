@@ -266,6 +266,58 @@ export async function getExpensesByReportFilters(userName, filters) {
 }
 
 /**
+ * Get expenses for a specific project
+ * Reuses query structure from getExpensesByReportFilters()
+ * 
+ * @param {string} userName - Username to get expenses for
+ * @param {string} projectId - Project UUID
+ * @param {boolean} isOwner - Whether the user is the project owner
+ * @returns {Promise<Array>} Array of expenses with billing_status, project_name, and user_display_name
+ */
+export async function getExpensesByProjectId(userName, projectId, isOwner) {
+  let query = supabaseServer
+    .from("expenses")
+    .select(
+      `
+      *,
+      users!user_id(name),
+      projects:project_id (
+        id,
+        name,
+        owner_name,
+        is_shared
+      )
+    `
+    )
+    .eq("project_id", projectId);
+
+  // Conditional filtering: owners see all expenses, members see only their own
+  if (!isOwner) {
+    query = query.eq("user_name", userName);
+  }
+
+  query = query.order("date", { ascending: false });
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Error fetching expenses by project ID:", error);
+    throw error;
+  }
+
+  // Map results to include billing_status and project_name
+  return (data || []).map((row) => {
+    const expense = mapExpenseToClient(row);
+    const project = row.projects;
+    return {
+      ...expense,
+      billing_status: row.billing_status ?? "draft",
+      project_name: project?.name ?? null,
+    };
+  });
+}
+
+/**
  * Gets aggregated expense summary for a project
  * Returns total expenses and count of expense entries
  *
