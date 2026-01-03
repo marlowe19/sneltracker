@@ -1,4 +1,4 @@
-import { lookupUserByUsername } from "@/lib/supabase/services/projectsService";
+import { lookupUserByUsername, syncUserWithAuth0 } from "@/lib/supabase/services/projectsService";
 import { NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth/auth0";
 
@@ -14,8 +14,11 @@ export const GET = auth0.withApiAuthRequired(async (request) => {
       );
     }
 
+    // Sync user with Auth0 data (updates name if missing)
+    const syncedUser = await syncUserWithAuth0(user, session.user);
+
     // Look up user in Supabase using the auth0 ID as username
-    const userData = await lookupUserByUsername(user);
+    const userData = syncedUser || await lookupUserByUsername(user);
 
     if (!userData) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -37,4 +40,5 @@ export const GET = auth0.withApiAuthRequired(async (request) => {
     );
   }
 });
+
 

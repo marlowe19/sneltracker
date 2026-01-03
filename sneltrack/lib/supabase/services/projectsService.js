@@ -62,6 +62,66 @@ export async function lookupUserByUsername(username) {
 }
 
 /**
+ * Sync user data from Auth0 to Supabase users table
+ * Updates name, email, and other fields if available
+ *
+ * @param {string} userName - Auth0 user ID (user_name)
+ * @param {Object} auth0User - Auth0 user object with name, email, nickname, etc.
+ * @returns {Promise<Object|null>} Updated user data or null if not found
+ */
+export async function syncUserWithAuth0(userName, auth0User) {
+  if (!userName || !auth0User) return null;
+
+  const displayName = auth0User.name || auth0User.nickname || auth0User.email || null;
+  const email = auth0User.email || null;
+
+  // First, check if user exists
+  const existingUser = await lookupUserByUsername(userName);
+  
+  if (!existingUser) {
+    // User doesn't exist, create one
+    const { data, error } = await supabaseServer
+      .from("users")
+      .insert({
+        user_name: userName,
+        name: displayName,
+        email: email,
+      })
+      .select("id, name")
+      .single();
+
+    if (error) {
+      console.error("Error creating user:", error);
+      return null;
+    }
+
+    return data;
+  }
+
+  // User exists, update if name is missing or different
+  if (!existingUser.name && displayName) {
+    const { data, error } = await supabaseServer
+      .from("users")
+      .update({
+        name: displayName,
+        ...(email && { email: email }),
+      })
+      .eq("user_name", userName)
+      .select("id, name")
+      .single();
+
+    if (error) {
+      console.error("Error updating user:", error);
+      return existingUser;
+    }
+
+    return data;
+  }
+
+  return existingUser;
+}
+
+/**
  * Maps a Firestore project to Supabase schema
  *
  * @param {Object} project - Firestore project object
@@ -275,8 +335,8 @@ export async function getProjectDetail(
   startDate = null,
   endDate = null
 ) {
-  const { data, error } = await supabaseServer.rpc("get_project_detail_v3", {
-    // ✅ Updated to v3 for user_display_name
+  const { data, error } = await supabaseServer.rpc("get_project_detail_v4", {
+    // ✅ Updated to v4 for user_display_name in both members and member_statistics
     p_user_name: userName,
     p_project_id: projectId,
     p_start_date: startDate ? startDate.toISOString() : null,
@@ -284,7 +344,13 @@ export async function getProjectDetail(
   });
 
   if (error) {
-    console.error("Error fetching project detail:", error);
+    console.error("Error fetching project detail:", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+    });
     throw error;
   }
 

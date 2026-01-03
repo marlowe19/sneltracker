@@ -466,75 +466,77 @@ export default function ProjectDetailClient({
           onClose={() => setIsCalendarExpanded(false)}
         />
       )}
-      <div className="flex border-b border-gray-200 mb-6">
-        <button
-          type="button"
-          onClick={() => setActiveTab("statistieken")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "statistieken"
-              ? "border-[#008eff] text-[#008eff]"
-              : "border-transparent text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Statistieken
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("notes")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "notes"
-              ? "border-[#008eff] text-[#008eff]"
-              : "border-transparent text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Notities
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("timeEntries")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "timeEntries"
-              ? "border-[#008eff] text-[#008eff]"
-              : "border-transparent text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Tijdregistraties {timeEntriesCount > 0 && `(${timeEntriesCount})`}
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("expenses")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "expenses"
-              ? "border-[#008eff] text-[#008eff]"
-              : "border-transparent text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Uitgaven {expensesCount > 0 && `(${expensesCount})`}
-        </button>
-        {isShared && (
+      <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
+        <div className="flex min-w-max">
           <button
             type="button"
-            onClick={() => setActiveTab("members")}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "members"
+            onClick={() => setActiveTab("statistieken")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "statistieken"
                 ? "border-[#008eff] text-[#008eff]"
                 : "border-transparent text-gray-600 hover:text-gray-900"
             }`}
           >
-            Leden
+            Statistieken
           </button>
-        )}
-        <button
-          type="button"
-          onClick={() => setActiveTab("settings")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "settings"
-              ? "border-[#008eff] text-[#008eff]"
-              : "border-transparent text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Instellingen
-        </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("notes")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "notes"
+                ? "border-[#008eff] text-[#008eff]"
+                : "border-transparent text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Notities
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("timeEntries")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "timeEntries"
+                ? "border-[#008eff] text-[#008eff]"
+                : "border-transparent text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Tijdregistraties {timeEntriesCount > 0 && `(${timeEntriesCount})`}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("expenses")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "expenses"
+                ? "border-[#008eff] text-[#008eff]"
+                : "border-transparent text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Uitgaven {expensesCount > 0 && `(${expensesCount})`}
+          </button>
+          {isShared && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("members")}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === "members"
+                  ? "border-[#008eff] text-[#008eff]"
+                  : "border-transparent text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Leden
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setActiveTab("settings")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "settings"
+                ? "border-[#008eff] text-[#008eff]"
+                : "border-transparent text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Instellingen
+          </button>
+        </div>
       </div>
 
       {/* Tab Content */}
@@ -983,7 +985,7 @@ export default function ProjectDetailClient({
                       >
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-gray-900">
-                            {member.user_name}
+                            {member.user_display_name || member.user_name}
                           </span>
                           <span
                             className={`text-xs px-2 py-0.5 rounded ${

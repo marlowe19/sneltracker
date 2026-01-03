@@ -230,7 +230,7 @@ export default function MembersListClient({
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-gray-900">
-                    {member.user_name}
+                    {member.user_display_name || member.user_name}
                   </span>
                   <span
                     className={`text-xs px-2 py-0.5 rounded ${

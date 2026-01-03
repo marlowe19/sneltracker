@@ -37,7 +37,9 @@ export default function StoredReportsTab({ userName }) {
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(
-            errorData.error || errorData.message || `Failed to fetch stored reports (${res.status})`
+            errorData.error ||
+              errorData.message ||
+              `Failed to fetch stored reports (${res.status})`
           );
         }
         const data = await res.json();
@@ -152,9 +154,7 @@ export default function StoredReportsTab({ userName }) {
     return (
       <div className="flex items-center justify-center py-8">
         <div className="text-center">
-          <p className="text-lg text-gray-600">
-            Geen opgeslagen rapporten
-          </p>
+          <p className="text-lg text-gray-600">Geen opgeslagen rapporten</p>
           <p className="text-sm text-gray-500 mt-2">
             Sla een rapport op vanuit het "Huidig Rapport" tabblad
           </p>
@@ -193,12 +193,12 @@ export default function StoredReportsTab({ userName }) {
             >
               Bekijken
             </button>
-            <button
+            {/* <button
               onClick={(e) => handleApplyFilters(report.id, e)}
               className="px-3 py-1.5 text-sm font-medium text-green-600 bg-green-50 rounded-md hover:bg-green-100 transition-colors"
             >
               Filters toepassen
-            </button>
+            </button> */}
             <button
               onClick={(e) => handleDelete(report.id, e)}
               disabled={deletingId === report.id}
@@ -212,4 +212,3 @@ export default function StoredReportsTab({ userName }) {
     </div>
   );
 }
-

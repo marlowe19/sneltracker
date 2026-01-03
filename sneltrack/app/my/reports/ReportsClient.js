@@ -311,7 +311,7 @@ function ProjectCard({ project, user }) {
                     className="bg-white rounded-lg p-3 border border-gray-200"
                   >
                     <div className="font-medium text-gray-900 mb-2">
-                      {member.user_name}
+                      {member.user_display_name || member.user_name}
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
                       <div>
@@ -464,7 +464,7 @@ function ReportsContent({ onReportDataReady }) {
           }
         );
         setFilters(data.filters || null);
-        
+
         // Notify parent component that report data is ready
         if (onReportDataReady) {
           onReportDataReady({

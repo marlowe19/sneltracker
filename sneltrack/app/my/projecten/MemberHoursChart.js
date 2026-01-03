@@ -62,7 +62,7 @@ export default function MemberHoursChart({ memberStats }) {
               <div key={member.user_name} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium text-gray-900">
-                    {member.user_name}
+                    {member.user_display_name || member.user_name}
                   </span>
                   <div className="flex items-center gap-4">
                     <span className="text-gray-600">
@@ -102,7 +102,7 @@ export default function MemberHoursChart({ memberStats }) {
               <div key={member.user_name} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium text-gray-900">
-                    {member.user_name}
+                    {member.user_display_name || member.user_name}
                   </span>
                   <span className="text-gray-600 font-semibold">
                     {percentage.toFixed(1)}%
