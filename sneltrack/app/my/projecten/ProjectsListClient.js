@@ -97,13 +97,34 @@ export default function ProjectsListClient({ user, initialProjects }) {
   }
 
   // Filter projects based on active tab
-  const filteredProjects = displayProjects.filter((project) => {
-    if (activeTab === "shared") {
-      return project.is_shared === true;
-    } else {
-      return !project.is_shared;
-    }
-  });
+  const filteredProjects = displayProjects
+    .filter((project) => {
+      if (activeTab === "shared") {
+        return project.is_shared === true;
+      } else {
+        return !project.is_shared;
+      }
+    })
+    .sort((a, b) => {
+      // Sort: non-archived first, then archived
+      const aIsArchived = a.status === "archived" || a.archived === true;
+      const bIsArchived = b.status === "archived" || b.archived === true;
+
+      if (aIsArchived && !bIsArchived) return 1;
+      if (!aIsArchived && bIsArchived) return -1;
+
+      // If both archived or both not archived, sort by archived_at (desc) or name
+      if (aIsArchived && bIsArchived) {
+        if (a.archived_at && b.archived_at) {
+          return new Date(b.archived_at) - new Date(a.archived_at);
+        }
+        if (a.archived_at) return -1;
+        if (b.archived_at) return 1;
+      }
+
+      // Sort by name for non-archived projects
+      return a.name.localeCompare(b.name);
+    });
 
   return (
     <>
@@ -182,6 +203,13 @@ export default function ProjectsListClient({ user, initialProjects }) {
                         </span>
                       )}
                     </div>
+                    {(project.status === "archived" || project.archived === true) && (
+                      <div className="mb-1">
+                        <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded">
+                          Gearchiveerd
+                        </span>
+                      </div>
+                    )}
                     {project.is_shared && (
                       <div className="flex items-center gap-2">
                         <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">

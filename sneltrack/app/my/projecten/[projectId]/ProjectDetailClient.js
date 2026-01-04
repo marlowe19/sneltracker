@@ -8,6 +8,7 @@ import ProjectNotesClient from "./ProjectNotesClient";
 import CalendarViewClient from "@/app/my/components/CalendarViewClient";
 import ProjectForecastClient from "./ProjectForecastClient";
 import ProjectEntriesListClient from "./ProjectEntriesListClient";
+import ArchiveProjectModal from "./ArchiveProjectModal";
 
 function formatMoney(amount) {
   if (!amount && amount !== 0) return "";
@@ -76,12 +77,18 @@ export default function ProjectDetailClient({
       ? new Date(project.start_date).toISOString().split("T")[0]
       : ""
   );
+  const [actualEndDate, setActualEndDate] = useState(
+    project?.actual_end_date
+      ? new Date(project.actual_end_date).toISOString().split("T")[0]
+      : ""
+  );
   const [status, setStatus] = useState(project?.status || "active");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isTogglingArchive, setIsTogglingArchive] = useState(false);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
 
   // Member management state (for settings tab)
   const [newMemberName, setNewMemberName] = useState("");
@@ -349,7 +356,7 @@ export default function ProjectDetailClient({
     }
   }
 
-  async function handleToggleArchive() {
+  async function handleToggleArchive(archiveData = null) {
     // Only allow toggle between 'active' and 'archived'
     if (status !== "active" && status !== "archived") {
       setError("Kan alleen tussen actief en gearchiveerd wisselen");
@@ -357,26 +364,44 @@ export default function ProjectDetailClient({
     }
 
     const newStatus = status === "active" ? "archived" : "active";
-    const confirmMessage =
-      newStatus === "archived"
-        ? "Weet je zeker dat je dit project wilt archiveren?"
-        : "Weet je zeker dat je dit project wilt activeren?";
 
-    if (!confirm(confirmMessage)) {
+    // If archiving, show modal instead of confirm
+    if (newStatus === "archived" && !archiveData) {
+      setShowArchiveModal(true);
       return;
+    }
+
+    // If unarchiving, use simple confirm
+    if (newStatus === "active") {
+      if (!confirm("Weet je zeker dat je dit project wilt activeren?")) {
+        return;
+      }
     }
 
     setIsTogglingArchive(true);
     setError(null);
+    setShowArchiveModal(false);
 
     try {
+      const body = {
+        id: projectId,
+        status: newStatus,
+      };
+
+      // Add archive data if archiving
+      if (newStatus === "archived" && archiveData) {
+        if (archiveData.actual_end_date) {
+          body.actual_end_date = archiveData.actual_end_date;
+        }
+        if (archiveData.description) {
+          body.description = archiveData.description;
+        }
+      }
+
       const res = await fetch(`/my/projecten/api`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: projectId,
-          status: newStatus,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -856,6 +881,27 @@ export default function ProjectDetailClient({
               />
             </div>
 
+            {actualEndDate && (
+              <div>
+                <label
+                  htmlFor="actualEndDate"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Werkelijke einddatum
+                </label>
+                <input
+                  type="date"
+                  id="actualEndDate"
+                  value={actualEndDate}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed text-base"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Deze datum is ingesteld bij het archiveren van het project.
+                </p>
+              </div>
+            )}
+
             {!canEdit && (
               <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
                 <p className="font-medium mb-1">Alleen-lezen</p>
@@ -1160,6 +1206,15 @@ export default function ProjectDetailClient({
           />
         </div>
       )}
+
+      {/* Archive Project Modal */}
+      <ArchiveProjectModal
+        isOpen={showArchiveModal}
+        onClose={() => setShowArchiveModal(false)}
+        onArchive={handleToggleArchive}
+        projectName={name}
+        isArchiving={isTogglingArchive}
+      />
     </div>
   );
 }

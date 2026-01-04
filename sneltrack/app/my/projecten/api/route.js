@@ -281,6 +281,15 @@ function buildProjectUpdates(body) {
   if (body.end_date !== undefined) {
     updates.end_date = body.end_date || null;
   }
+  if (body.actual_end_date !== undefined) {
+    updates.actual_end_date = body.actual_end_date || null;
+  }
+  if (body.description !== undefined) {
+    updates.description =
+      typeof body.description === "string"
+        ? body.description.trim() || null
+        : body.description;
+  }
   if (body.is_default !== undefined) {
     updates.is_default = body.is_default === true;
   }

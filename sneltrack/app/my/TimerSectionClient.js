@@ -247,56 +247,61 @@ export default function TimerSectionClient({ user }) {
                 >
                   Kies een project
                 </button>
-                {projects.map((project, index) => (
-                  <div key={project.id}>
-                    <div className="h-px bg-gray-200" />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // Dummy action - will be replaced with server call later
-                        handleProjectChange(timerId, project.id);
-                      }}
-                      className="w-full px-3 py-2 text-base text-left hover:bg-gray-100 text-gray-700 flex items-center gap-2"
-                    >
-                      <span className="flex-1">{project.name}</span>
-                      <div className="flex items-center gap-1.5">
-                        {project.is_default && (
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            className="text-yellow-500"
-                            aria-hidden="true"
-                            title="Standaard"
-                          >
-                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                          </svg>
-                        )}
-                        {project.is_shared && (
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="text-blue-500"
-                            aria-hidden="true"
-                            title="Gedeeld"
-                          >
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                            <circle cx="9" cy="7" r="4" />
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                          </svg>
-                        )}
-                      </div>
-                    </button>
-                  </div>
-                ))}
+                {projects
+                  .filter(
+                    (project) =>
+                      project.status !== "archived" && project.archived !== true
+                  )
+                  .map((project, index) => (
+                    <div key={project.id}>
+                      <div className="h-px bg-gray-200" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Dummy action - will be replaced with server call later
+                          handleProjectChange(timerId, project.id);
+                        }}
+                        className="w-full px-3 py-2 text-base text-left hover:bg-gray-100 text-gray-700 flex items-center gap-2"
+                      >
+                        <span className="flex-1">{project.name}</span>
+                        <div className="flex items-center gap-1.5">
+                          {project.is_default && (
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="currentColor"
+                              className="text-yellow-500"
+                              aria-hidden="true"
+                              title="Standaard"
+                            >
+                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                            </svg>
+                          )}
+                          {project.is_shared && (
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="text-blue-500"
+                              aria-hidden="true"
+                              title="Gedeeld"
+                            >
+                              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                              <circle cx="9" cy="7" r="4" />
+                              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                            </svg>
+                          )}
+                        </div>
+                      </button>
+                    </div>
+                  ))}
               </div>
             )}
           </div>

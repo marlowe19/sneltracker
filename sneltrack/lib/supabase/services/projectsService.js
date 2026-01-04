@@ -494,6 +494,8 @@ export async function createProject(userName, projectData) {
  * @param {string|null} [updates.due_date] - Deadline date (ISO date string or null)
  * @param {string|null} [updates.start_date] - Project start date (ISO date string or null)
  * @param {string|null} [updates.end_date] - Planned project end date (ISO date string or null)
+ * @param {string|null} [updates.actual_end_date] - Actual end date when project was completed/archived (ISO date string or null)
+ * @param {string|null} [updates.description] - Project description/notes
  * @param {string|null} [updates.currency] - Currency code (ISO 4217)
  * @param {string} [updates.status] - Project status (planned, active, on_hold, completed, cancelled, archived)
  * @returns {Promise<Object>} Updated project object
@@ -566,6 +568,12 @@ export async function updateProject(userName, projectId, updates) {
   }
   if (updates.end_date !== undefined) {
     updateData.end_date = updates.end_date || null;
+  }
+  if (updates.actual_end_date !== undefined) {
+    updateData.actual_end_date = updates.actual_end_date || null;
+  }
+  if (updates.description !== undefined) {
+    updateData.description = updates.description || null;
   }
   if (updates.currency !== undefined) {
     updateData.currency = updates.currency || "EUR";

@@ -2345,10 +2345,14 @@ export default function DayEntriesListClient({
                           >
                             <option value="">Selecteer een project</option>
                             {projects
-                              .filter((x) => x.status !== "status")
+                              .filter(
+                                (x) =>
+                                  x.status !== "archived" && x.archived !== true
+                              )
                               .map((project) => (
                                 <option key={project.id} value={project.id}>
                                   {project.name}
+
                                   {project.is_default && " (Standaard)"}
                                   {project.is_shared && " (Gedeeld)"}
                                 </option>

@@ -72,37 +72,42 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
               >
                 Kies project
               </button>
-              {projects.map((project) => (
-                <button
-                  key={project.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedProjectId(project.id);
-                    setShowProjectSelect(false);
-                  }}
-                  className={`w-full px-3 py-2 text-sm text-left hover:bg-gray-100 ${
-                    selectedProjectId === project.id
-                      ? "bg-blue-50 text-blue-900"
-                      : "text-gray-700"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span>{project.name}</span>
-                    <div className="flex items-center gap-2">
-                      {project.is_default && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
-                          Standaard
-                        </span>
-                      )}
-                      {project.is_shared && (
-                        <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
-                          Gedeeld
-                        </span>
-                      )}
+              {projects
+                .filter(
+                  (project) =>
+                    project.status !== "archived" && project.archived !== true
+                )
+                .map((project) => (
+                  <button
+                    key={project.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedProjectId(project.id);
+                      setShowProjectSelect(false);
+                    }}
+                    className={`w-full px-3 py-2 text-sm text-left hover:bg-gray-100 ${
+                      selectedProjectId === project.id
+                        ? "bg-blue-50 text-blue-900"
+                        : "text-gray-700"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>{project.name}</span>
+                      <div className="flex items-center gap-2">
+                        {project.is_default && (
+                          <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                            Standaard
+                          </span>
+                        )}
+                        {project.is_shared && (
+                          <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                            Gedeeld
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                ))}
             </div>
           )}
         </div>
