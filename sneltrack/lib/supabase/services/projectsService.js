@@ -365,7 +365,7 @@ export async function getProjectDetail(
   const { data: projectData, error: projectError } = await supabaseServer
     .from("projects")
     .select(
-      "due_date, start_date, end_date, capacity_per_week, priority, zip_code, budget_amount, currency"
+      "due_date, start_date, end_date, capacity_per_week, priority, zip_code, budget_amount, currency, status"
     )
     .eq("id", projectId)
     .single();
@@ -393,6 +393,7 @@ export async function getProjectDetail(
     capacity_per_week: projectData?.capacity_per_week || null,
     priority: projectData?.priority || null,
     zip_code: projectData?.zip_code || null,
+    status: projectData?.status || "active",
     statistics: {
       totalHours: row.total_hours,
       entryCount: Number(row.entry_count),
@@ -494,6 +495,7 @@ export async function createProject(userName, projectData) {
  * @param {string|null} [updates.start_date] - Project start date (ISO date string or null)
  * @param {string|null} [updates.end_date] - Planned project end date (ISO date string or null)
  * @param {string|null} [updates.currency] - Currency code (ISO 4217)
+ * @param {string} [updates.status] - Project status (planned, active, on_hold, completed, cancelled, archived)
  * @returns {Promise<Object>} Updated project object
  */
 export async function updateProject(userName, projectId, updates) {
@@ -568,6 +570,9 @@ export async function updateProject(userName, projectId, updates) {
   if (updates.currency !== undefined) {
     updateData.currency = updates.currency || "EUR";
   }
+  if (updates.status !== undefined) {
+    updateData.status = updates.status;
+  }
 
   const { data, error } = await supabaseServer
     .from("projects")
@@ -593,6 +598,7 @@ export async function updateProject(userName, projectId, updates) {
     capacity_per_week: data.capacity_per_week,
     priority: data.priority,
     zip_code: data.zip_code,
+    status: data.status,
     owner: data.owner_name,
   };
 }

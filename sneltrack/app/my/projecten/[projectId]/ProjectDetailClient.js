@@ -76,10 +76,12 @@ export default function ProjectDetailClient({
       ? new Date(project.start_date).toISOString().split("T")[0]
       : ""
   );
+  const [status, setStatus] = useState(project?.status || "active");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isTogglingArchive, setIsTogglingArchive] = useState(false);
 
   // Member management state (for settings tab)
   const [newMemberName, setNewMemberName] = useState("");
@@ -123,6 +125,7 @@ export default function ProjectDetailClient({
           ? new Date(project.start_date).toISOString().split("T")[0]
           : ""
       );
+      setStatus(project.status || "active");
     }
   }, [project]);
 
@@ -343,6 +346,52 @@ export default function ProjectDetailClient({
       setError(err.message || "An error occurred");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleToggleArchive() {
+    // Only allow toggle between 'active' and 'archived'
+    if (status !== "active" && status !== "archived") {
+      setError("Kan alleen tussen actief en gearchiveerd wisselen");
+      return;
+    }
+
+    const newStatus = status === "active" ? "archived" : "active";
+    const confirmMessage =
+      newStatus === "archived"
+        ? "Weet je zeker dat je dit project wilt archiveren?"
+        : "Weet je zeker dat je dit project wilt activeren?";
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    setIsTogglingArchive(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/my/projecten/api`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: projectId,
+          status: newStatus,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to update project status");
+      }
+
+      // Update local state
+      setStatus(newStatus);
+      // Reload page data after successful update
+      router.refresh();
+    } catch (err) {
+      setError(err.message || "Failed to update project status");
+    } finally {
+      setIsTogglingArchive(false);
     }
   }
 
@@ -1009,6 +1058,60 @@ export default function ProjectDetailClient({
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {/* Archive/Unarchive Project Section */}
+          {canEdit && (
+            <div className="mt-8 pt-8 border-t border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-900 mb-4">
+                Project Status
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">
+                      Huidige status:
+                    </span>
+                    <span
+                      className={`text-xs px-2 py-1 rounded font-medium ${
+                        status === "archived"
+                          ? "bg-gray-200 text-gray-700"
+                          : "bg-green-100 text-green-700"
+                      }`}
+                    >
+                      {status === "archived" ? "Gearchiveerd" : "Actief"}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-600">
+                  {status === "archived"
+                    ? "Dit project is gearchiveerd. Activeer het om het weer beschikbaar te maken."
+                    : "Archiveer dit project om het te verbergen zonder het te verwijderen."}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleToggleArchive}
+                  disabled={isTogglingArchive || isSaving || isDeleting}
+                  className={`w-full px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-medium ${
+                    status === "archived"
+                      ? "bg-[#008eff] text-white"
+                      : "bg-gray-600 text-white"
+                  }`}
+                >
+                  {isTogglingArchive
+                    ? status === "archived"
+                      ? "Activeren..."
+                      : "Archiveren..."
+                    : status === "archived"
+                    ? "Project Activeren"
+                    : "Project Archiveren"}
+                </button>
+                {error && isTogglingArchive && (
+                  <div className="text-sm text-red-600 bg-red-50 p-3 rounded">
+                    {error}
                   </div>
                 )}
               </div>

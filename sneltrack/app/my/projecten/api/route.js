@@ -284,6 +284,9 @@ function buildProjectUpdates(body) {
   if (body.is_default !== undefined) {
     updates.is_default = body.is_default === true;
   }
+  if (body.status !== undefined) {
+    updates.status = body.status;
+  }
 
   return updates;
 }

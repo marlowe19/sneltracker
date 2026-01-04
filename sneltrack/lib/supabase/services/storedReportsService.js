@@ -14,7 +14,12 @@ import { supabaseServer } from "@/lib/supabaseServer";
  * @param {Object} reportData - Report data object containing projects, totals, and filters
  * @returns {Promise<Object>} Created stored report
  */
-export async function saveStoredReport(userName, name, description, reportData) {
+export async function saveStoredReport(
+  userName,
+  name,
+  description,
+  reportData
+) {
   const { data, error } = await supabaseServer
     .from("stored_reports")
     .insert({
@@ -97,4 +102,3 @@ export async function deleteStoredReport(userName, reportId) {
     throw error;
   }
 }
-

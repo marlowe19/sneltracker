@@ -1880,13 +1880,15 @@ export default function DayEntriesListClient({
                             required
                           >
                             <option value="">Selecteer een project</option>
-                            {projects.map((project) => (
-                              <option key={project.id} value={project.id}>
-                                {project.name}
-                                {project.is_default && " (Standaard)"}
-                                {project.is_shared && " (Gedeeld)"}
-                              </option>
-                            ))}
+                            {projects
+                              .filter((x) => x.status !== "archived")
+                              .map((project) => (
+                                <option key={project.id} value={project.id}>
+                                  {project.name}
+                                  {project.is_default && " (Standaard)"}
+                                  {project.is_shared && " (Gedeeld)"}
+                                </option>
+                              ))}
                           </select>
                         </div>
 
@@ -2342,13 +2344,15 @@ export default function DayEntriesListClient({
                             required
                           >
                             <option value="">Selecteer een project</option>
-                            {projects.map((project) => (
-                              <option key={project.id} value={project.id}>
-                                {project.name}
-                                {project.is_default && " (Standaard)"}
-                                {project.is_shared && " (Gedeeld)"}
-                              </option>
-                            ))}
+                            {projects
+                              .filter((x) => x.status !== "status")
+                              .map((project) => (
+                                <option key={project.id} value={project.id}>
+                                  {project.name}
+                                  {project.is_default && " (Standaard)"}
+                                  {project.is_shared && " (Gedeeld)"}
+                                </option>
+                              ))}
                           </select>
                         </div>
 
