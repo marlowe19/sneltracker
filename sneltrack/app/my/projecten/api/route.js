@@ -27,6 +27,7 @@ import {
   removeProjectMember,
   createProject as createProjectSupabase,
   updateProject as updateProjectSupabase,
+  lookupUserByEmail,
 } from "@/lib/supabase/services/projectsService";
 import { auth0 } from "@/lib/auth/auth0";
 
@@ -115,8 +116,8 @@ export const POST = auth0.withApiAuthRequired(async (req) => {
       // check if users exists in table based on the email and return the user by email
 
       //lookup user by email
-      const user = await lookupUserByEmail(memberName);
-      if (!user) {
+      const foundUser = await lookupUserByEmail(memberName);
+      if (!foundUser) {
         return NextResponse.json(
           { error: "Gebruiker niet gevonden" },
           { status: 404 }
@@ -139,10 +140,11 @@ export const POST = auth0.withApiAuthRequired(async (req) => {
       // );
 
       // ✅ NEW: Also write to Supabase
+      // Use foundUser.user_name (auth0 id) instead of memberName (email)
       try {
         await addProjectMember(
           projectId,
-          memberName,
+          foundUser.user_name,
           "member",
           hourly_rate ?? null,
           body.capacity_per_week ?? null

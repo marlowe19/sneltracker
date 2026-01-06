@@ -34,7 +34,7 @@ export async function lookupUserByEmail(email) {
   if (!email) return null;
   const { data, error } = await supabaseServer
     .from("users")
-    .select("id, name")
+    .select("id, name, user_name")
     .eq("email", email)
     .single();
 
@@ -72,12 +72,13 @@ export async function lookupUserByUsername(username) {
 export async function syncUserWithAuth0(userName, auth0User) {
   if (!userName || !auth0User) return null;
 
-  const displayName = auth0User.name || auth0User.nickname || auth0User.email || null;
+  const displayName =
+    auth0User.name || auth0User.nickname || auth0User.email || null;
   const email = auth0User.email || null;
 
   // First, check if user exists
   const existingUser = await lookupUserByUsername(userName);
-  
+
   if (!existingUser) {
     // User doesn't exist, create one
     const { data, error } = await supabaseServer
