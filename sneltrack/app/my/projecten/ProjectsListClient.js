@@ -45,8 +45,11 @@ export default function ProjectsListClient({ user, initialProjects }) {
   function handleProjectClick(project) {
     // Check if shared project and user is not owner
     if (project.is_shared && project.owner !== user) {
-      toast.show("alleen de eigenaar heeft toegang tot het project");
-      return;
+      // Also check if user has owner role in project members
+      if (project.member_role !== "owner") {
+        toast.show("alleen de eigenaar heeft toegang tot het project");
+        return;
+      }
     }
     // Navigate to detail page
     router.push(`/my/projecten/${project.id}`);
@@ -203,7 +206,8 @@ export default function ProjectsListClient({ user, initialProjects }) {
                         </span>
                       )}
                     </div>
-                    {(project.status === "archived" || project.archived === true) && (
+                    {(project.status === "archived" ||
+                      project.archived === true) && (
                       <div className="mb-1">
                         <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded">
                           Gearchiveerd

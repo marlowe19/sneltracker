@@ -24,6 +24,7 @@ import {
   updateProjectMemberRate,
   deleteProject as deleteProjectSupabase,
   updateProjectMemberCapacity,
+  updateProjectMemberRole,
   removeProjectMember,
   createProject as createProjectSupabase,
   updateProject as updateProjectSupabase,
@@ -382,6 +383,75 @@ export const PATCH = auth0.withApiAuthRequired(async (req) => {
         );
       } catch (error) {
         console.error("Failed to update member capacity in Supabase:", error);
+        throw error;
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
+    // Handle updateMemberRole action
+    if (action === "updateMemberRole") {
+      const { projectId, memberName, role } = body;
+      if (!projectId || !memberName || !role) {
+        return NextResponse.json(
+          { error: "projectId, memberName, and role are required" },
+          { status: 400 }
+        );
+      }
+
+      // Validate role value
+      if (role !== "owner" && role !== "member") {
+        return NextResponse.json(
+          { error: "Role must be either 'owner' or 'member'" },
+          { status: 400 }
+        );
+      }
+
+      const projectDetail = await getProjectDetail(user, projectId);
+      if (!projectDetail) {
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 404 }
+        );
+      }
+
+      // Check if user is project owner OR has "owner" role in project_members
+      const canChangeRole =
+        projectDetail.is_owner || projectDetail.member_role === "owner";
+
+      if (!canChangeRole) {
+        return NextResponse.json(
+          {
+            error:
+              "Only project owners and members with owner role can change member roles",
+          },
+          { status: 403 }
+        );
+      }
+
+      // Prevent project owner from changing their own role
+      if (projectDetail.is_owner && memberName === user) {
+        return NextResponse.json(
+          { error: "Project owner cannot change their own role" },
+          { status: 403 }
+        );
+      }
+
+      // Check if member exists in project
+      const member = projectDetail.members?.find(
+        (m) => m.user_name === memberName
+      );
+      if (!member) {
+        return NextResponse.json(
+          { error: "Member not found in project" },
+          { status: 404 }
+        );
+      }
+
+      try {
+        await updateProjectMemberRole(projectId, memberName, role);
+      } catch (error) {
+        console.error("Failed to update member role in Supabase:", error);
         throw error;
       }
 

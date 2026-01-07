@@ -291,7 +291,7 @@ export function upsert(project, userName) {
  */
 export async function getUserProjectsWithStats(userName) {
   const { data, error } = await supabaseServer.rpc(
-    "get_user_projects_with_stats",
+    "get_user_projects_with_stats_v2",
     {
       p_user_name: userName,
     }
@@ -313,6 +313,7 @@ export async function getUserProjectsWithStats(userName) {
     is_default: row.is_default,
     owner: row.owner_name,
     is_owner: row.is_owner,
+    member_role: row.member_role || null, // User's role from project_members
     member_count: row.member_count,
     total_hours: row.total_hours,
     is_over_budget: row.is_over_budget,
@@ -701,6 +702,28 @@ export async function updateProjectMemberCapacity(
 
   if (error) {
     console.error("Error updating member capacity in Supabase:", error);
+    throw error;
+  }
+
+  return true;
+}
+
+/**
+ * Updates a project member's role in Supabase
+ *
+ * @param {string} projectId - Supabase project UUID
+ * @param {string} userName - Username of member to update
+ * @param {string} role - New role ("owner" or "member")
+ */
+export async function updateProjectMemberRole(projectId, userName, role) {
+  const { error } = await supabaseServer
+    .from("project_members")
+    .update({ role: role })
+    .eq("project_id", projectId)
+    .eq("user_name", userName);
+
+  if (error) {
+    console.error("Error updating member role in Supabase:", error);
     throw error;
   }
 

@@ -37,6 +37,8 @@ export default function MembersListClient({
   const [editCapacityValue, setEditCapacityValue] = useState("");
   const [isUpdatingRate, setIsUpdatingRate] = useState(false);
   const [isUpdatingCapacity, setIsUpdatingCapacity] = useState(false);
+  const [editingRole, setEditingRole] = useState(null);
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false);
   const [calculatingCapacity, setCalculatingCapacity] = useState(null);
   const [calculatedCapacity, setCalculatedCapacity] = useState(null);
   const [error, setError] = useState(null);
@@ -53,6 +55,12 @@ export default function MembersListClient({
       statsMap.set(stat.user_name, stat);
     });
   }
+
+  // Find current user's member record to check their role
+  const currentUserMember = members.find((m) => m.user_name === user);
+  const currentUserRole = currentUserMember?.role;
+  // User can change roles if they are project owner OR have "owner" role in project_members
+  const canChangeRoles = isOwner || currentUserRole === "owner";
 
   function handleStartEditRate(member) {
     setEditingRate(member.user_name);
@@ -203,6 +211,40 @@ export default function MembersListClient({
     }
   }
 
+  async function handleChangeRole(memberName, newRole) {
+    setIsUpdatingRole(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/my/projecten/api?action=updateMemberRole`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          memberName,
+          role: newRole,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to update role");
+      }
+
+      // Optimistically update members list with new role
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.user_name === memberName ? { ...m, role: newRole } : m
+        )
+      );
+      setEditingRole(null);
+    } catch (err) {
+      setError(err.message || "Failed to update role");
+    } finally {
+      setIsUpdatingRole(false);
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div className="text-sm font-medium text-gray-700">Leden</div>
@@ -232,15 +274,55 @@ export default function MembersListClient({
                   <span className="text-sm font-medium text-gray-900">
                     {member.user_display_name || member.user_name}
                   </span>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded ${
-                      member.role === "owner"
-                        ? "bg-purple-100 text-purple-700"
-                        : "bg-gray-200 text-gray-700"
-                    }`}
-                  >
-                    {member.role === "owner" ? "Eigenaar" : "Lid"}
-                  </span>
+                  {editingRole === member.user_name ? (
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={member.role}
+                        onChange={(e) => handleChangeRole(member.user_name, e.target.value)}
+                        disabled={isUpdatingRole}
+                        className="text-xs px-2 py-0.5 rounded border border-gray-300 bg-white"
+                        autoFocus
+                      >
+                        <option value="member">Lid</option>
+                        <option value="owner">Eigenaar</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setEditingRole(null)}
+                        disabled={isUpdatingRole}
+                        className="text-gray-400 hover:text-gray-600 text-sm"
+                        title="Annuleren"
+                      >
+                        ✕
+                      </button>
+                      {isUpdatingRole && (
+                        <span className="text-xs text-gray-500">...</span>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded ${
+                          member.role === "owner"
+                            ? "bg-purple-100 text-purple-700"
+                            : "bg-gray-200 text-gray-700"
+                        }`}
+                      >
+                        {member.role === "owner" ? "Eigenaar" : "Lid"}
+                      </span>
+                      {canChangeRoles &&
+                        member.user_name !== user && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingRole(member.user_name)}
+                            className="text-blue-400 hover:text-blue-600 text-xs"
+                            title="Bewerk rol"
+                          >
+                            ✎
+                          </button>
+                        )}
+                    </>
+                  )}
                 </div>
                 {editingRate === member.user_name ? (
                   <div className="flex items-center gap-2">
