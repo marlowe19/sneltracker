@@ -256,7 +256,7 @@ export default function ProjectActivitiesTab({ projectId, isOwner }) {
 
       {isOwner && (
         <div className="border-t pt-4">
-          <div className="flex gap-2">
+          <div className="flex gap-2 overflow-x-hidden">
             <input
               type="text"
               placeholder="Activiteit naam"
@@ -269,7 +269,7 @@ export default function ProjectActivitiesTab({ projectId, isOwner }) {
                   handleAddActivity();
                 }
               }}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
+              className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md"
             />
             <input
               type="number"
@@ -284,12 +284,12 @@ export default function ProjectActivitiesTab({ projectId, isOwner }) {
                   handleAddActivity();
                 }
               }}
-              className="w-32 px-3 py-2 border border-gray-300 rounded-md"
+              className="w-32 min-w-0 flex-shrink-0 px-3 py-2 border border-gray-300 rounded-md"
             />
             <button
               onClick={handleAddActivity}
               disabled={isAdding || !newActivity.name.trim()}
-              className="px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0070cc] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0070cc] disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
             >
               {isAdding ? "..." : "Toevoegen"}
             </button>
