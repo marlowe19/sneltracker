@@ -12,6 +12,9 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
   const projects = useStore((state) => state.projects);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [showProjectSelect, setShowProjectSelect] = useState(false);
+  const [projectActivities, setProjectActivities] = useState([]);
+  const [selectedActivity, setSelectedActivity] = useState(null);
+  const [loadingActivities, setLoadingActivities] = useState(false);
 
   // Pre-select default project when projects are loaded
   useEffect(() => {
@@ -23,6 +26,34 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
     }
   }, [projects, selectedProjectId]);
 
+  // Fetch activities when project is selected
+  useEffect(() => {
+    if (selectedProjectId) {
+      fetchProjectActivities(selectedProjectId);
+    } else {
+      setProjectActivities([]);
+      setSelectedActivity(null);
+    }
+  }, [selectedProjectId]);
+
+  async function fetchProjectActivities(projectId) {
+    setLoadingActivities(true);
+    try {
+      const res = await fetch(`/my/projects/${projectId}/activities`);
+      if (res.ok) {
+        const data = await res.json();
+        setProjectActivities(data.activities || []);
+      } else {
+        setProjectActivities([]);
+      }
+    } catch (error) {
+      console.error("Error fetching project activities:", error);
+      setProjectActivities([]);
+    } finally {
+      setLoadingActivities(false);
+    }
+  }
+
   async function handle(action) {
     setIsLoading(true);
 
@@ -33,8 +64,19 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
 
     try {
       const url = new URL(`/my/${action}`, window.location.origin);
-      if (action === "start" && selectedProjectId) {
-        url.searchParams.set("project", selectedProjectId);
+      if (action === "start") {
+        if (selectedProjectId) {
+          url.searchParams.set("project", selectedProjectId);
+        }
+        if (selectedActivity) {
+          url.searchParams.set("activity_type", selectedActivity.name);
+          if (selectedActivity.hourly_rate) {
+            url.searchParams.set(
+              "activity_hourly_rate",
+              selectedActivity.hourly_rate.toString()
+            );
+          }
+        }
       }
       await fetch(url.toString(), { method: "POST" });
     } finally {
@@ -112,6 +154,47 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
           )}
         </div>
       )}
+
+      {/* Activity Selector - only show if project has activities and not active */}
+      {!active &&
+        selectedProjectId &&
+        projectActivities.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-xs text-gray-500">Activiteit (optioneel)</div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedActivity(null)}
+                className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                  !selectedActivity
+                    ? "bg-[#008eff] text-white border-[#008eff]"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                Geen
+              </button>
+              {projectActivities.map((activity) => (
+                <button
+                  key={activity.id}
+                  type="button"
+                  onClick={() => setSelectedActivity(activity)}
+                  className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                    selectedActivity?.id === activity.id
+                      ? "bg-[#008eff] text-white border-[#008eff]"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  {activity.name}
+                  {activity.hourly_rate && (
+                    <span className="ml-1 text-xs">
+                      (€{parseFloat(activity.hourly_rate).toFixed(2)}/uur)
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
       <button
         type="button"

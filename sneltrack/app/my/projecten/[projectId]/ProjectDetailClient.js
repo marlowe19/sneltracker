@@ -9,6 +9,7 @@ import CalendarViewClient from "@/app/my/components/CalendarViewClient";
 import ProjectForecastClient from "./ProjectForecastClient";
 import ProjectEntriesListClient from "./ProjectEntriesListClient";
 import ArchiveProjectModal from "./ArchiveProjectModal";
+import ProjectActivitiesTab from "./ProjectActivitiesTab";
 
 function formatMoney(amount) {
   if (!amount && amount !== 0) return "";
@@ -601,6 +602,17 @@ export default function ProjectDetailClient({
           )}
           <button
             type="button"
+            onClick={() => setActiveTab("activities")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "activities"
+                ? "border-[#008eff] text-[#008eff]"
+                : "border-transparent text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Activiteiten
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab("settings")}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               activeTab === "settings"
@@ -659,6 +671,11 @@ export default function ProjectDetailClient({
         </div>
       )}
 
+      {activeTab === "activities" && (
+        <div>
+          <ProjectActivitiesTab projectId={projectId} isOwner={isOwner} />
+        </div>
+      )}
       {activeTab === "settings" && (
         <div className="space-y-6 mb-4">
           <form onSubmit={handleSaveSettings} className="space-y-4">

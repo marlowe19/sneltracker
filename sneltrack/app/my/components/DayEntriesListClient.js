@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useStore } from "@/stores/useStore";
@@ -15,6 +15,8 @@ import {
   ChevronLeft,
   ChevronLeft24,
   ToolBox,
+  ChevronDown,
+  ChevronUp,
 } from "@carbon/icons-react";
 function formatTime(isoString) {
   if (!isoString) return "";
@@ -105,6 +107,7 @@ export default function DayEntriesListClient({
   onClose, // Add this prop
 }) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const projects = useStore((state) => state.projects);
   const addEntry = useStore((state) => state.addEntry);
   const updateEntry = useStore((state) => state.updateEntry);
@@ -134,6 +137,10 @@ export default function DayEntriesListClient({
   const [expandedExpenses, setExpandedExpenses] = useState(new Set());
   const [savingExpenseId, setSavingExpenseId] = useState(null);
   const [loadingEntries, setLoadingEntries] = useState(false);
+  const [entryActivities, setEntryActivities] = useState({}); // entryId -> activities array
+  const [expandedActivities, setExpandedActivities] = useState(new Set()); // entryIds with activities expanded
+  const [editingActivityId, setEditingActivityId] = useState(null); // activityId being edited
+  const [editingActivityData, setEditingActivityData] = useState(null); // temporary edit data
   const toast = useToast();
   // Memoize dayDateString to ensure stable reference
   const dayDateString = useMemo(
@@ -171,6 +178,22 @@ export default function DayEntriesListClient({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayDateString, user]);
+
+  // Initialize activities from entries (activities are now included in the query)
+  useEffect(() => {
+    if (localEntries.length > 0) {
+      const activitiesMap = {};
+      localEntries.forEach((entry) => {
+        if (entry.activities && entry.activities.length > 0) {
+          activitiesMap[entry.id] = entry.activities;
+        }
+      });
+      if (Object.keys(activitiesMap).length > 0) {
+        setEntryActivities((prev) => ({ ...prev, ...activitiesMap }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localEntries]);
 
   // // Initialize entries
   // useEffect(() => {
@@ -404,6 +427,102 @@ export default function DayEntriesListClient({
       updated[index].duration_editable = formatted;
       setLocalEntries(updated);
     }
+  };
+
+  async function fetchEntryActivities(entryId) {
+    try {
+      const res = await fetch(`/my/entries/${entryId}/activities`);
+      if (res.ok) {
+        const data = await res.json();
+        setEntryActivities((prev) => ({
+          ...prev,
+          [entryId]: data.activities || [],
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching entry activities:", error);
+    }
+  }
+
+  const handleEditActivity = async (entryId, activityId, activityData) => {
+    try {
+      const res = await fetch(
+        `/my/entries/${entryId}/activities/${activityId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(activityData),
+        }
+      );
+
+      if (res.ok) {
+        // Refresh activities for this entry
+        await fetchEntryActivities(entryId);
+        setEditingActivityId(null);
+        setEditingActivityData(null);
+        toast.show("Activiteit bijgewerkt");
+        // Refresh entries to get updated activities
+        await fetchDayEntries(user, selectedDate);
+        startTransition(() => router.refresh());
+      } else {
+        const error = await res.json();
+        toast.show(error.message || "Fout bij bijwerken van activiteit");
+      }
+    } catch (error) {
+      console.error("Error updating activity:", error);
+      toast.show("Fout bij bijwerken van activiteit");
+    }
+  };
+
+  const handleDeleteActivity = async (entryId, activityId) => {
+    if (!confirm("Weet je zeker dat je deze activiteit wilt verwijderen?")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `/my/entries/${entryId}/activities/${activityId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (res.ok) {
+        // Remove from local state
+        setEntryActivities((prev) => ({
+          ...prev,
+          [entryId]: (prev[entryId] || []).filter((a) => a.id !== activityId),
+        }));
+        toast.show("Activiteit verwijderd");
+        // Refresh entries to get updated activities
+        await fetchDayEntries(user, selectedDate);
+        startTransition(() => router.refresh());
+      } else {
+        const error = await res.json();
+        toast.show(error.message || "Fout bij verwijderen van activiteit");
+      }
+    } catch (error) {
+      console.error("Error deleting activity:", error);
+      toast.show("Fout bij verwijderen van activiteit");
+    }
+  };
+
+  const startEditingActivity = (activity) => {
+    setEditingActivityId(activity.id);
+    setEditingActivityData({
+      activity_type: activity.activity_type,
+      hourly_rate: activity.hourly_rate || "",
+      billable: activity.billable !== false,
+      start_time: activity.start_time ? formatTime(activity.start_time) : "",
+      end_time: activity.end_time ? formatTime(activity.end_time) : "",
+      original_start_time: activity.start_time, // Store original for date preservation
+      original_end_time: activity.end_time,
+    });
+  };
+
+  const cancelEditingActivity = () => {
+    setEditingActivityId(null);
+    setEditingActivityData(null);
   };
 
   const handleToggleExpand = (entryId) => {
@@ -905,7 +1024,7 @@ export default function DayEntriesListClient({
       //   if (onEntryUpdate) {
       //     onEntryUpdate();
       //   }
-      toast.success("Wijzigingen opgeslagen");
+      toast.show("Wijzigingen opgeslagen");
     } catch (err) {
       setError(err.message || "Failed to save changes");
       setIsSaving(false);
@@ -1780,6 +1899,37 @@ export default function DayEntriesListClient({
                         <span className="text-base  text-gray-700">
                           {entry ? entry.project_name : "-"}
                         </span>
+                        {entry.has_activities && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newSet = new Set(expandedActivities);
+                              if (newSet.has(entry.id)) {
+                                newSet.delete(entry.id);
+                              } else {
+                                newSet.add(entry.id);
+                                // Activities are already included in entry, but ensure they're in state
+                                if (
+                                  entry.activities &&
+                                  !entryActivities[entry.id]
+                                ) {
+                                  setEntryActivities((prev) => ({
+                                    ...prev,
+                                    [entry.id]: entry.activities,
+                                  }));
+                                }
+                              }
+                              setExpandedActivities(newSet);
+                            }}
+                            className="ml-2 text-gray-500 hover:text-gray-700"
+                          >
+                            {expandedActivities.has(entry.id) ? (
+                              <ChevronUp size={16} />
+                            ) : (
+                              <ChevronDown size={16} />
+                            )}
+                          </button>
+                        )}
                       </div>
                       {/* <button
                         onClick={() => handleToggleExpand(entry.id)}
@@ -1847,6 +1997,41 @@ export default function DayEntriesListClient({
                             </span>
                           </div>
                         </div> */}
+
+                        {/* Activity Breakdown - Collapsed View */}
+                        {entry.has_activities &&
+                          expandedActivities.has(entry.id) && (
+                            <div className="mt-2 ml-6 space-y-1 border-l-2 border-gray-200 pl-3">
+                              {(
+                                entry.activities ||
+                                entryActivities[entry.id] ||
+                                []
+                              ).map((activity) => {
+                                const durationMs =
+                                  activity.duration_ms ||
+                                  (activity.end_time
+                                    ? new Date(activity.end_time).getTime() -
+                                      new Date(activity.start_time).getTime()
+                                    : new Date().getTime() -
+                                      new Date(activity.start_time).getTime());
+                                const hours = durationMs / (1000 * 60 * 60);
+                                const earnings = activity.hourly_rate
+                                  ? hours * parseFloat(activity.hourly_rate)
+                                  : 0;
+                                return (
+                                  <div
+                                    key={activity.id}
+                                    className="text-sm text-gray-600"
+                                  >
+                                    • {activity.activity_type} -{" "}
+                                    {formatHoursMinutes(durationMs)}
+                                    {earnings > 0 &&
+                                      ` - ${formatMoney(earnings)}`}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                       </div>
                     ) : (
                       // Expanded View
@@ -2156,6 +2341,363 @@ export default function DayEntriesListClient({
                             )}
                           </>
                         )}
+
+                        {/* Activities Section */}
+                        {entry.has_activities &&
+                          entry.id &&
+                          !entry.id.startsWith("temp-") && (
+                            <div className="pt-4 border-t border-gray-200">
+                              <div className="flex items-center justify-between mb-3">
+                                <label className="block text-sm font-medium text-gray-700">
+                                  Activiteiten
+                                </label>
+                              </div>
+                              {(
+                                entry.activities ||
+                                entryActivities[entry.id] ||
+                                []
+                              ).length > 0 ? (
+                                <div className="space-y-3">
+                                  {(
+                                    entry.activities ||
+                                    entryActivities[entry.id] ||
+                                    []
+                                  ).map((activity) => {
+                                    const isEditing =
+                                      editingActivityId === activity.id;
+                                    const activityData = isEditing
+                                      ? editingActivityData
+                                      : null;
+                                    const durationMs =
+                                      activity.duration_ms ||
+                                      (activity.end_time
+                                        ? new Date(
+                                            activity.end_time
+                                          ).getTime() -
+                                          new Date(
+                                            activity.start_time
+                                          ).getTime()
+                                        : new Date().getTime() -
+                                          new Date(
+                                            activity.start_time
+                                          ).getTime());
+                                    const hours = durationMs / (1000 * 60 * 60);
+                                    const earnings = activity.hourly_rate
+                                      ? hours * parseFloat(activity.hourly_rate)
+                                      : 0;
+
+                                    return (
+                                      <div
+                                        key={activity.id}
+                                        className="border border-gray-200 rounded-md p-3 bg-gray-50"
+                                      >
+                                        {isEditing ? (
+                                          <div className="space-y-3">
+                                            <div>
+                                              <label className="block text-xs font-medium text-gray-700 mb-1">
+                                                Activiteit type
+                                              </label>
+                                              <input
+                                                type="text"
+                                                value={
+                                                  activityData?.activity_type ||
+                                                  ""
+                                                }
+                                                onChange={(e) =>
+                                                  setEditingActivityData({
+                                                    ...activityData,
+                                                    activity_type:
+                                                      e.target.value,
+                                                  })
+                                                }
+                                                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff]"
+                                                placeholder="Bijv. Work, Lunch"
+                                              />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                              <div>
+                                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                                  Starttijd
+                                                </label>
+                                                <input
+                                                  type="time"
+                                                  value={
+                                                    activityData?.start_time ||
+                                                    ""
+                                                  }
+                                                  onChange={(e) =>
+                                                    setEditingActivityData({
+                                                      ...activityData,
+                                                      start_time:
+                                                        e.target.value,
+                                                    })
+                                                  }
+                                                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff]"
+                                                />
+                                              </div>
+                                              <div>
+                                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                                  Eindtijd
+                                                </label>
+                                                <input
+                                                  type="time"
+                                                  value={
+                                                    activityData?.end_time || ""
+                                                  }
+                                                  onChange={(e) =>
+                                                    setEditingActivityData({
+                                                      ...activityData,
+                                                      end_time: e.target.value,
+                                                    })
+                                                  }
+                                                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff]"
+                                                />
+                                              </div>
+                                            </div>
+                                            <div>
+                                              <label className="block text-xs font-medium text-gray-700 mb-1">
+                                                Uurtarief (€)
+                                              </label>
+                                              <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={
+                                                  activityData?.hourly_rate ||
+                                                  ""
+                                                }
+                                                onChange={(e) =>
+                                                  setEditingActivityData({
+                                                    ...activityData,
+                                                    hourly_rate:
+                                                      e.target.value === ""
+                                                        ? null
+                                                        : parseFloat(
+                                                            e.target.value
+                                                          ),
+                                                  })
+                                                }
+                                                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff]"
+                                                placeholder="0.00"
+                                              />
+                                            </div>
+                                            <div>
+                                              <label className="block text-xs font-medium text-gray-700 mb-2">
+                                                Declarabel
+                                              </label>
+                                              <div className="flex gap-4">
+                                                <label className="flex items-center space-x-2 cursor-pointer">
+                                                  <input
+                                                    type="radio"
+                                                    name={`activity-billable-${activity.id}`}
+                                                    checked={
+                                                      activityData?.billable !==
+                                                      false
+                                                    }
+                                                    onChange={() =>
+                                                      setEditingActivityData({
+                                                        ...activityData,
+                                                        billable: true,
+                                                      })
+                                                    }
+                                                    className="w-3 h-3 text-[#008eff] border-gray-300 focus:ring-[#008eff]"
+                                                  />
+                                                  <span className="text-xs text-gray-700">
+                                                    Declarabel
+                                                  </span>
+                                                </label>
+                                                <label className="flex items-center space-x-2 cursor-pointer">
+                                                  <input
+                                                    type="radio"
+                                                    name={`activity-billable-${activity.id}`}
+                                                    checked={
+                                                      activityData?.billable ===
+                                                      false
+                                                    }
+                                                    onChange={() =>
+                                                      setEditingActivityData({
+                                                        ...activityData,
+                                                        billable: false,
+                                                      })
+                                                    }
+                                                    className="w-3 h-3 text-[#008eff] border-gray-300 focus:ring-[#008eff]"
+                                                  />
+                                                  <span className="text-xs text-gray-700">
+                                                    Niet declarabel
+                                                  </span>
+                                                </label>
+                                              </div>
+                                            </div>
+                                            <div className="flex gap-2 pt-2">
+                                              <button
+                                                onClick={() => {
+                                                  // Preserve original date, update time
+                                                  let startTimeISO =
+                                                    activityData.original_start_time;
+                                                  let endTimeISO =
+                                                    activityData.original_end_time;
+
+                                                  if (
+                                                    activityData.start_time &&
+                                                    activityData.original_start_time
+                                                  ) {
+                                                    const originalDate =
+                                                      new Date(
+                                                        activityData.original_start_time
+                                                      );
+                                                    const [hours, minutes] =
+                                                      activityData.start_time.split(
+                                                        ":"
+                                                      );
+                                                    originalDate.setHours(
+                                                      parseInt(hours, 10) || 0,
+                                                      parseInt(minutes, 10) ||
+                                                        0,
+                                                      0,
+                                                      0
+                                                    );
+                                                    startTimeISO =
+                                                      originalDate.toISOString();
+                                                  }
+
+                                                  if (
+                                                    activityData.end_time &&
+                                                    activityData.original_end_time
+                                                  ) {
+                                                    const originalDate =
+                                                      new Date(
+                                                        activityData.original_end_time
+                                                      );
+                                                    const [hours, minutes] =
+                                                      activityData.end_time.split(
+                                                        ":"
+                                                      );
+                                                    originalDate.setHours(
+                                                      parseInt(hours, 10) || 0,
+                                                      parseInt(minutes, 10) ||
+                                                        0,
+                                                      0,
+                                                      0
+                                                    );
+                                                    endTimeISO =
+                                                      originalDate.toISOString();
+                                                  }
+
+                                                  handleEditActivity(
+                                                    entry.id,
+                                                    activity.id,
+                                                    {
+                                                      activity_type:
+                                                        activityData.activity_type,
+                                                      hourly_rate:
+                                                        activityData.hourly_rate,
+                                                      billable:
+                                                        activityData.billable,
+                                                      start_time: startTimeISO,
+                                                      end_time: endTimeISO,
+                                                    }
+                                                  );
+                                                }}
+                                                className="px-3 py-1.5 text-xs bg-[#008eff] text-white rounded-md hover:bg-[#0066b3]"
+                                              >
+                                                Opslaan
+                                              </button>
+                                              <button
+                                                onClick={cancelEditingActivity}
+                                                className="px-3 py-1.5 text-xs bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                                              >
+                                                Annuleren
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div>
+                                            <div className="flex items-start justify-between">
+                                              <div className="flex-1">
+                                                <div className="font-medium text-sm text-gray-900">
+                                                  {activity.activity_type}
+                                                </div>
+                                                <div className="text-xs text-gray-600 mt-1">
+                                                  {formatTime(
+                                                    activity.start_time
+                                                  )}
+                                                  {activity.end_time
+                                                    ? ` - ${formatTime(
+                                                        activity.end_time
+                                                      )}`
+                                                    : " - Actief"}
+                                                </div>
+                                                <div className="text-xs text-gray-600 mt-1">
+                                                  Duur:{" "}
+                                                  {formatHoursMinutes(
+                                                    durationMs
+                                                  )}
+                                                  {activity.hourly_rate && (
+                                                    <>
+                                                      {" • "}
+                                                      {formatMoney(earnings)}
+                                                    </>
+                                                  )}
+                                                </div>
+                                                {activity.hourly_rate && (
+                                                  <div className="text-xs text-gray-500 mt-1">
+                                                    Tarief: €
+                                                    {parseFloat(
+                                                      activity.hourly_rate
+                                                    ).toFixed(2)}
+                                                    /uur
+                                                  </div>
+                                                )}
+                                                <div className="text-xs text-gray-500 mt-1">
+                                                  {activity.billable !== false
+                                                    ? "Declarabel"
+                                                    : "Niet declarabel"}
+                                                </div>
+                                              </div>
+                                              <div className="flex gap-2 ml-2">
+                                                <button
+                                                  onClick={() =>
+                                                    startEditingActivity(
+                                                      activity
+                                                    )
+                                                  }
+                                                  className="px-2 py-1 text-xs text-[#008eff] hover:bg-[#008eff]/10 rounded"
+                                                  disabled={
+                                                    isSaving || isDeleting
+                                                  }
+                                                >
+                                                  Bewerken
+                                                </button>
+                                                <button
+                                                  onClick={() =>
+                                                    handleDeleteActivity(
+                                                      entry.id,
+                                                      activity.id
+                                                    )
+                                                  }
+                                                  className="px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded"
+                                                  disabled={
+                                                    isSaving || isDeleting
+                                                  }
+                                                >
+                                                  Verwijderen
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="text-sm text-gray-500 py-2">
+                                  Geen activiteiten gevonden
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                         {/* Save button */}
                         <div className="pt-2 border-t border-gray-200 flex justify-end">
                           <button

@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useTransition, useRef } from "react";
+import { useEffect, useTransition, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/stores/useStore";
 import RunningClockClient from "./RunningClockClient";
-import MoneyCounterClient from "./MoneyCounterClient";
+import TimerActivitySwitcher from "@/app/my/components/TimerActivitySwitcher";
 import { computeEntryDurationMs } from "@/lib/time";
 import { formatHM } from "@/lib/time";
 
 export default function TimerSectionClient({ user }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [entryActivities, setEntryActivities] = useState({}); // entryId -> { currentActivity: { activity_type, hourly_rate, start_time }, allActivities: [...] }
+  const [now, setNow] = useState(() => Date.now()); // For real-time updates
   const activeEntries = useStore((state) => state.activeEntries);
   const stoppedTimersList = useStore((state) => state.stoppedTimers);
   const projects = useStore((state) => state.projects);
@@ -45,6 +47,76 @@ export default function TimerSectionClient({ user }) {
       };
     }
   }, [openDropdowns, closeDropdown]);
+
+  // Real-time update effect for cumulative earnings calculation
+  useEffect(() => {
+    const id = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Function to fetch activities for a specific entry
+  const fetchEntryActivities = async (entryId) => {
+    try {
+      const res = await fetch(`/my/entries/${entryId}/activities`);
+      if (res.ok) {
+        const data = await res.json();
+        const allActivities = data.activities || [];
+        const active = allActivities.find((a) => !a.end_time);
+
+        return {
+          currentActivity: active
+            ? {
+                activity_type: active.activity_type,
+                hourly_rate: active.hourly_rate,
+                start_time: active.start_time,
+              }
+            : null,
+          allActivities: allActivities,
+        };
+      }
+    } catch (error) {
+      console.error("Error fetching activities:", error);
+    }
+    return null;
+  };
+
+  // Fetch all activities for active entries
+  useEffect(() => {
+    async function fetchCurrentActivities() {
+      const activitiesMap = {};
+
+      for (const entry of activeEntries) {
+        if (entry.has_activities || entry.project_id) {
+          const activitiesData = await fetchEntryActivities(entry.id);
+          if (activitiesData) {
+            activitiesMap[entry.id] = activitiesData;
+          }
+        }
+      }
+
+      setEntryActivities(activitiesMap);
+    }
+
+    if (activeEntries.length > 0) {
+      fetchCurrentActivities();
+    } else {
+      // Clear activities when no active entries
+      setEntryActivities({});
+    }
+  }, [activeEntries]);
+
+  // Function to refresh activities for a specific entry (called after activity switch)
+  const refreshEntryActivities = async (entryId) => {
+    const activitiesData = await fetchEntryActivities(entryId);
+    if (activitiesData) {
+      setEntryActivities((prev) => ({
+        ...prev,
+        [entryId]: activitiesData,
+      }));
+    }
+  };
 
   function handleProjectChange(entryId, newProjectId) {
     closeDropdown(entryId);
@@ -120,6 +192,39 @@ export default function TimerSectionClient({ user }) {
     }
   }
 
+  // Calculate cumulative earnings from all activities
+  function calculateCumulativeEarnings(
+    activities,
+    currentActivity,
+    currentTime
+  ) {
+    let total = 0;
+
+    // Sum earnings from completed activities
+    activities.forEach((activity) => {
+      if (activity.end_time && activity.hourly_rate) {
+        const durationMs =
+          activity.duration_ms ||
+          new Date(activity.end_time).getTime() -
+            new Date(activity.start_time).getTime();
+        const hours = durationMs / (1000 * 60 * 60);
+        total += hours * parseFloat(activity.hourly_rate);
+      }
+    });
+
+    // Add current activity earnings (will be 0 if rate is 0)
+    if (currentActivity && currentActivity.start_time) {
+      const startTime = new Date(currentActivity.start_time).getTime();
+      const currentTimeMs = currentTime || Date.now();
+      const durationMs = currentTimeMs - startTime;
+      const hours = durationMs / (1000 * 60 * 60);
+      const rate = parseFloat(currentActivity.hourly_rate) || 0;
+      total += hours * rate;
+    }
+
+    return total;
+  }
+
   const allTimers = [
     ...activeEntries.map((entry) => ({ type: "active", data: entry })),
     ...pendingTimers.map((timer) => ({ type: "pending", data: timer })),
@@ -131,6 +236,42 @@ export default function TimerSectionClient({ user }) {
     const timerId = entry?.id || pending?.id;
     const isPendingTimer = timer.type === "pending";
     const stoppedAt = stoppedTimers[timerId];
+
+    // Get activities data
+    const activitiesData = entryActivities[entry?.id];
+    const currentActivity = activitiesData?.currentActivity;
+    const allActivities = activitiesData?.allActivities || [];
+    const currentActivityName = currentActivity?.activity_type;
+
+    // Calculate cumulative earnings
+    const currentTime = stoppedAt ? new Date(stoppedAt).getTime() : now;
+    let cumulativeEarnings = 0;
+
+    if (allActivities.length > 0) {
+      // Calculate from activities
+      cumulativeEarnings = calculateCumulativeEarnings(
+        allActivities,
+        currentActivity,
+        currentTime
+      );
+    } else if (entry?.hourly_rate && entry?.start_time) {
+      // Fallback to entry rate if no activities
+      const startTime = new Date(entry.start_time).getTime();
+      const durationMs = currentTime - startTime;
+      const hours = durationMs / (1000 * 60 * 60);
+      cumulativeEarnings = hours * parseFloat(entry.hourly_rate);
+    }
+
+    // Format money
+    const formattedMoney =
+      cumulativeEarnings > 0
+        ? new Intl.NumberFormat("nl-NL", {
+            style: "currency",
+            currency: "EUR",
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }).format(cumulativeEarnings)
+        : null;
 
     return (
       <div
@@ -314,20 +455,50 @@ export default function TimerSectionClient({ user }) {
                 stoppedAt={stoppedAt}
               />
             </div>
-            {entry?.hourly_rate && (
+            {currentActivityName && (
+              <div className="mt-1 text-sm text-gray-600 font-medium">
+                {currentActivityName}
+              </div>
+            )}
+            {formattedMoney && (
               <div className="mt-1 text-base font-semibold text-gray-700">
-                <MoneyCounterClient
-                  startedAt={entry.start_time}
-                  hourlyRate={entry.hourly_rate}
-                  stoppedAt={stoppedAt}
-                />
+                <span className="money-text">{formattedMoney}</span>
               </div>
             )}
           </div>
+
+          {/* Activity Switcher - only show for active timers with project */}
+          {!isPendingTimer &&
+            entry &&
+            (entry.has_activities || entry.project_id) && (
+              <div className="mt-2 w-full">
+                <TimerActivitySwitcher
+                  entryId={entry.id}
+                  projectId={entry.project_id || entry.project}
+                  onActivitySwitched={() => refreshEntryActivities(entry.id)}
+                  currentTime={computeEntryDurationMs(
+                    entry.start_time,
+                    entry.end_time,
+                    entry.duration_ms
+                  )}
+                  currentEarnings={
+                    entry.hourly_rate
+                      ? (computeEntryDurationMs(
+                          entry.start_time,
+                          entry.end_time,
+                          entry.duration_ms
+                        ) /
+                          (1000 * 60 * 60)) *
+                        entry.hourly_rate
+                      : 0
+                  }
+                />
+              </div>
+            )}
         </div>
 
         {/* Right column: Play/Stop button */}
-        <div className="flex items-center justify-center shrink-0 pl-4 self-center">
+        <div className="flex items-start justify-center shrink-0 pl-4">
           {isPendingTimer ? (
             <button
               type="button"

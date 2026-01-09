@@ -4,3 +4,4 @@
 -- Update the comment on the status column to include 'archived'
 COMMENT ON COLUMN projects.status IS 'Project status: planned, active, on_hold, completed, cancelled, archived';
 
+

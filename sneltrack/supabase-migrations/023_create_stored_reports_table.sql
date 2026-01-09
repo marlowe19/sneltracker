@@ -66,3 +66,4 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.stored_reports TO authenticated;
 COMMENT ON TABLE public.stored_reports IS 'Stores user-created report snapshots with projects, totals, and filter parameters';
 COMMENT ON COLUMN public.stored_reports.report_data IS 'JSONB blob containing projects array, totals object, and filters object';
 
+

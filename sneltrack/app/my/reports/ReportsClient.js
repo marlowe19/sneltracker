@@ -3,7 +3,19 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import BackButtonClient from "../projecten/[projectId]/BackButtonClient";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Legend,
+} from "recharts";
 import {
   DateRangeProvider,
   CustomDateRangeSelector,
@@ -215,7 +227,12 @@ function CategoryBreakdownPieChart({ totals }) {
 
 function ProjectCard({ project, user }) {
   const [showMembers, setShowMembers] = useState(false);
+  const [showActivities, setShowActivities] = useState(false);
   const hasMembers = project.members && project.members.length > 0;
+  const hasActivities =
+    project.activities &&
+    Array.isArray(project.activities) &&
+    project.activities.length > 0;
 
   return (
     <div className="border border-[#ffa540] bg-[#fff9e5] rounded-lg p-4 hover:bg-gray-50 transition-colors">
@@ -352,6 +369,66 @@ function ProjectCard({ project, user }) {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Activities Section */}
+      {hasActivities && (
+        <div className="mt-4 pt-3 border-t border-gray-200">
+          <button
+            onClick={() => setShowActivities(!showActivities)}
+            className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 w-full"
+          >
+            <span>{showActivities ? "▼" : "▶"}</span>
+            <span>Activiteiten overzicht</span>
+          </button>
+
+          {showActivities && (
+            <div className="mt-3 space-y-2">
+              {project.activities.map((activity, index) => (
+                <div
+                  key={`${activity.activity_type}-${index}`}
+                  className="bg-white rounded-lg p-3 border border-gray-200"
+                >
+                  <div className="font-medium text-gray-900 mb-3">
+                    {activity.activity_type}
+                  </div>
+                  <div className="flex flex-row gap-4 text-sm">
+                    <div className="flex-1 text-gray-700">
+                      <div className="font-medium text-gray-600 mb-1">Uren</div>
+                      <div>{formatHours(activity.total_hours)}</div>
+                    </div>
+                    {activity.hourly_rate > 0 && (
+                      <div className="flex-1 text-gray-700">
+                        <div className="font-medium text-gray-600 mb-1">
+                          Uurtarief
+                        </div>
+                        <div>{formatMoney(activity.hourly_rate)}</div>
+                      </div>
+                    )}
+                    {activity.total_amount > 0 && (
+                      <div className="flex-1 text-gray-700">
+                        <div className="font-medium text-gray-600 mb-1">
+                          Bedrag
+                        </div>
+                        <div>
+                          <span className="text-green-600 font-semibold">
+                            {formatMoney(activity.total_amount)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex-1 text-gray-700">
+                      <div className="font-medium text-gray-600 mb-1">
+                        Aantal
+                      </div>
+                      <div>{activity.count}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

@@ -15,6 +15,11 @@ import {
   getMonthBoundsUTC,
   getQuarterBoundsUTC,
 } from "@/lib/dateRangeUtils";
+import {
+  startActivity,
+  getCurrentActivity,
+  updateTimerActivity,
+} from "./timerActivitiesService";
 
 /**
  * Looks up a Supabase project UUID by Firestore project ID
@@ -742,7 +747,7 @@ export async function getDayEntries(userName, dayDate) {
   // what the query needs to do is get all the entries for the user for the given day.
   // if a user is the owner of a project they should see all the entries for the project for the given day.
 
-  const { data, error } = await supabaseServer.rpc("get_day_entries_v2", {
+  const { data, error } = await supabaseServer.rpc("get_day_entries_v3", {
     p_user_name: userName,
     p_day_date: dateStr,
   });
@@ -753,7 +758,7 @@ export async function getDayEntries(userName, dayDate) {
   }
 
   // Return entries with Supabase UUID as primary identifier (clean cutover)
-  return (data || []).map((row) => ({
+  const entries = (data || []).map((row) => ({
     id: row.id, // Use Supabase UUID as the entry ID
     user_name: row.user_name,
     user_display_name: row.user_display_name ?? null, // ✅ User's display name from users table
@@ -773,7 +778,54 @@ export async function getDayEntries(userName, dayDate) {
     creation_method: row.creation_method ?? null,
     is_running: row.is_running ?? false,
     firestore_id: row.firestore_id, // Keep as metadata for sync operations
+    has_activities: row.has_activities ?? false, // ✅ Activity support
+    current_activity_id: row.current_activity_id ?? null, // ✅ Current activity
+    activities: row.activities || [], // ✅ Activities included directly from query
   }));
+
+  return entries;
+}
+
+/**
+ * Gets a time entry with its activities
+ * @param {string} timeEntryId - Time entry UUID
+ * @returns {Promise<Object>} Time entry with activities array
+ */
+export async function getTimeEntryWithActivities(timeEntryId) {
+  if (!timeEntryId) {
+    throw new Error("Time entry ID is required");
+  }
+
+  // Get the entry
+  const { data: entry, error: entryError } = await supabaseServer
+    .from("time_entries")
+    .select("*")
+    .eq("id", timeEntryId)
+    .single();
+
+  if (entryError || !entry) {
+    throw new Error("Time entry not found");
+  }
+
+  // Get activities if entry has activities
+  let activities = [];
+  if (entry.has_activities) {
+    const { data: activitiesData, error: activitiesError } = await supabaseServer
+      .from("timer_activities")
+      .select("*")
+      .eq("time_entry_id", timeEntryId)
+      .order("display_order", { ascending: true })
+      .order("start_time", { ascending: true });
+
+    if (!activitiesError && activitiesData) {
+      activities = activitiesData;
+    }
+  }
+
+  return {
+    ...entry,
+    activities,
+  };
 }
 
 /**
@@ -997,9 +1049,17 @@ export async function createEntry(
  * @param {string} userName - Username starting the entry
  * @param {number|null} hourlyRate - Optional hourly rate (will be overridden by project/member rate if available)
  * @param {string|null} project - Project identifier (Firestore ID or Supabase UUID)
+ * @param {string|null} activityType - Optional activity type to start with
+ * @param {number|null} activityHourlyRate - Optional hourly rate for the activity
  * @returns {Promise<Object>} Created time entry matching Firestore format
  */
-export async function startEntry(userName, hourlyRate = null, project = null) {
+export async function startEntry(
+  userName,
+  hourlyRate = null,
+  project = null,
+  activityType = null,
+  activityHourlyRate = null
+) {
   const now = new Date();
 
   // Resolve project and determine hourly rate
@@ -1029,9 +1089,24 @@ export async function startEntry(userName, hourlyRate = null, project = null) {
     modified_at: now.toISOString(),
     creation_method: "timer",
     is_running: true,
+    has_activities: false, // Will be set to true if activity is created
+    current_activity_id: null,
   };
 
-  return await insertEntryWithProjectInfo(entryData, userName);
+  const entry = await insertEntryWithProjectInfo(entryData, userName);
+
+  // If activity type is provided, start the first activity
+  if (activityType && entry.id) {
+    try {
+      // Pass userId to startActivity
+      await startActivity(entry.id, activityType, activityHourlyRate, userId);
+    } catch (error) {
+      console.error("Error starting activity:", error);
+      // Don't fail the entry creation if activity creation fails
+    }
+  }
+
+  return entry;
 }
 
 /**
@@ -1059,6 +1134,24 @@ export async function stopEntry(userName, entryId = null) {
 
     if (fetchError || !entry) {
       return null;
+    }
+
+    // Stop current activity if entry has activities
+    if (entry.has_activities && entry.current_activity_id) {
+      try {
+        const currentActivity = await getCurrentActivity(entryId);
+        if (currentActivity) {
+          const activityStartTime = new Date(currentActivity.start_time);
+          const activityDurationMs = endTime.getTime() - activityStartTime.getTime();
+          await updateTimerActivity(currentActivity.id, {
+            end_time: endTime.toISOString(),
+            duration_ms: activityDurationMs,
+          });
+        }
+      } catch (error) {
+        console.error("Error stopping current activity:", error);
+        // Continue with stopping the entry even if activity stop fails
+      }
     }
 
     // Calculate duration_ms

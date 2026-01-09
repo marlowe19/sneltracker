@@ -23,3 +23,4 @@ CREATE INDEX IF NOT EXISTS idx_expenses_user_id
 COMMENT ON COLUMN public.expenses.user_id IS 
 'User ID (UUID) referencing users.id. Enables optimized joins with users table. Populated from user_name for existing records.';
 
+

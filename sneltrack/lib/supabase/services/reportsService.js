@@ -64,3 +64,81 @@ export async function getUserProjectReports(userName, startDate, endDate) {
     members: Array.isArray(row.members) ? row.members : [],
   }));
 }
+
+/**
+ * Get overall activities breakdown for a user within a date range
+ * Aggregates activities by activity_type across all projects
+ *
+ * @param {string} userName - Username to get activities for
+ * @param {Date} startDate - Start of date range
+ * @param {Date} endDate - End of date range
+ * @param {Array<string>|null} projectIds - Optional array of project UUIDs to filter by
+ * @returns {Promise<Array>} Array of activities with activity_type, total_hours, and count
+ */
+export async function getActivitiesReport(
+  userName,
+  startDate,
+  endDate,
+  projectIds = null
+) {
+  const { data, error } = await supabaseServer.rpc("get_activities_report", {
+    p_user_name: userName,
+    p_start_date: startDate.toISOString(),
+    p_end_date: endDate.toISOString(),
+    p_project_ids: projectIds && projectIds.length > 0 ? projectIds : null,
+  });
+
+  if (error) {
+    console.error("Error fetching activities report:", error);
+    throw error;
+  }
+
+  return (data || []).map((row) => ({
+    activity_type: row.activity_type,
+    total_hours: Number(row.total_hours) || 0,
+    count: Number(row.count) || 0,
+    hourly_rate: Number(row.hourly_rate) || 0,
+    total_amount: Number(row.total_amount) || 0,
+  }));
+}
+
+/**
+ * Get per-project activities breakdown for a user within a date range
+ * Aggregates activities by project_id and activity_type
+ *
+ * @param {string} userName - Username to get activities for
+ * @param {Date} startDate - Start of date range
+ * @param {Date} endDate - End of date range
+ * @param {Array<string>|null} projectIds - Optional array of project UUIDs to filter by
+ * @returns {Promise<Array>} Array of activities with project_id, activity_type, total_hours, and count
+ */
+export async function getProjectActivitiesReport(
+  userName,
+  startDate,
+  endDate,
+  projectIds = null
+) {
+  const { data, error } = await supabaseServer.rpc(
+    "get_project_activities_report",
+    {
+      p_user_name: userName,
+      p_start_date: startDate.toISOString(),
+      p_end_date: endDate.toISOString(),
+      p_project_ids: projectIds && projectIds.length > 0 ? projectIds : null,
+    }
+  );
+
+  if (error) {
+    console.error("Error fetching project activities report:", error);
+    throw error;
+  }
+
+  return (data || []).map((row) => ({
+    project_id: row.project_id,
+    activity_type: row.activity_type,
+    total_hours: Number(row.total_hours) || 0,
+    count: Number(row.count) || 0,
+    hourly_rate: Number(row.hourly_rate) || 0,
+    total_amount: Number(row.total_amount) || 0,
+  }));
+}

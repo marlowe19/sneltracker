@@ -4,7 +4,11 @@ import {
   getMonthBoundsUTC,
   getQuarterBoundsUTC,
 } from "@/lib/dateRangeUtils";
-import { getUserProjectReports } from "@/lib/supabase/services/reportsService";
+import {
+  getUserProjectReports,
+  getActivitiesReport,
+  getProjectActivitiesReport,
+} from "@/lib/supabase/services/reportsService";
 import { auth0 } from "@/lib/auth/auth0";
 
 export const dynamic = "force-dynamic";
@@ -145,10 +149,57 @@ export const GET = auth0.withApiAuthRequired(async (req) => {
       includeExpenses: includeExpenses,
     };
 
+    // Get activities data
+    const startDate = dateRange?.start || new Date(0);
+    const endDate = dateRange?.end || new Date();
+    const projectIds =
+      projectIdsParam && projectIdsParam.length > 0
+        ? projectIdsParam.split(",").filter(Boolean)
+        : null;
+
+    // Fetch overall activities
+    const activities = await getActivitiesReport(
+      user,
+      startDate,
+      endDate,
+      projectIds
+    );
+
+    // Fetch per-project activities
+    const projectActivities = await getProjectActivitiesReport(
+      user,
+      startDate,
+      endDate,
+      projectIds
+    );
+
+    // Group per-project activities by project_id
+    const projectActivitiesMap = {};
+    projectActivities.forEach((activity) => {
+      const projectId = activity.project_id;
+      if (!projectActivitiesMap[projectId]) {
+        projectActivitiesMap[projectId] = [];
+      }
+      projectActivitiesMap[projectId].push({
+        activity_type: activity.activity_type,
+        total_hours: activity.total_hours,
+        count: activity.count,
+        hourly_rate: activity.hourly_rate,
+        total_amount: activity.total_amount,
+      });
+    });
+
+    // Enrich each project with its activities array
+    const projectsWithActivities = enrichedProjects.map((project) => ({
+      ...project,
+      activities: projectActivitiesMap[project.id] || [],
+    }));
+
     return NextResponse.json({
-      projects: enrichedProjects,
+      projects: projectsWithActivities,
       totals,
       filters,
+      activities,
     });
   } catch (error) {
     console.error("Error fetching reports:", error);
