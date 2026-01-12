@@ -34,6 +34,7 @@
     "react-slick": "^0.31.0",
     "recharts": "^2.15.0",
     "slick-carousel": "^1.8.1",
+    "ts-caldav": "^0.2.7",
     "uuid": "^13.0.0",
     "zustand": "^5.0.8"
   },

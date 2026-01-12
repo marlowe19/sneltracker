@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { auth0 } from "@/lib/auth/auth0";
 import Link from "next/link";
+import AppleCalendarConnectionClient from "../components/AppleCalendarConnectionClient";
+import WeeklyHoursClient from "../components/WeeklyHoursClient";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +73,10 @@ export default async function ProfilePage({ request }) {
               <div className="text-xs px-4">App versie: 2.2.0</div>
             </div>
           </div>
+
+          <WeeklyHoursClient />
+
+          <AppleCalendarConnectionClient user={user.sub} />
 
           <div className="mt-6">
             <Link
