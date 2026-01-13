@@ -528,31 +528,39 @@ export default function DayEntriesListClient({
   };
 
   const handleToggleExpand = (entryId) => {
-    setExpandedEntries((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(entryId)) {
+    const isCurrentlyExpanded = expandedEntries.has(entryId);
+
+    if (isCurrentlyExpanded) {
+      // Sluiten: verwijder deze entry en reset current editing
+      setExpandedEntries((prev) => {
+        const newSet = new Set(prev);
         newSet.delete(entryId);
-        setCurrentEditingEntryId(null); // Reset state when closing
-      } else {
-        newSet.add(entryId);
-        setCurrentEditingEntryId(entryId); // Set current editing entry
-      }
-      return newSet;
-    });
+        return newSet;
+      });
+      setCurrentEditingEntryId(null);
+    } else {
+      // Openen: sluit alle andere entries en open alleen deze
+      setExpandedEntries(new Set([entryId])); // Alleen deze entry expanded
+      setCurrentEditingEntryId(entryId); // Direct zetten, niet binnen updater
+    }
   };
 
   const handleToggleExpandExpense = (expenseId) => {
-    setExpandedExpenses((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(expenseId)) {
+    const isCurrentlyExpanded = expandedExpenses.has(expenseId);
+
+    if (isCurrentlyExpanded) {
+      // Sluiten: verwijder deze expense en reset current editing
+      setExpandedExpenses((prev) => {
+        const newSet = new Set(prev);
         newSet.delete(expenseId);
-        setCurrentEditingExpenseId(null); // Reset state when closing
-      } else {
-        newSet.add(expenseId);
-        setCurrentEditingExpenseId(expenseId); // Set current editing expense
-      }
-      return newSet;
-    });
+        return newSet;
+      });
+      setCurrentEditingExpenseId(null);
+    } else {
+      // Openen: sluit alle andere expenses en open alleen deze
+      setExpandedExpenses(new Set([expenseId])); // Alleen deze expense expanded
+      setCurrentEditingExpenseId(expenseId); // Direct zetten, niet binnen updater
+    }
   };
 
   const getCurrentEditingEntryIndex = () => {
