@@ -141,6 +141,8 @@ export default function DayEntriesListClient({
   const [expandedActivities, setExpandedActivities] = useState(new Set()); // entryIds with activities expanded
   const [editingActivityId, setEditingActivityId] = useState(null); // activityId being edited
   const [editingActivityData, setEditingActivityData] = useState(null); // temporary edit data
+  const [currentEditingEntryId, setCurrentEditingEntryId] = useState(null); // ID of entry currently being edited
+  const [currentEditingExpenseId, setCurrentEditingExpenseId] = useState(null); // ID of expense currently being edited
   const toast = useToast();
   // Memoize dayDateString to ensure stable reference
   const dayDateString = useMemo(
@@ -530,8 +532,10 @@ export default function DayEntriesListClient({
       const newSet = new Set(prev);
       if (newSet.has(entryId)) {
         newSet.delete(entryId);
+        setCurrentEditingEntryId(null); // Reset state when closing
       } else {
         newSet.add(entryId);
+        setCurrentEditingEntryId(entryId); // Set current editing entry
       }
       return newSet;
     });
@@ -542,11 +546,27 @@ export default function DayEntriesListClient({
       const newSet = new Set(prev);
       if (newSet.has(expenseId)) {
         newSet.delete(expenseId);
+        setCurrentEditingExpenseId(null); // Reset state when closing
       } else {
         newSet.add(expenseId);
+        setCurrentEditingExpenseId(expenseId); // Set current editing expense
       }
       return newSet;
     });
+  };
+
+  const getCurrentEditingEntryIndex = () => {
+    if (!currentEditingEntryId) return -1;
+    return localEntries.findIndex(
+      (entry) => entry.id === currentEditingEntryId
+    );
+  };
+
+  const getCurrentEditingExpenseIndex = () => {
+    if (!currentEditingExpenseId) return -1;
+    return localExpenses.findIndex(
+      (expense) => expense.id === currentEditingExpenseId
+    );
   };
 
   const calculateEntryTotal = (entry) => {
@@ -596,6 +616,7 @@ export default function DayEntriesListClient({
     setLocalEntries([newEntry, ...localEntries]);
     // Automatically expand new entries for immediate editing
     setExpandedEntries((prev) => new Set([...prev, tempId]));
+    setCurrentEditingEntryId(tempId); // Set as current editing entry
   };
 
   const handleExpenseChange = (index, field, value) => {
@@ -629,6 +650,7 @@ export default function DayEntriesListClient({
     setLocalExpenses([newExpense, ...localExpenses]);
     // Automatically expand new expenses for immediate editing
     setExpandedExpenses((prev) => new Set([...prev, tempId]));
+    setCurrentEditingExpenseId(tempId); // Set as current editing expense
   };
 
   const handleSave = async () => {
@@ -1185,6 +1207,7 @@ export default function DayEntriesListClient({
             newSet.delete(responseData.entry.id); // Also remove new ID in case it was added
             return newSet;
           });
+          setCurrentEditingEntryId(null); // Reset current editing state
         }
 
         setSuccessMessage("Entry opgeslagen");
@@ -1357,6 +1380,7 @@ export default function DayEntriesListClient({
               newSet.delete(entry.id);
               return newSet;
             });
+            setCurrentEditingEntryId(null); // Reset current editing state
           }
 
           setSuccessMessage("Entry opgeslagen");
@@ -1377,6 +1401,7 @@ export default function DayEntriesListClient({
             newSet.delete(entry.id);
             return newSet;
           });
+          setCurrentEditingEntryId(null); // Reset current editing state
           setSavingEntryId(null);
         }
       }
@@ -1455,6 +1480,7 @@ export default function DayEntriesListClient({
             newSet.delete(responseData.expense.id); // Also remove new ID in case it was added
             return newSet;
           });
+          setCurrentEditingExpenseId(null); // Reset current editing state
         }
 
         setSuccessMessage("Uitgave opgeslagen");
@@ -1540,6 +1566,7 @@ export default function DayEntriesListClient({
               newSet.delete(expense.id);
               return newSet;
             });
+            setCurrentEditingExpenseId(null); // Reset current editing state
           }
 
           setSuccessMessage("Uitgave opgeslagen");
@@ -1555,6 +1582,7 @@ export default function DayEntriesListClient({
             newSet.delete(expense.id);
             return newSet;
           });
+          setCurrentEditingExpenseId(null); // Reset current editing state
           setSavingExpenseId(null);
         }
       }
@@ -1586,6 +1614,10 @@ export default function DayEntriesListClient({
 
       const updated = localEntries.filter((_, i) => i !== index);
       setLocalEntries(updated);
+      // Reset current editing state if deleted entry was being edited
+      if (currentEditingEntryId === entryId) {
+        setCurrentEditingEntryId(null);
+      }
       setIsDeleting(false);
 
       if (onEntryUpdate) {
@@ -1621,6 +1653,10 @@ export default function DayEntriesListClient({
 
       const updated = localExpenses.filter((_, i) => i !== index);
       setLocalExpenses(updated);
+      // Reset current editing state if deleted expense was being edited
+      if (currentEditingExpenseId === expenseId) {
+        setCurrentEditingExpenseId(null);
+      }
       setIsDeleting(false);
 
       if (onEntryUpdate) {
@@ -2698,23 +2734,6 @@ export default function DayEntriesListClient({
                             </div>
                           )}
 
-                        {/* Save button */}
-                        <div className="pt-2 border-t border-gray-200 flex justify-end">
-                          <button
-                            onClick={() => handleSaveEntry(index)}
-                            disabled={
-                              isSaving ||
-                              isDeleting ||
-                              savingEntryId === entry.id ||
-                              !entry.project_editable
-                            }
-                            className="px-4 w-full sm:w-auto py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                          >
-                            {savingEntryId === entry.id
-                              ? "Opslaan..."
-                              : "Opslaan"}
-                          </button>
-                        </div>
                         {entry.id &&
                           !entry.id.startsWith("temp-") &&
                           entry.is_running !== true && (
@@ -2738,15 +2757,45 @@ export default function DayEntriesListClient({
             </div>
           )}
 
-          {/* Add Entry Button */}
+          {/* Add Entry Button / Save Button */}
           <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 mt-4">
-            <button
-              onClick={handleAddEntry}
-              disabled={isSaving || isDeleting}
-              className="w-full sm:w-auto px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
-            >
-              <span>Tijdregistratie toevoegen</span>
-            </button>
+            {currentEditingEntryId ? (
+              (() => {
+                const currentIndex = getCurrentEditingEntryIndex();
+                const currentEntry =
+                  currentIndex >= 0 ? localEntries[currentIndex] : null;
+                return (
+                  <button
+                    onClick={() => {
+                      if (currentIndex >= 0) {
+                        handleSaveEntry(currentIndex);
+                      }
+                    }}
+                    disabled={
+                      isSaving ||
+                      isDeleting ||
+                      savingEntryId === currentEditingEntryId ||
+                      !currentEntry?.project_editable
+                    }
+                    className="w-full px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
+                  >
+                    <span>
+                      {savingEntryId === currentEditingEntryId
+                        ? "Opslaan..."
+                        : "Opslaan"}
+                    </span>
+                  </button>
+                );
+              })()
+            ) : (
+              <button
+                onClick={handleAddEntry}
+                disabled={isSaving || isDeleting}
+                className="w-full px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
+              >
+                <span>Tijdregistratie toevoegen</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -2976,25 +3025,6 @@ export default function DayEntriesListClient({
                             </div>
                           </>
                         )}
-                        {/* Save button */}
-                        <div className="pt-2 border-t border-gray-200 flex justify-end">
-                          <button
-                            onClick={() => handleSaveExpense(index)}
-                            disabled={
-                              isSaving ||
-                              isDeleting ||
-                              savingExpenseId === expense.id ||
-                              !expense.project_editable ||
-                              !expense.name_editable ||
-                              !expense.price_editable
-                            }
-                            className="px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                          >
-                            {savingExpenseId === expense.id
-                              ? "Opslaan..."
-                              : "Opslaan"}
-                          </button>
-                        </div>
                         {expense.id &&
                           !expense.id.startsWith("temp-expense-") && (
                             <div className="pt-2 border-t border-gray-200">
@@ -3017,15 +3047,47 @@ export default function DayEntriesListClient({
             </div>
           )}
 
-          {/* Add Expense Button */}
+          {/* Add Expense Button / Save Button */}
           <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 mt-4">
-            <button
-              onClick={handleAddExpense}
-              disabled={isSaving || isDeleting}
-              className="w-full sm:w-auto px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
-            >
-              <span>Uitgave toevoegen</span>
-            </button>
+            {currentEditingExpenseId ? (
+              (() => {
+                const currentIndex = getCurrentEditingExpenseIndex();
+                const currentExpense =
+                  currentIndex >= 0 ? localExpenses[currentIndex] : null;
+                return (
+                  <button
+                    onClick={() => {
+                      if (currentIndex >= 0) {
+                        handleSaveExpense(currentIndex);
+                      }
+                    }}
+                    disabled={
+                      isSaving ||
+                      isDeleting ||
+                      savingExpenseId === currentEditingExpenseId ||
+                      !currentExpense?.project_editable ||
+                      !currentExpense?.name_editable ||
+                      !currentExpense?.price_editable
+                    }
+                    className="w-full sm:w-auto px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
+                  >
+                    <span>
+                      {savingExpenseId === currentEditingExpenseId
+                        ? "Opslaan..."
+                        : "Opslaan"}
+                    </span>
+                  </button>
+                );
+              })()
+            ) : (
+              <button
+                onClick={handleAddExpense}
+                disabled={isSaving || isDeleting}
+                className="w-full sm:w-auto px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
+              >
+                <span>Uitgave toevoegen</span>
+              </button>
+            )}
           </div>
         </div>
 
