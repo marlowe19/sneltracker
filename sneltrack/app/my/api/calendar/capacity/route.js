@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getUserFreeBusy } from "@/lib/googleCalendar";
+import { getUserFreeBusy as getGoogleFreeBusy } from "@/lib/googleCalendar";
+import { getUserFreeBusy as getAppleFreeBusy } from "@/lib/appleCalendar";
 import { isWorkday, getHolidaysInRange } from "@/lib/holidays";
 import { auth0 } from "@/lib/auth/auth0";
 
@@ -8,13 +9,10 @@ export const dynamic = "force-dynamic";
 export const GET = auth0.withApiAuthRequired(async (req, context) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
 
     if (!user) {
-      return NextResponse.json(
-        { error: "user is verplicht" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "user is verplicht" }, { status: 400 });
     }
 
     // Calculate next 2 weeks
@@ -23,8 +21,45 @@ export const GET = auth0.withApiAuthRequired(async (req, context) => {
     const twoWeeksLater = new Date(today);
     twoWeeksLater.setDate(twoWeeksLater.getDate() + 14);
 
-    // Get free/busy times from Google Calendar
-    const busyTimes = await getUserFreeBusy(user, today, twoWeeksLater);
+    // Get free/busy times from Google Calendar and Apple Calendar
+    // Try both calendars and combine the busy times
+    const [googleBusyTimes, appleBusyTimes] = await Promise.all([
+      getGoogleFreeBusy(user, today, twoWeeksLater).catch((err) => {
+        console.error("Error fetching Google Calendar free/busy:", err);
+        return [];
+      }),
+      getAppleFreeBusy(user, today, twoWeeksLater).catch((err) => {
+        console.error("Error fetching Apple Calendar free/busy:", err);
+        return [];
+      }),
+    ]);
+
+    // Combine busy times from both calendars
+    const allBusyTimes = [...googleBusyTimes, ...appleBusyTimes];
+
+    // Merge overlapping intervals
+    let busyTimes = [];
+    if (allBusyTimes.length > 0) {
+      // Sort by start time
+      allBusyTimes.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+      // Merge overlapping intervals
+      let current = { ...allBusyTimes[0] };
+      for (let i = 1; i < allBusyTimes.length; i++) {
+        const next = allBusyTimes[i];
+        if (next.start <= current.end) {
+          // Overlapping, merge
+          current.end = new Date(
+            Math.max(current.end.getTime(), next.end.getTime())
+          );
+        } else {
+          // Not overlapping, push current and start new
+          busyTimes.push(current);
+          current = { ...next };
+        }
+      }
+      busyTimes.push(current);
+    }
 
     // Get holidays in range
     const holidays = getHolidaysInRange(today, twoWeeksLater);
@@ -41,10 +76,10 @@ export const GET = auth0.withApiAuthRequired(async (req, context) => {
     let week1Workdays = 0;
     let week2Hours = 0;
     let week2Workdays = 0;
-    
+
     const week1End = new Date(today);
     week1End.setDate(week1End.getDate() + 7);
-    
+
     const current = new Date(today);
 
     while (current <= twoWeeksLater) {
@@ -71,9 +106,13 @@ export const GET = auth0.withApiAuthRequired(async (req, context) => {
       // Calculate busy time in this day
       let busyMs = 0;
       for (const busy of busyTimes) {
-        const busyStart = new Date(Math.max(busy.start.getTime(), dayStart.getTime()));
-        const busyEnd = new Date(Math.min(busy.end.getTime(), dayEnd.getTime()));
-        
+        const busyStart = new Date(
+          Math.max(busy.start.getTime(), dayStart.getTime())
+        );
+        const busyEnd = new Date(
+          Math.min(busy.end.getTime(), dayEnd.getTime())
+        );
+
         if (busyStart < busyEnd) {
           busyMs += busyEnd.getTime() - busyStart.getTime();
         }
@@ -115,12 +154,11 @@ export const GET = auth0.withApiAuthRequired(async (req, context) => {
   } catch (error) {
     console.error("Error calculating capacity:", error);
     return NextResponse.json(
-      { 
-        error: "Capaciteit berekenen mislukt", 
-        message: error.message 
+      {
+        error: "Capaciteit berekenen mislukt",
+        message: error.message,
       },
       { status: 500 }
     );
   }
 });
-

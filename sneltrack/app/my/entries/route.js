@@ -5,7 +5,7 @@ import { auth0 } from "@/lib/auth/auth0";
 export const POST = auth0.withApiAuthRequired(async (req, context) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const body = await req.json();
 
     // Validate required fields

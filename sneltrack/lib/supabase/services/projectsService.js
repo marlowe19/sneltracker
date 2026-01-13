@@ -14,7 +14,7 @@ import { fireAndForget, logError, toIsoString } from "./base";
  * @param {string} username - Username to look up
  * @returns {Promise<string|null>} User UUID or null if not found
  */
-async function lookupUserIdByUsername(username) {
+export async function lookupUserIdByUsername(username) {
   if (!username) return null;
 
   const { data, error } = await supabaseServer
@@ -28,6 +28,98 @@ async function lookupUserIdByUsername(username) {
   }
 
   return null;
+}
+
+export async function lookupUserByEmail(email) {
+  if (!email) return null;
+  const { data, error } = await supabaseServer
+    .from("users")
+    .select("id, name, user_name")
+    .eq("email", email)
+    .single();
+
+  if (!error && data?.id) {
+    return data;
+  }
+
+  return null;
+}
+
+export async function lookupUserByUsername(username) {
+  if (!username) return null;
+
+  const { data, error } = await supabaseServer
+    .from("users")
+    .select("id, name")
+    .eq("user_name", username)
+    .single();
+
+  if (!error && data?.id) {
+    return data;
+  }
+
+  return null;
+}
+
+/**
+ * Sync user data from Auth0 to Supabase users table
+ * Updates name, email, and other fields if available
+ *
+ * @param {string} userName - Auth0 user ID (user_name)
+ * @param {Object} auth0User - Auth0 user object with name, email, nickname, etc.
+ * @returns {Promise<Object|null>} Updated user data or null if not found
+ */
+export async function syncUserWithAuth0(userName, auth0User) {
+  if (!userName || !auth0User) return null;
+
+  const displayName =
+    auth0User.name || auth0User.nickname || auth0User.email || null;
+  const email = auth0User.email || null;
+
+  // First, check if user exists
+  const existingUser = await lookupUserByUsername(userName);
+
+  if (!existingUser) {
+    // User doesn't exist, create one
+    const { data, error } = await supabaseServer
+      .from("users")
+      .insert({
+        user_name: userName,
+        name: displayName,
+        email: email,
+      })
+      .select("id, name")
+      .single();
+
+    if (error) {
+      console.error("Error creating user:", error);
+      return null;
+    }
+
+    return data;
+  }
+
+  // User exists, update if name is missing or different
+  if (!existingUser.name && displayName) {
+    const { data, error } = await supabaseServer
+      .from("users")
+      .update({
+        name: displayName,
+        ...(email && { email: email }),
+      })
+      .eq("user_name", userName)
+      .select("id, name")
+      .single();
+
+    if (error) {
+      console.error("Error updating user:", error);
+      return existingUser;
+    }
+
+    return data;
+  }
+
+  return existingUser;
 }
 
 /**
@@ -199,7 +291,7 @@ export function upsert(project, userName) {
  */
 export async function getUserProjectsWithStats(userName) {
   const { data, error } = await supabaseServer.rpc(
-    "get_user_projects_with_stats",
+    "get_user_projects_with_stats_v3",
     {
       p_user_name: userName,
     }
@@ -221,9 +313,11 @@ export async function getUserProjectsWithStats(userName) {
     is_default: row.is_default,
     owner: row.owner_name,
     is_owner: row.is_owner,
+    member_role: row.member_role || null, // User's role from project_members
     member_count: row.member_count,
     total_hours: row.total_hours,
     is_over_budget: row.is_over_budget,
+    status: row.status || "active", // ✅ NEW: Include status field
   }));
 }
 
@@ -244,7 +338,8 @@ export async function getProjectDetail(
   startDate = null,
   endDate = null
 ) {
-  const { data, error } = await supabaseServer.rpc("get_project_detail_v2", {
+  const { data, error } = await supabaseServer.rpc("get_project_detail_v4", {
+    // ✅ Updated to v4 for user_display_name in both members and member_statistics
     p_user_name: userName,
     p_project_id: projectId,
     p_start_date: startDate ? startDate.toISOString() : null,
@@ -252,7 +347,13 @@ export async function getProjectDetail(
   });
 
   if (error) {
-    console.error("Error fetching project detail:", error);
+    console.error("Error fetching project detail:", {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+    });
     throw error;
   }
 
@@ -267,7 +368,7 @@ export async function getProjectDetail(
   const { data: projectData, error: projectError } = await supabaseServer
     .from("projects")
     .select(
-      "due_date, start_date, end_date, capacity_per_week, priority, zip_code, budget_amount, currency"
+      "due_date, start_date, end_date, capacity_per_week, priority, zip_code, budget_amount, currency, status"
     )
     .eq("id", projectId)
     .single();
@@ -295,6 +396,7 @@ export async function getProjectDetail(
     capacity_per_week: projectData?.capacity_per_week || null,
     priority: projectData?.priority || null,
     zip_code: projectData?.zip_code || null,
+    status: projectData?.status || "active",
     statistics: {
       totalHours: row.total_hours,
       entryCount: Number(row.entry_count),
@@ -395,7 +497,10 @@ export async function createProject(userName, projectData) {
  * @param {string|null} [updates.due_date] - Deadline date (ISO date string or null)
  * @param {string|null} [updates.start_date] - Project start date (ISO date string or null)
  * @param {string|null} [updates.end_date] - Planned project end date (ISO date string or null)
+ * @param {string|null} [updates.actual_end_date] - Actual end date when project was completed/archived (ISO date string or null)
+ * @param {string|null} [updates.description] - Project description/notes
  * @param {string|null} [updates.currency] - Currency code (ISO 4217)
+ * @param {string} [updates.status] - Project status (planned, active, on_hold, completed, cancelled, archived)
  * @returns {Promise<Object>} Updated project object
  */
 export async function updateProject(userName, projectId, updates) {
@@ -467,8 +572,17 @@ export async function updateProject(userName, projectId, updates) {
   if (updates.end_date !== undefined) {
     updateData.end_date = updates.end_date || null;
   }
+  if (updates.actual_end_date !== undefined) {
+    updateData.actual_end_date = updates.actual_end_date || null;
+  }
+  if (updates.description !== undefined) {
+    updateData.description = updates.description || null;
+  }
   if (updates.currency !== undefined) {
     updateData.currency = updates.currency || "EUR";
+  }
+  if (updates.status !== undefined) {
+    updateData.status = updates.status;
   }
 
   const { data, error } = await supabaseServer
@@ -495,6 +609,7 @@ export async function updateProject(userName, projectId, updates) {
     capacity_per_week: data.capacity_per_week,
     priority: data.priority,
     zip_code: data.zip_code,
+    status: data.status,
     owner: data.owner_name,
   };
 }
@@ -588,6 +703,28 @@ export async function updateProjectMemberCapacity(
 
   if (error) {
     console.error("Error updating member capacity in Supabase:", error);
+    throw error;
+  }
+
+  return true;
+}
+
+/**
+ * Updates a project member's role in Supabase
+ *
+ * @param {string} projectId - Supabase project UUID
+ * @param {string} userName - Username of member to update
+ * @param {string} role - New role ("owner" or "member")
+ */
+export async function updateProjectMemberRole(projectId, userName, role) {
+  const { error } = await supabaseServer
+    .from("project_members")
+    .update({ role: role })
+    .eq("project_id", projectId)
+    .eq("user_name", userName);
+
+  if (error) {
+    console.error("Error updating member role in Supabase:", error);
     throw error;
   }
 

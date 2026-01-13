@@ -15,7 +15,7 @@ export default async function ProjectDetailPage({ params, request }) {
   if (!session?.user) {
     redirect("/auth/login");
   }
-  const user = session.user.nickname;
+  const user = session.user.sub;
   const { projectId } = await params;
 
   // Get project detail with all data in ONE query (migrated to Supabase)

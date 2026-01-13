@@ -4,7 +4,11 @@ import {
   getMonthBoundsUTC,
   getQuarterBoundsUTC,
 } from "@/lib/dateRangeUtils";
-import { getUserProjectReports } from "@/lib/supabase/services/reportsService";
+import {
+  getUserProjectReports,
+  getActivitiesReport,
+  getProjectActivitiesReport,
+} from "@/lib/supabase/services/reportsService";
 import { auth0 } from "@/lib/auth/auth0";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +16,7 @@ export const dynamic = "force-dynamic";
 export const GET = auth0.withApiAuthRequired(async (req) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const url = new URL(req.url);
     const rangeType = url.searchParams.get("rangeType");
     const referenceDateParam = url.searchParams.get("referenceDate");
@@ -132,9 +136,70 @@ export const GET = auth0.withApiAuthRequired(async (req) => {
       { totalBillableHours: 0, totalUnbillableHours: 0, totalBillableAmount: 0 }
     );
 
+    // Build filters object for storage/regeneration
+    const filters = {
+      rangeType: rangeType || null,
+      referenceDate: referenceDateParam || null,
+      customStartDate: startDateParam || null,
+      customEndDate: endDateParam || null,
+      selectedProjectIds: projectIdsParam
+        ? projectIdsParam.split(",").filter(Boolean)
+        : [],
+      billableFilter: billableFilterParam || "both",
+      includeExpenses: includeExpenses,
+    };
+
+    // Get activities data
+    const startDate = dateRange?.start || new Date(0);
+    const endDate = dateRange?.end || new Date();
+    const projectIds =
+      projectIdsParam && projectIdsParam.length > 0
+        ? projectIdsParam.split(",").filter(Boolean)
+        : null;
+
+    // Fetch overall activities
+    const activities = await getActivitiesReport(
+      user,
+      startDate,
+      endDate,
+      projectIds
+    );
+
+    // Fetch per-project activities
+    const projectActivities = await getProjectActivitiesReport(
+      user,
+      startDate,
+      endDate,
+      projectIds
+    );
+
+    // Group per-project activities by project_id
+    const projectActivitiesMap = {};
+    projectActivities.forEach((activity) => {
+      const projectId = activity.project_id;
+      if (!projectActivitiesMap[projectId]) {
+        projectActivitiesMap[projectId] = [];
+      }
+      projectActivitiesMap[projectId].push({
+        activity_type: activity.activity_type,
+        total_hours: activity.total_hours,
+        count: activity.count,
+        hourly_rate: activity.hourly_rate,
+        total_amount: activity.total_amount,
+      });
+    });
+
+    // Enrich each project with its activities array
+    const projectsWithActivities = enrichedProjects.map((project) => ({
+      ...project,
+      activities: projectActivitiesMap[project.id] || [],
+    }));
+
     return NextResponse.json({
-      projects: enrichedProjects,
+      projects: projectsWithActivities,
       totals,
+      filters,
+      activities,
     });
   } catch (error) {
     console.error("Error fetching reports:", error);

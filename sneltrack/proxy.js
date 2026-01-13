@@ -3,7 +3,7 @@ import { auth0 } from "./lib/auth/auth0";
 
 export async function proxy(request) {
   const session = await auth0.getSession(request);
-  console.log("session", session);
+  //console.log("session", session);
 
   //console.log("proxying request", request);
   return await auth0.middleware(request);

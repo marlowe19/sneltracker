@@ -30,6 +30,8 @@
             "runtimeExecutable": "${env:HOME}/.nvm/versions/node/v20.13.1/bin/node",
             "runtimeArgs": ["${workspaceFolder}/sneltrack/node_modules/.bin/next", "dev"],
             "cwd": "${workspaceFolder}/sneltrack",
+            "sourceMaps": true,
+
             "skipFiles": [
                 "<node_internals>/**"
             ],

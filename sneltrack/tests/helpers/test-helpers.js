@@ -8,8 +8,7 @@
  * @param {string} username
  */
 export async function navigateToUserPage(page, username) {
-  const encodedUser = encodeURIComponent(username);
-  await page.goto(`/${encodedUser}`);
+  await page.goto(`/my`);
   // Wait for the page to be fully loaded
   await page.waitForLoadState("networkidle");
 }
@@ -30,8 +29,7 @@ export async function waitForApiCalls(page, timeout = 5000) {
  * @param {string} projectId - Optional project ID
  */
 export async function startTimer(page, username, projectId = null) {
-  const encodedUser = encodeURIComponent(username);
-  const url = new URL(`/${encodedUser}/start`, page.url());
+  const url = new URL(`/my/start`, page.url());
   if (projectId) {
     url.searchParams.set("project", projectId);
   }
@@ -54,8 +52,7 @@ export async function startTimer(page, username, projectId = null) {
  * @param {string} username
  */
 export async function stopTimer(page, username) {
-  const encodedUser = encodeURIComponent(username);
-  const url = new URL(`/${encodedUser}/stop`, page.url());
+  const url = new URL(`/my/stop`, page.url());
 
   // Wait for the stop request to complete
   const responsePromise = page.waitForResponse(
@@ -102,8 +99,7 @@ export async function selectProject(page, projectName) {
  * @param {string} username
  */
 export async function navigateToProjects(page, username) {
-  const encodedUser = encodeURIComponent(username);
-  await page.goto(`/${encodedUser}/projecten`);
+  await page.goto(`/my/projecten`);
   await waitForApiCalls(page);
 }
 
@@ -114,8 +110,7 @@ export async function navigateToProjects(page, username) {
  * @param {number} weekOffset - Week offset (0 = current week, -1 = previous week, 1 = next week)
  */
 export async function navigateToWeek(page, username, weekOffset) {
-  const encodedUser = encodeURIComponent(username);
-  await page.goto(`/${encodedUser}?w=${weekOffset}`);
+  await page.goto(`/my?w=${weekOffset}`);
   await waitForApiCalls(page);
 }
 

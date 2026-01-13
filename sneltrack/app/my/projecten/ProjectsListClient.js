@@ -30,7 +30,7 @@ export default function ProjectsListClient({ user, initialProjects }) {
   const [editingProject, setEditingProject] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [copiedProjectId, setCopiedProjectId] = useState(null);
-  const [activeTab, setActiveTab] = useState("user"); // "user" or "shared"
+  const [activeTab, setActiveTab] = useState("user"); // "user", "shared", or "archived"
   const toast = useToast();
 
   // Use projects from store, fallback to initialProjects if store is empty
@@ -45,8 +45,11 @@ export default function ProjectsListClient({ user, initialProjects }) {
   function handleProjectClick(project) {
     // Check if shared project and user is not owner
     if (project.is_shared && project.owner !== user) {
-      toast.show("alleen de eigenaar heeft toegang tot het project");
-      return;
+      // Also check if user has owner role in project members
+      if (project.member_role !== "owner") {
+        toast.show("alleen de eigenaar heeft toegang tot het project");
+        return;
+      }
     }
     // Navigate to detail page
     router.push(`/my/projecten/${project.id}`);
@@ -82,10 +85,7 @@ export default function ProjectsListClient({ user, initialProjects }) {
   async function handleCopyLink(e, projectId) {
     e.stopPropagation(); // Prevent triggering project edit modal
 
-    const url = new URL(
-      `/${encodeURIComponent(user)}/start`,
-      window.location.origin
-    );
+    const url = new URL(`/my/start`, window.location.origin);
     url.searchParams.set("project", projectId);
 
     try {
@@ -99,14 +99,43 @@ export default function ProjectsListClient({ user, initialProjects }) {
     }
   }
 
+  // Helper function to check if project is archived
+  const isArchived = (project) => {
+    return project.status === "archived" || project.archived === true;
+  };
+
   // Filter projects based on active tab
-  const filteredProjects = displayProjects.filter((project) => {
-    if (activeTab === "shared") {
-      return project.is_shared === true;
-    } else {
-      return !project.is_shared;
-    }
-  });
+  const filteredProjects = displayProjects
+    .filter((project) => {
+      const archived = isArchived(project);
+      
+      if (activeTab === "archived") {
+        return archived;
+      } else if (activeTab === "shared") {
+        return project.is_shared === true && !archived;
+      } else {
+        // "user" tab - show non-shared, non-archived projects
+        return !project.is_shared && !archived;
+      }
+    })
+    .sort((a, b) => {
+      // For archived tab, sort by archived_at (desc) or name
+      if (activeTab === "archived") {
+        const aIsArchived = isArchived(a);
+        const bIsArchived = isArchived(b);
+        
+        if (aIsArchived && bIsArchived) {
+          if (a.archived_at && b.archived_at) {
+            return new Date(b.archived_at) - new Date(a.archived_at);
+          }
+          if (a.archived_at) return -1;
+          if (b.archived_at) return 1;
+        }
+      }
+      
+      // Sort by name for all tabs
+      return a.name.localeCompare(b.name);
+    });
 
   return (
     <>
@@ -121,7 +150,8 @@ export default function ProjectsListClient({ user, initialProjects }) {
               : "text-gray-600 hover:text-gray-900"
           }`}
         >
-          Mijn Projecten ({displayProjects.filter((p) => !p.is_shared).length})
+          Mijn Projecten (
+          {displayProjects.filter((p) => !p.is_shared && !isArchived(p)).length})
         </button>
         <button
           type="button"
@@ -133,7 +163,19 @@ export default function ProjectsListClient({ user, initialProjects }) {
           }`}
         >
           Gedeelde Projecten (
-          {displayProjects.filter((p) => p.is_shared).length})
+          {displayProjects.filter((p) => p.is_shared && !isArchived(p)).length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("archived")}
+          className={`px-4 py-2 text-sm font-medium ${
+            activeTab === "archived"
+              ? "text-[#008eff] border-b-2 border-[#008eff]"
+              : "text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          Gearchiveerd (
+          {displayProjects.filter((p) => isArchived(p)).length})
         </button>
       </div>
 
@@ -185,6 +227,14 @@ export default function ProjectsListClient({ user, initialProjects }) {
                         </span>
                       )}
                     </div>
+                    {(project.status === "archived" ||
+                      project.archived === true) && (
+                      <div className="mb-1">
+                        <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded">
+                          Gearchiveerd
+                        </span>
+                      </div>
+                    )}
                     {project.is_shared && (
                       <div className="flex items-center gap-2">
                         <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">

@@ -7,6 +7,9 @@ import MembersListClient from "../MembersListClient";
 import ProjectNotesClient from "./ProjectNotesClient";
 import CalendarViewClient from "@/app/my/components/CalendarViewClient";
 import ProjectForecastClient from "./ProjectForecastClient";
+import ProjectEntriesListClient from "./ProjectEntriesListClient";
+import ArchiveProjectModal from "./ArchiveProjectModal";
+import ProjectActivitiesTab from "./ProjectActivitiesTab";
 
 function formatMoney(amount) {
   if (!amount && amount !== 0) return "";
@@ -41,6 +44,10 @@ export default function ProjectDetailClient({
   const [members, setMembers] = useState(initialMembers);
   const [activeTab, setActiveTab] = useState("statistieken");
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
+  const [timeEntriesCount, setTimeEntriesCount] = useState(0);
+  const [expensesCount, setExpensesCount] = useState(0);
+  const [entriesData, setEntriesData] = useState(null);
+  const [entriesLoading, setEntriesLoading] = useState(false);
 
   // Settings form state
   const [name, setName] = useState(project?.name || "");
@@ -71,10 +78,18 @@ export default function ProjectDetailClient({
       ? new Date(project.start_date).toISOString().split("T")[0]
       : ""
   );
+  const [actualEndDate, setActualEndDate] = useState(
+    project?.actual_end_date
+      ? new Date(project.actual_end_date).toISOString().split("T")[0]
+      : ""
+  );
+  const [status, setStatus] = useState(project?.status || "active");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isTogglingArchive, setIsTogglingArchive] = useState(false);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
 
   // Member management state (for settings tab)
   const [newMemberName, setNewMemberName] = useState("");
@@ -118,6 +133,7 @@ export default function ProjectDetailClient({
           ? new Date(project.start_date).toISOString().split("T")[0]
           : ""
       );
+      setStatus(project.status || "active");
     }
   }, [project]);
 
@@ -145,6 +161,54 @@ export default function ProjectDetailClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
+  // Fetch entries data once when component mounts or projectId changes
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchEntriesData() {
+      setEntriesLoading(true);
+      // Reset data before fetching new data
+      setEntriesData(null);
+      setTimeEntriesCount(0);
+      setExpensesCount(0);
+      
+      try {
+        const res = await fetch(
+          `/my/projecten/${projectId}/api?action=entries`
+        );
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          // Debug: log the fetched data
+          if (process.env.NODE_ENV === "development") {
+            console.log("Fetched entries data:", data);
+          }
+          setEntriesData(data);
+          setTimeEntriesCount(data.timeEntries?.length || 0);
+          setExpensesCount(data.expenses?.length || 0);
+        }
+      } catch (err) {
+        console.error("Error fetching entry data:", err);
+      } finally {
+        if (isMounted) {
+          setEntriesLoading(false);
+        }
+      }
+    }
+
+    fetchEntriesData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [projectId]); // Only fetch when projectId changes
+
+  // Reset entries data when projectId changes
+  useEffect(() => {
+    setEntriesData(null);
+    setTimeEntriesCount(0);
+    setExpensesCount(0);
+  }, [projectId]);
+
   async function checkCalendarStatus() {
     setCheckingCalendar(true);
     setCalendarError(null);
@@ -163,9 +227,7 @@ export default function ProjectDetailClient({
   }
 
   function handleConnectCalendar() {
-    const authUrl = `/api/auth/google/authorize?user=${encodeURIComponent(
-      user
-    )}`;
+    const authUrl = `/api/auth/google/authorize?user=my`;
     window.location.href = authUrl;
   }
 
@@ -295,6 +357,70 @@ export default function ProjectDetailClient({
     }
   }
 
+  async function handleToggleArchive(archiveData = null) {
+    // Only allow toggle between 'active' and 'archived'
+    if (status !== "active" && status !== "archived") {
+      setError("Kan alleen tussen actief en gearchiveerd wisselen");
+      return;
+    }
+
+    const newStatus = status === "active" ? "archived" : "active";
+
+    // If archiving, show modal instead of confirm
+    if (newStatus === "archived" && !archiveData) {
+      setShowArchiveModal(true);
+      return;
+    }
+
+    // If unarchiving, use simple confirm
+    if (newStatus === "active") {
+      if (!confirm("Weet je zeker dat je dit project wilt activeren?")) {
+        return;
+      }
+    }
+
+    setIsTogglingArchive(true);
+    setError(null);
+    setShowArchiveModal(false);
+
+    try {
+      const body = {
+        id: projectId,
+        status: newStatus,
+      };
+
+      // Add archive data if archiving
+      if (newStatus === "archived" && archiveData) {
+        if (archiveData.actual_end_date) {
+          body.actual_end_date = archiveData.actual_end_date;
+        }
+        if (archiveData.description) {
+          body.description = archiveData.description;
+        }
+      }
+
+      const res = await fetch(`/my/projecten/api`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to update project status");
+      }
+
+      // Update local state
+      setStatus(newStatus);
+      // Reload page data after successful update
+      router.refresh();
+    } catch (err) {
+      setError(err.message || "Failed to update project status");
+    } finally {
+      setIsTogglingArchive(false);
+    }
+  }
+
   async function handleDeleteProject() {
     if (
       !confirm(
@@ -415,53 +541,88 @@ export default function ProjectDetailClient({
           onClose={() => setIsCalendarExpanded(false)}
         />
       )}
-      <div className="flex border-b border-gray-200 mb-6">
-        <button
-          type="button"
-          onClick={() => setActiveTab("statistieken")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "statistieken"
-              ? "border-[#008eff] text-[#008eff]"
-              : "border-transparent text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Statistieken
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("notes")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "notes"
-              ? "border-[#008eff] text-[#008eff]"
-              : "border-transparent text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Notities
-        </button>
-        {isShared && (
+      <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
+        <div className="flex min-w-max">
           <button
             type="button"
-            onClick={() => setActiveTab("members")}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "members"
+            onClick={() => setActiveTab("statistieken")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "statistieken"
                 ? "border-[#008eff] text-[#008eff]"
                 : "border-transparent text-gray-600 hover:text-gray-900"
             }`}
           >
-            Leden
+            Statistieken
           </button>
-        )}
-        <button
-          type="button"
-          onClick={() => setActiveTab("settings")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === "settings"
-              ? "border-[#008eff] text-[#008eff]"
-              : "border-transparent text-gray-600 hover:text-gray-900"
-          }`}
-        >
-          Instellingen
-        </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("notes")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "notes"
+                ? "border-[#008eff] text-[#008eff]"
+                : "border-transparent text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Notities
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("timeEntries")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "timeEntries"
+                ? "border-[#008eff] text-[#008eff]"
+                : "border-transparent text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Tijdregistraties {timeEntriesCount > 0 && `(${timeEntriesCount})`}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("expenses")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "expenses"
+                ? "border-[#008eff] text-[#008eff]"
+                : "border-transparent text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Uitgaven {expensesCount > 0 && `(${expensesCount})`}
+          </button>
+          {isShared && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("members")}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === "members"
+                  ? "border-[#008eff] text-[#008eff]"
+                  : "border-transparent text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Leden
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setActiveTab("activities")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "activities"
+                ? "border-[#008eff] text-[#008eff]"
+                : "border-transparent text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Activiteiten
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("settings")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === "settings"
+                ? "border-[#008eff] text-[#008eff]"
+                : "border-transparent text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Instellingen
+          </button>
+        </div>
       </div>
 
       {/* Tab Content */}
@@ -476,6 +637,30 @@ export default function ProjectDetailClient({
         </div>
       )}
 
+      {activeTab === "timeEntries" && (
+        <div className="mb-4">
+          <ProjectEntriesListClient
+            user={user}
+            projectId={projectId}
+            type="timeEntries"
+            data={entriesData}
+            loading={entriesLoading}
+          />
+        </div>
+      )}
+
+      {activeTab === "expenses" && (
+        <div className="mb-4">
+          <ProjectEntriesListClient
+            user={user}
+            projectId={projectId}
+            type="expenses"
+            data={entriesData}
+            loading={entriesLoading}
+          />
+        </div>
+      )}
+
       {activeTab === "notes" && (
         <div className="mb-4">
           <ProjectNotesClient
@@ -486,6 +671,11 @@ export default function ProjectDetailClient({
         </div>
       )}
 
+      {activeTab === "activities" && (
+        <div>
+          <ProjectActivitiesTab projectId={projectId} isOwner={isOwner} />
+        </div>
+      )}
       {activeTab === "settings" && (
         <div className="space-y-6 mb-4">
           <form onSubmit={handleSaveSettings} className="space-y-4">
@@ -708,6 +898,27 @@ export default function ProjectDetailClient({
               />
             </div>
 
+            {actualEndDate && (
+              <div>
+                <label
+                  htmlFor="actualEndDate"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Werkelijke einddatum
+                </label>
+                <input
+                  type="date"
+                  id="actualEndDate"
+                  value={actualEndDate}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed text-base"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Deze datum is ingesteld bij het archiveren van het project.
+                </p>
+              </div>
+            )}
+
             {!canEdit && (
               <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
                 <p className="font-medium mb-1">Alleen-lezen</p>
@@ -886,7 +1097,7 @@ export default function ProjectDetailClient({
                       >
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-gray-900">
-                            {member.user_name}
+                            {member.user_display_name || member.user_name}
                           </span>
                           <span
                             className={`text-xs px-2 py-0.5 rounded ${
@@ -910,6 +1121,60 @@ export default function ProjectDetailClient({
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {/* Archive/Unarchive Project Section */}
+          {canEdit && (
+            <div className="mt-8 pt-8 border-t border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-900 mb-4">
+                Project Status
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">
+                      Huidige status:
+                    </span>
+                    <span
+                      className={`text-xs px-2 py-1 rounded font-medium ${
+                        status === "archived"
+                          ? "bg-gray-200 text-gray-700"
+                          : "bg-green-100 text-green-700"
+                      }`}
+                    >
+                      {status === "archived" ? "Gearchiveerd" : "Actief"}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-600">
+                  {status === "archived"
+                    ? "Dit project is gearchiveerd. Activeer het om het weer beschikbaar te maken."
+                    : "Archiveer dit project om het te verbergen zonder het te verwijderen."}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleToggleArchive}
+                  disabled={isTogglingArchive || isSaving || isDeleting}
+                  className={`w-full px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-medium ${
+                    status === "archived"
+                      ? "bg-[#008eff] text-white"
+                      : "bg-gray-600 text-white"
+                  }`}
+                >
+                  {isTogglingArchive
+                    ? status === "archived"
+                      ? "Activeren..."
+                      : "Archiveren..."
+                    : status === "archived"
+                    ? "Project Activeren"
+                    : "Project Archiveren"}
+                </button>
+                {error && isTogglingArchive && (
+                  <div className="text-sm text-red-600 bg-red-50 p-3 rounded">
+                    {error}
                   </div>
                 )}
               </div>
@@ -958,6 +1223,15 @@ export default function ProjectDetailClient({
           />
         </div>
       )}
+
+      {/* Archive Project Modal */}
+      <ArchiveProjectModal
+        isOpen={showArchiveModal}
+        onClose={() => setShowArchiveModal(false)}
+        onArchive={handleToggleArchive}
+        projectName={name}
+        isArchiving={isTogglingArchive}
+      />
     </div>
   );
 }

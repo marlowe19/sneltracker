@@ -24,9 +24,11 @@ import {
   updateProjectMemberRate,
   deleteProject as deleteProjectSupabase,
   updateProjectMemberCapacity,
+  updateProjectMemberRole,
   removeProjectMember,
   createProject as createProjectSupabase,
   updateProject as updateProjectSupabase,
+  lookupUserByEmail,
 } from "@/lib/supabase/services/projectsService";
 import { auth0 } from "@/lib/auth/auth0";
 
@@ -35,7 +37,7 @@ export const dynamic = "force-dynamic";
 export const GET = auth0.withApiAuthRequired(async (req) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const url = new URL(req.url);
     const projectId = url.searchParams.get("projectId");
     const stats = url.searchParams.get("stats") === "true";
@@ -90,7 +92,7 @@ export const GET = auth0.withApiAuthRequired(async (req) => {
 export const POST = auth0.withApiAuthRequired(async (req) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const body = await req.json();
     const url = new URL(req.url);
     const action = url.searchParams.get("action");
@@ -112,6 +114,16 @@ export const POST = auth0.withApiAuthRequired(async (req) => {
           { status: 404 }
         );
       }
+      // check if users exists in table based on the email and return the user by email
+
+      //lookup user by email
+      const foundUser = await lookupUserByEmail(memberName);
+      if (!foundUser) {
+        return NextResponse.json(
+          { error: "Gebruiker niet gevonden" },
+          { status: 404 }
+        );
+      }
 
       if (!projectDetail.is_owner) {
         return NextResponse.json(
@@ -129,10 +141,11 @@ export const POST = auth0.withApiAuthRequired(async (req) => {
       // );
 
       // ✅ NEW: Also write to Supabase
+      // Use foundUser.user_name (auth0 id) instead of memberName (email)
       try {
         await addProjectMember(
           projectId,
-          memberName,
+          foundUser.user_name,
           "member",
           hourly_rate ?? null,
           body.capacity_per_week ?? null
@@ -271,8 +284,20 @@ function buildProjectUpdates(body) {
   if (body.end_date !== undefined) {
     updates.end_date = body.end_date || null;
   }
+  if (body.actual_end_date !== undefined) {
+    updates.actual_end_date = body.actual_end_date || null;
+  }
+  if (body.description !== undefined) {
+    updates.description =
+      typeof body.description === "string"
+        ? body.description.trim() || null
+        : body.description;
+  }
   if (body.is_default !== undefined) {
     updates.is_default = body.is_default === true;
+  }
+  if (body.status !== undefined) {
+    updates.status = body.status;
   }
 
   return updates;
@@ -281,7 +306,7 @@ function buildProjectUpdates(body) {
 export const PATCH = auth0.withApiAuthRequired(async (req) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const body = await req.json();
     const url = new URL(req.url);
     const action = url.searchParams.get("action");
@@ -364,6 +389,75 @@ export const PATCH = auth0.withApiAuthRequired(async (req) => {
       return NextResponse.json({ success: true });
     }
 
+    // Handle updateMemberRole action
+    if (action === "updateMemberRole") {
+      const { projectId, memberName, role } = body;
+      if (!projectId || !memberName || !role) {
+        return NextResponse.json(
+          { error: "projectId, memberName, and role are required" },
+          { status: 400 }
+        );
+      }
+
+      // Validate role value
+      if (role !== "owner" && role !== "member") {
+        return NextResponse.json(
+          { error: "Role must be either 'owner' or 'member'" },
+          { status: 400 }
+        );
+      }
+
+      const projectDetail = await getProjectDetail(user, projectId);
+      if (!projectDetail) {
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 404 }
+        );
+      }
+
+      // Check if user is project owner OR has "owner" role in project_members
+      const canChangeRole =
+        projectDetail.is_owner || projectDetail.member_role === "owner";
+
+      if (!canChangeRole) {
+        return NextResponse.json(
+          {
+            error:
+              "Only project owners and members with owner role can change member roles",
+          },
+          { status: 403 }
+        );
+      }
+
+      // Prevent project owner from changing their own role
+      if (projectDetail.is_owner && memberName === user) {
+        return NextResponse.json(
+          { error: "Project owner cannot change their own role" },
+          { status: 403 }
+        );
+      }
+
+      // Check if member exists in project
+      const member = projectDetail.members?.find(
+        (m) => m.user_name === memberName
+      );
+      if (!member) {
+        return NextResponse.json(
+          { error: "Member not found in project" },
+          { status: 404 }
+        );
+      }
+
+      try {
+        await updateProjectMemberRole(projectId, memberName, role);
+      } catch (error) {
+        console.error("Failed to update member role in Supabase:", error);
+        throw error;
+      }
+
+      return NextResponse.json({ success: true });
+    }
+
     // Regular project update
     if (!body.id) {
       return NextResponse.json(
@@ -417,7 +511,7 @@ export const PATCH = auth0.withApiAuthRequired(async (req) => {
 export const DELETE = auth0.withApiAuthRequired(async (req) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const url = new URL(req.url);
     const projectId = url.searchParams.get("id");
     const action = url.searchParams.get("action");

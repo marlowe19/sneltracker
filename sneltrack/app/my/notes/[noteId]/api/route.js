@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const GET = auth0.withApiAuthRequired(async (req, context) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const { noteId } = await context.params;
 
     // Fetch note
@@ -61,7 +61,7 @@ export const GET = auth0.withApiAuthRequired(async (req, context) => {
 export const POST = auth0.withApiAuthRequired(async (req, context) => {
   try {
     const session = await auth0.getSession(req);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const { noteId } = await context.params;
     const url = new URL(req.url);
     const action = url.searchParams.get("action");

@@ -74,7 +74,7 @@ export default async function UserPage({ params, searchParams, request }) {
   if (!session?.user) {
     redirect("/auth/login");
   }
-  const user = session.user.nickname;
+  const user = session.user.sub;
   return (
     <Suspense fallback={<UserPageLoading user={user} />}>
       <UserPageContent user={user} weekOffset={weekOffset} />

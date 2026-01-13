@@ -20,6 +20,7 @@ import {
   subWeeks,
   subMonths,
   subQuarters,
+  subYears,
   getWeek,
   isSameDay,
   isSameMonth,
@@ -192,10 +193,24 @@ export default function CustomDateRangeSelectorClient({
   const currentBounds = useMemo(() => {
     // Check if we have custom dates from props (updated via context)
     if (initialCustomStartDate && initialCustomEndDate) {
-      return {
-        start: new Date(initialCustomStartDate),
-        end: new Date(initialCustomEndDate),
-      };
+      const start = new Date(initialCustomStartDate);
+      const end = new Date(initialCustomEndDate);
+
+      // Check if this is approximately a 2-year range (default when cleared)
+      const now = new Date();
+      const twoYearsAgo = subYears(now, 2);
+      const daysDiff = Math.abs(
+        (start.getTime() - twoYearsAgo.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      const isTwoYearDefault =
+        daysDiff < 7 &&
+        Math.abs((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) < 1;
+
+      if (isTwoYearDefault) {
+        return { start: null, end: null, isDefault: true };
+      }
+
+      return { start, end };
     }
 
     if (initialRangeType === "week") {
@@ -212,10 +227,12 @@ export default function CustomDateRangeSelectorClient({
     initialCustomStartDate,
     initialCustomEndDate,
   ]);
-  const currentRangeLabel = formatDateRangeDisplay(
-    currentBounds.start,
-    currentBounds.end
-  );
+
+  const currentRangeLabel = currentBounds.isDefault
+    ? "Laatste 2 jaar"
+    : currentBounds.start && currentBounds.end
+    ? formatDateRangeDisplay(currentBounds.start, currentBounds.end)
+    : "Selecteer datumbereik";
 
   // Generate calendar grid
   const { weeks, monthStart } = generateMonthGrid(
@@ -228,9 +245,16 @@ export default function CustomDateRangeSelectorClient({
 
   const handleOpenModal = async () => {
     const bounds = currentBounds;
-    setTempStartDate(bounds.start);
-    setTempEndDate(bounds.end);
-    setDisplayMonth(bounds.start || new Date());
+    // If it's the default 2-year range, use the actual dates from context
+    if (bounds.isDefault && initialCustomStartDate && initialCustomEndDate) {
+      setTempStartDate(new Date(initialCustomStartDate));
+      setTempEndDate(new Date(initialCustomEndDate));
+      setDisplayMonth(new Date(initialCustomStartDate));
+    } else {
+      setTempStartDate(bounds.start);
+      setTempEndDate(bounds.end);
+      setDisplayMonth(bounds.start || new Date());
+    }
     setActiveField("start");
     setShowCalendar(false); // Don't show calendar by default
 
@@ -268,8 +292,14 @@ export default function CustomDateRangeSelectorClient({
   const handleCloseModal = () => {
     setIsModalOpen(false);
     const bounds = currentBounds;
-    setTempStartDate(bounds.start);
-    setTempEndDate(bounds.end);
+    // If it's the default 2-year range, use the actual dates from context
+    if (bounds.isDefault && initialCustomStartDate && initialCustomEndDate) {
+      setTempStartDate(new Date(initialCustomStartDate));
+      setTempEndDate(new Date(initialCustomEndDate));
+    } else {
+      setTempStartDate(bounds.start);
+      setTempEndDate(bounds.end);
+    }
     // Reset temp filters to current values
     setTempSelectedProjectIds(initialSelectedProjectIds);
     setTempBillableFilter(initialBillableFilter);
@@ -405,8 +435,11 @@ export default function CustomDateRangeSelectorClient({
         onRangeChange(newRangeType, newReferenceDate, null, null, filters);
       }
     } else {
-      // No dates selected - just apply filters with current range type
-      onRangeChange(rangeType, referenceDate, null, null, filters);
+      // No dates selected - default to last 2 years
+      const now = new Date();
+      const twoYearsAgo = subYears(now, 2);
+      // Use custom date range to represent "last 2 years"
+      onRangeChange("week", now, twoYearsAgo, now, filters);
     }
 
     setIsModalOpen(false);
@@ -543,11 +576,11 @@ export default function CustomDateRangeSelectorClient({
           onClick={handleCloseModal}
         >
           <div
-            className="bg-white rounded-t-xl w-full max-w-md max-h-[90vh] flex flex-col"
+            className="bg-white rounded-t-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 shrink-0">
               <button
                 onClick={handleCloseModal}
                 className="text-[#008eff] text-sm font-medium"
@@ -566,7 +599,7 @@ export default function CustomDateRangeSelectorClient({
             </div>
 
             {/* Start/End Date Inputs */}
-            <div className="flex gap-4 p-4 border-b border-gray-200">
+            <div className="flex gap-4 p-4 border-b border-gray-200 shrink-0">
               <div className="flex-1">
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Start
@@ -626,7 +659,7 @@ export default function CustomDateRangeSelectorClient({
             </div>
 
             {/* Shortcut Buttons */}
-            <div className="flex flex-wrap gap-2 p-4 border-b border-gray-200">
+            <div className="flex flex-wrap gap-2 p-4 border-b border-gray-200 shrink-0">
               <button
                 onClick={handleThisWeek}
                 className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
@@ -665,98 +698,125 @@ export default function CustomDateRangeSelectorClient({
               </button>
             </div>
 
-            {/* Calendar - Conditional */}
-            {showCalendar && (
-              <div className="flex-1 overflow-y-auto p-4 border-b border-gray-200">
-                {/* Month Navigation */}
-                <div className="flex items-center justify-between mb-4">
-                  <button
-                    onClick={handlePreviousMonthNav}
-                    className="text-[#008eff] p-1"
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+            {/* Calendar - Collapsible */}
+            <div className="border-b border-gray-200">
+              <button
+                onClick={() => setShowCalendar(!showCalendar)}
+                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+              >
+                <span className="text-sm font-medium text-gray-900">
+                  Kalender
+                </span>
+                <svg
+                  className={`w-5 h-5 text-gray-400 transition-transform ${
+                    showCalendar ? "rotate-180" : ""
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </button>
+              {showCalendar && (
+                <div className="overflow-y-auto p-4 max-h-[400px]">
+                  {/* Month Navigation */}
+                  <div className="flex items-center justify-between mb-4">
+                    <button
+                      onClick={handlePreviousMonthNav}
+                      className="text-[#008eff] p-1"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 19l-7-7 7-7"
-                      />
-                    </svg>
-                  </button>
-                  <h4 className="text-base font-semibold text-[#008eff]">
-                    {format(displayMonth, "MMMM yyyy", { locale: nl })}
-                  </h4>
-                  <button
-                    onClick={handleNextMonthNav}
-                    className="text-[#008eff] p-1"
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </button>
-                </div>
-
-                {/* Calendar Grid */}
-                <div className="w-full">
-                  {/* Day Headers */}
-                  <div className="grid grid-cols-8 gap-1 mb-1">
-                    <div className="text-xs font-medium text-gray-500 text-center"></div>
-                    {["M", "D", "W", "D", "V", "Z", "Z"].map((label, idx) => (
-                      <div
-                        key={idx}
-                        className="text-xs font-medium text-gray-500 text-center"
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
                       >
-                        {label}
-                      </div>
-                    ))}
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 19l-7-7 7-7"
+                        />
+                      </svg>
+                    </button>
+                    <h4 className="text-base font-semibold text-[#008eff]">
+                      {format(displayMonth, "MMMM yyyy", { locale: nl })}
+                    </h4>
+                    <button
+                      onClick={handleNextMonthNav}
+                      className="text-[#008eff] p-1"
+                    >
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 5l7 7-7 7"
+                        />
+                      </svg>
+                    </button>
                   </div>
 
-                  {/* Calendar Weeks */}
-                  {weeks.map((week, weekIdx) => (
-                    <div key={weekIdx} className="grid grid-cols-8 gap-1 mb-1">
-                      {/* Week Number */}
-                      <div className="text-xs text-gray-400 text-center flex items-center justify-center">
-                        {week.weekNumber}
-                      </div>
+                  {/* Calendar Grid */}
+                  <div className="w-full">
+                    {/* Day Headers */}
+                    <div className="grid grid-cols-8 gap-1 mb-1">
+                      <div className="text-xs font-medium text-gray-500 text-center"></div>
+                      {["M", "D", "W", "D", "V", "Z", "Z"].map((label, idx) => (
+                        <div
+                          key={idx}
+                          className="text-xs font-medium text-gray-500 text-center"
+                        >
+                          {label}
+                        </div>
+                      ))}
+                    </div>
 
-                      {/* Days */}
-                      {week.days.map((day, dayIdx) => {
-                        const isCurrentMonth = isSameMonth(day, monthStart);
-                        const isToday = isSameDay(day, today);
-                        const isInRange =
-                          tempStartDate &&
-                          tempEndDate &&
-                          isDateInRange(day, tempStartDate, tempEndDate);
-                        const isStart =
-                          tempStartDate && isSameDay(day, tempStartDate);
-                        const isEnd =
-                          tempEndDate && isSameDay(day, tempEndDate);
-                        const isBoundary = isRangeBoundary(
-                          day,
-                          tempStartDate,
-                          tempEndDate
-                        );
+                    {/* Calendar Weeks */}
+                    {weeks.map((week, weekIdx) => (
+                      <div
+                        key={weekIdx}
+                        className="grid grid-cols-8 gap-1 mb-1"
+                      >
+                        {/* Week Number */}
+                        <div className="text-xs text-gray-400 text-center flex items-center justify-center">
+                          {week.weekNumber}
+                        </div>
 
-                        return (
-                          <button
-                            key={dayIdx}
-                            onClick={() => handleDateClick(day)}
-                            className={`
+                        {/* Days */}
+                        {week.days.map((day, dayIdx) => {
+                          const isCurrentMonth = isSameMonth(day, monthStart);
+                          const isToday = isSameDay(day, today);
+                          const isInRange =
+                            tempStartDate &&
+                            tempEndDate &&
+                            isDateInRange(day, tempStartDate, tempEndDate);
+                          const isStart =
+                            tempStartDate && isSameDay(day, tempStartDate);
+                          const isEnd =
+                            tempEndDate && isSameDay(day, tempEndDate);
+                          const isBoundary = isRangeBoundary(
+                            day,
+                            tempStartDate,
+                            tempEndDate
+                          );
+
+                          return (
+                            <button
+                              key={dayIdx}
+                              onClick={() => handleDateClick(day)}
+                              className={`
                             relative h-10 rounded-full w-10 text-sm transition-colors
                             ${
                               !isCurrentMonth
@@ -777,26 +837,27 @@ export default function CustomDateRangeSelectorClient({
                             hover:bg-blue-50
                             ${!isCurrentMonth ? "hover:bg-transparent" : ""}
                           `}
-                          >
-                            {day.getDate()}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ))}
+                            >
+                              {day.getDate()}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Filters Section - Always Visible */}
-            <div className="border-b border-gray-200">
-              <div className="px-4 py-3 border-b border-gray-100">
+            <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+              <div className="px-4 py-3 border-b border-gray-100 shrink-0">
                 <span className="text-sm font-medium text-gray-900">
                   Filters
                 </span>
               </div>
 
-              <div className="px-4 pb-4 space-y-4 max-h-96 overflow-y-auto">
+              <div className="px-4 pb-4 space-y-4 overflow-y-auto">
                 {/* Projects Filter */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -911,9 +972,10 @@ export default function CustomDateRangeSelectorClient({
                       className="w-5 h-5 text-[#008eff] border-gray-300 rounded focus:ring-[#008eff]"
                     />
                     <span className="text-sm font-medium text-gray-700">
-                      Uitgaven meenemen
+                      Uitgaven
                     </span>
                   </label>
+                  x
                 </div>
               </div>
             </div>

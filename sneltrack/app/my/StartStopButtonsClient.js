@@ -12,6 +12,9 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
   const projects = useStore((state) => state.projects);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [showProjectSelect, setShowProjectSelect] = useState(false);
+  const [projectActivities, setProjectActivities] = useState([]);
+  const [selectedActivity, setSelectedActivity] = useState(null);
+  const [loadingActivities, setLoadingActivities] = useState(false);
 
   // Pre-select default project when projects are loaded
   useEffect(() => {
@@ -23,6 +26,34 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
     }
   }, [projects, selectedProjectId]);
 
+  // Fetch activities when project is selected
+  useEffect(() => {
+    if (selectedProjectId) {
+      fetchProjectActivities(selectedProjectId);
+    } else {
+      setProjectActivities([]);
+      setSelectedActivity(null);
+    }
+  }, [selectedProjectId]);
+
+  async function fetchProjectActivities(projectId) {
+    setLoadingActivities(true);
+    try {
+      const res = await fetch(`/my/projects/${projectId}/activities`);
+      if (res.ok) {
+        const data = await res.json();
+        setProjectActivities(data.activities || []);
+      } else {
+        setProjectActivities([]);
+      }
+    } catch (error) {
+      console.error("Error fetching project activities:", error);
+      setProjectActivities([]);
+    } finally {
+      setLoadingActivities(false);
+    }
+  }
+
   async function handle(action) {
     setIsLoading(true);
 
@@ -32,12 +63,20 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
     }
 
     try {
-      const url = new URL(
-        `/${encodeURIComponent(user)}/${action}`,
-        window.location.origin
-      );
-      if (action === "start" && selectedProjectId) {
-        url.searchParams.set("project", selectedProjectId);
+      const url = new URL(`/my/${action}`, window.location.origin);
+      if (action === "start") {
+        if (selectedProjectId) {
+          url.searchParams.set("project", selectedProjectId);
+        }
+        if (selectedActivity) {
+          url.searchParams.set("activity_type", selectedActivity.name);
+          if (selectedActivity.hourly_rate) {
+            url.searchParams.set(
+              "activity_hourly_rate",
+              selectedActivity.hourly_rate.toString()
+            );
+          }
+        }
       }
       await fetch(url.toString(), { method: "POST" });
     } finally {
@@ -75,41 +114,87 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
               >
                 Kies project
               </button>
-              {projects.map((project) => (
-                <button
-                  key={project.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedProjectId(project.id);
-                    setShowProjectSelect(false);
-                  }}
-                  className={`w-full px-3 py-2 text-sm text-left hover:bg-gray-100 ${
-                    selectedProjectId === project.id
-                      ? "bg-blue-50 text-blue-900"
-                      : "text-gray-700"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span>{project.name}</span>
-                    <div className="flex items-center gap-2">
-                      {project.is_default && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
-                          Standaard
-                        </span>
-                      )}
-                      {project.is_shared && (
-                        <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
-                          Gedeeld
-                        </span>
-                      )}
+              {projects
+                .filter(
+                  (project) =>
+                    project.status !== "archived" && project.archived !== true
+                )
+                .map((project) => (
+                  <button
+                    key={project.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedProjectId(project.id);
+                      setShowProjectSelect(false);
+                    }}
+                    className={`w-full px-3 py-2 text-sm text-left hover:bg-gray-100 ${
+                      selectedProjectId === project.id
+                        ? "bg-blue-50 text-blue-900"
+                        : "text-gray-700"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>{project.name}</span>
+                      <div className="flex items-center gap-2">
+                        {project.is_default && (
+                          <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                            Standaard
+                          </span>
+                        )}
+                        {project.is_shared && (
+                          <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                            Gedeeld
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                ))}
             </div>
           )}
         </div>
       )}
+
+      {/* Activity Selector - only show if project has activities and not active */}
+      {!active &&
+        selectedProjectId &&
+        projectActivities.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-xs text-gray-500">Activiteit (optioneel)</div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedActivity(null)}
+                className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                  !selectedActivity
+                    ? "bg-[#008eff] text-white border-[#008eff]"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                Geen
+              </button>
+              {projectActivities.map((activity) => (
+                <button
+                  key={activity.id}
+                  type="button"
+                  onClick={() => setSelectedActivity(activity)}
+                  className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                    selectedActivity?.id === activity.id
+                      ? "bg-[#008eff] text-white border-[#008eff]"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  {activity.name}
+                  {activity.hourly_rate && (
+                    <span className="ml-1 text-xs">
+                      (€{parseFloat(activity.hourly_rate).toFixed(2)}/uur)
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
       <button
         type="button"

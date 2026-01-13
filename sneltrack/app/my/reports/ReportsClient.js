@@ -3,7 +3,19 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import BackButtonClient from "../projecten/[projectId]/BackButtonClient";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Legend,
+} from "recharts";
 import {
   DateRangeProvider,
   CustomDateRangeSelector,
@@ -13,6 +25,8 @@ import { getWeekBounds, getMonthBounds, getQuarterBounds } from "@/lib/time";
 import { formatDateForAPI } from "@/lib/dateRangeUtils";
 import { HOURLY_RATE_BREAKDOWN } from "@/lib/hourlyRateBreakdown";
 import PieChartCarousel from "./PieChartCarousel";
+import SaveReportModal from "./SaveReportModal";
+import StoredReportsTab from "./StoredReportsTab";
 
 function formatMoney(amount) {
   return new Intl.NumberFormat("nl-NL", {
@@ -213,7 +227,12 @@ function CategoryBreakdownPieChart({ totals }) {
 
 function ProjectCard({ project, user }) {
   const [showMembers, setShowMembers] = useState(false);
+  const [showActivities, setShowActivities] = useState(false);
   const hasMembers = project.members && project.members.length > 0;
+  const hasActivities =
+    project.activities &&
+    Array.isArray(project.activities) &&
+    project.activities.length > 0;
 
   return (
     <div className="border border-[#ffa540] bg-[#fff9e5] rounded-lg p-4 hover:bg-gray-50 transition-colors">
@@ -309,7 +328,7 @@ function ProjectCard({ project, user }) {
                     className="bg-white rounded-lg p-3 border border-gray-200"
                   >
                     <div className="font-medium text-gray-900 mb-2">
-                      {member.user_name}
+                      {member.user_display_name || member.user_name}
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
                       <div>
@@ -354,11 +373,71 @@ function ProjectCard({ project, user }) {
           )}
         </div>
       )}
+
+      {/* Activities Section */}
+      {hasActivities && (
+        <div className="mt-4 pt-3 border-t border-gray-200">
+          <button
+            onClick={() => setShowActivities(!showActivities)}
+            className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 w-full"
+          >
+            <span>{showActivities ? "▼" : "▶"}</span>
+            <span>Activiteiten overzicht</span>
+          </button>
+
+          {showActivities && (
+            <div className="mt-3 space-y-2">
+              {project.activities.map((activity, index) => (
+                <div
+                  key={`${activity.activity_type}-${index}`}
+                  className="bg-white rounded-lg p-3 border border-gray-200"
+                >
+                  <div className="font-medium text-gray-900 mb-3">
+                    {activity.activity_type}
+                  </div>
+                  <div className="flex flex-row gap-4 text-sm">
+                    <div className="flex-1 text-gray-700">
+                      <div className="font-medium text-gray-600 mb-1">Uren</div>
+                      <div>{formatHours(activity.total_hours)}</div>
+                    </div>
+                    {activity.hourly_rate > 0 && (
+                      <div className="flex-1 text-gray-700">
+                        <div className="font-medium text-gray-600 mb-1">
+                          Uurtarief
+                        </div>
+                        <div>{formatMoney(activity.hourly_rate)}</div>
+                      </div>
+                    )}
+                    {activity.total_amount > 0 && (
+                      <div className="flex-1 text-gray-700">
+                        <div className="font-medium text-gray-600 mb-1">
+                          Bedrag
+                        </div>
+                        <div>
+                          <span className="text-green-600 font-semibold">
+                            {formatMoney(activity.total_amount)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex-1 text-gray-700">
+                      <div className="font-medium text-gray-600 mb-1">
+                        Aantal
+                      </div>
+                      <div>{activity.count}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function ReportsContent() {
+function ReportsContent({ onReportDataReady }) {
   const pathname = usePathname();
   const pathSegments = pathname?.split("/").filter(Boolean) || [];
   const userName = pathSegments[0] || "";
@@ -377,6 +456,7 @@ function ReportsContent() {
     totalUnbillableHours: 0,
     totalBillableAmount: 0,
   });
+  const [filters, setFilters] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -460,6 +540,20 @@ function ReportsContent() {
             totalBillableAmount: 0,
           }
         );
+        setFilters(data.filters || null);
+
+        // Notify parent component that report data is ready
+        if (onReportDataReady) {
+          onReportDataReady({
+            projects: data.projects || [],
+            totals: data.totals || {
+              totalBillableHours: 0,
+              totalUnbillableHours: 0,
+              totalBillableAmount: 0,
+            },
+            filters: data.filters || null,
+          });
+        }
       } catch (err) {
         console.error("Error fetching reports:", err);
         setError(err.message || "Failed to load reports");
@@ -548,12 +642,50 @@ export default function ReportsClient() {
   const pathname = usePathname();
   const pathSegments = pathname?.split("/").filter(Boolean) || [];
   const userName = pathSegments[0] || "";
+  const [activeTab, setActiveTab] = useState("current");
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [currentReportData, setCurrentReportData] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   if (!userName) {
     return null;
   }
 
-  const encodedUser = encodeURIComponent(userName);
+  const handleSaveReport = async (name, description) => {
+    if (!currentReportData) {
+      alert("Geen rapport data beschikbaar om op te slaan");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch("/my/reports/stored/api", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          description,
+          reportData: currentReportData,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to save report");
+      }
+
+      setShowSaveModal(false);
+      // Switch to stored reports tab to show the newly saved report
+      setActiveTab("stored");
+    } catch (err) {
+      console.error("Error saving report:", err);
+      alert(`Fout bij opslaan: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <main className="flex flex-col min-h-screen">
@@ -569,9 +701,62 @@ export default function ReportsClient() {
           <div className="mb-6">
             <CustomDateRangeSelector />
           </div>
-          <ReportsContent />
+
+          {/* Tab Navigation */}
+          <div className="mb-4 px-4">
+            <div className="flex gap-2 border-b border-gray-200">
+              <button
+                onClick={() => setActiveTab("current")}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === "current"
+                    ? "text-blue-600 border-b-2 border-blue-600"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Huidig Rapport
+              </button>
+              <button
+                onClick={() => setActiveTab("stored")}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === "stored"
+                    ? "text-blue-600 border-b-2 border-blue-600"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Opgeslagen Rapporten
+              </button>
+            </div>
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === "current" && (
+            <>
+              {/* Save Report Button */}
+              {currentReportData && (
+                <div className="px-4 mb-4">
+                  <button
+                    onClick={() => setShowSaveModal(true)}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    Rapport opslaan
+                  </button>
+                </div>
+              )}
+              <ReportsContent onReportDataReady={setCurrentReportData} />
+            </>
+          )}
+
+          {activeTab === "stored" && <StoredReportsTab userName={userName} />}
         </DateRangeProvider>
       </section>
+
+      {/* Save Report Modal */}
+      <SaveReportModal
+        isOpen={showSaveModal}
+        onClose={() => setShowSaveModal(false)}
+        onSave={handleSaveReport}
+        loading={saving}
+      />
     </main>
   );
 }

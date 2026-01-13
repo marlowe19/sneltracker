@@ -39,9 +39,7 @@ test.describe("Navigation and Layout @mobile", () => {
     await waitForApiCalls(page);
 
     // Verify we're on projects page
-    await expect(page).toHaveURL(
-      new RegExp(`/${encodeURIComponent(testUser)}/projecten`)
-    );
+    await expect(page).toHaveURL(new RegExp(`/my/projecten`));
   });
 
   test("should navigate back from projects page", async ({ page }) => {
@@ -60,9 +58,7 @@ test.describe("Navigation and Layout @mobile", () => {
     }
 
     // Verify we're back on main page
-    await expect(page).toHaveURL(
-      new RegExp(`/${encodeURIComponent(testUser)}(?:/)?$`)
-    );
+    await expect(page).toHaveURL(new RegExp(`/my(?:/)?$`));
   });
 
   test("should navigate to different weeks", async ({ page }) => {

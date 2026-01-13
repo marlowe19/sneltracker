@@ -5,7 +5,7 @@ import { auth0 } from "@/lib/auth/auth0";
 export const GET = auth0.withApiAuthRequired(async (request) => {
   try {
     const session = await auth0.getSession(request);
-    const user = session.user.nickname;
+    const user = session.user.sub;
     const { searchParams } = new URL(request.url);
     const dayDate = searchParams.get("dayDate");
 

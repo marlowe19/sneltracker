@@ -59,9 +59,7 @@ export default function ProjectFormClient({
     if (!projectId) return;
     try {
       const res = await fetch(
-        `/${encodeURIComponent(
-          user
-        )}/projecten/api?projectId=${projectId}&stats=true`
+        `/my/projecten/api?projectId=${projectId}&stats=true`
       );
       const data = await res.json();
       setStats(data.statistics);
@@ -74,9 +72,7 @@ export default function ProjectFormClient({
     if (!projectId) return;
     try {
       const res = await fetch(
-        `/${encodeURIComponent(
-          user
-        )}/projecten/api?action=members&projectId=${projectId}`
+        `/my/projecten/api?action=members&projectId=${projectId}`
       );
       const data = await res.json();
       setMembers(data.members || []);
@@ -102,7 +98,7 @@ export default function ProjectFormClient({
       if (project) {
         // Update existing project
         body.id = project.id;
-        const res = await fetch(`/${encodeURIComponent(user)}/projecten/api`, {
+        const res = await fetch(`/my/projecten/api`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -114,7 +110,7 @@ export default function ProjectFormClient({
         }
       } else {
         // Create new project
-        const res = await fetch(`/${encodeURIComponent(user)}/projecten/api`, {
+        const res = await fetch(`/my/projecten/api`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -164,14 +160,11 @@ export default function ProjectFormClient({
     setError(null);
 
     try {
-      const res = await fetch(
-        `/${encodeURIComponent(user)}/projecten/api?action=convertToShared`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectId: project.id }),
-        }
-      );
+      const res = await fetch(`/my/projecten/api?action=convertToShared`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: project.id }),
+      });
 
       if (!res.ok) {
         const data = await res.json();

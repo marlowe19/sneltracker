@@ -12,14 +12,9 @@ export default function NoteDetailClient({
   function handleShareClick() {
     if (!initialNote.share_token) {
       // Generate share token if it doesn't exist
-      fetch(
-        `/${encodeURIComponent(
-          user
-        )}/notes/${noteId}/api?action=generate-share-token`,
-        {
-          method: "POST",
-        }
-      )
+      fetch(`/my/notes/${noteId}/api?action=generate-share-token`, {
+        method: "POST",
+      })
         .then((res) => res.json())
         .then((data) => {
           if (data.share_token) {
@@ -45,7 +40,7 @@ export default function NoteDetailClient({
     <main className="flex flex-col">
       <div className="flex items-center justify-between p-4 relative">
         <Link
-          href={`/${encodeURIComponent(user)}/notes`}
+          href={`/my/notes`}
           prefetch={false}
           className="text-[#008eff] hover:underline"
         >

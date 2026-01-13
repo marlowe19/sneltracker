@@ -10,7 +10,7 @@ export async function GET(req, context) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const user = session.user.nickname;
+    const user = session.user.sub;
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }

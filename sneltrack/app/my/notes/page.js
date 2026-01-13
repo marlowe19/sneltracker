@@ -69,7 +69,7 @@ export default async function NotesPage({ params, request }) {
   if (!session?.user) {
     redirect("/auth/login");
   }
-  const user = session.user.nickname;
+  const user = session.user.sub;
 
   return (
     <Suspense fallback={<NotesLoading user={user} />}>

@@ -376,6 +376,16 @@ export default function WeekEntriesClient({ user, weekOffset }) {
           </div>
         </div>
       </div>
+      {/* <div className="w-full px-4 py-4 mt-4 flex justify-center">
+        <Link
+          href="/my/wrapped"
+          className="w-full max-w-md px-6 py-4 text-base sm:text-lg font-bold text-white bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 rounded-xl hover:from-purple-600 hover:via-pink-600 hover:to-red-600 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center gap-2"
+          aria-label="2025 Wrapped"
+        >
+          <span className="text-2xl">🎉</span>
+          <span>2025 Wrapped</span>
+        </Link>
+      </div> */}
     </section>
   );
 }

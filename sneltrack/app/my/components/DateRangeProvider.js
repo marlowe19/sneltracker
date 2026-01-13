@@ -1,17 +1,20 @@
 "use client";
 
 import { useState, createContext, useContext } from "react";
+import { subYears } from "date-fns";
 import DateRangeSelectorClient from "../projecten/[projectId]/DateRangeSelectorClient";
 import CustomDateRangeSelectorClient from "./CustomDateRangeSelectorClient";
 
 const DateRangeContext = createContext();
 
 export function DateRangeProvider({ children }) {
-  // Default to current week
+  // Default to last 2 years instead of current week
+  const now = new Date();
+  const twoYearsAgo = subYears(now, 2);
   const [rangeType, setRangeType] = useState("week");
-  const [referenceDate, setReferenceDate] = useState(new Date());
-  const [customStartDate, setCustomStartDate] = useState(null);
-  const [customEndDate, setCustomEndDate] = useState(null);
+  const [referenceDate, setReferenceDate] = useState(now);
+  const [customStartDate, setCustomStartDate] = useState(twoYearsAgo);
+  const [customEndDate, setCustomEndDate] = useState(now);
 
   // Filter state
   const [selectedProjectIds, setSelectedProjectIds] = useState([]); // Empty array = all selected

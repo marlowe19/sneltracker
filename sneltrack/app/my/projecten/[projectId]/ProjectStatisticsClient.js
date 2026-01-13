@@ -138,7 +138,7 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
               <PieChart margin={{ top: 30, right: 30, bottom: 20, left: 30 }}>
                 <Pie
                   data={memberStatistics.map((member) => ({
-                    name: member.user_name,
+                    name: member.user_display_name || member.user_name,
                     value: parseFloat(member.totalHours.toFixed(2)),
                     hours: member.totalHours,
                   }))}
@@ -188,7 +188,8 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
                   }}
                 />
                 <span className="text-xs text-gray-700">
-                  {member.user_name}: {formatHours(member.totalHours)}
+                  {member.user_display_name || member.user_name}:{" "}
+                  {formatHours(member.totalHours)}
                 </span>
               </div>
             ))}
@@ -246,7 +247,9 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
                       }}
                     />
                     <div className="flex flex-col text-xs text-gray-700">
-                      <div className="font-medium">{member.user_name}</div>
+                      <div className="font-medium">
+                        {member.user_display_name}
+                      </div>
                       <div className="text-gray-600">
                         {formatHours(member.totalHours)}
                         {project.hourly_rate && (
@@ -342,7 +345,9 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
                       }}
                     />
                     <div className="flex flex-col text-xs text-gray-700">
-                      <div className="font-medium">{member.user_name}</div>
+                      <div className="font-medium">
+                        {member.user_display_name}
+                      </div>
                       <div className="text-gray-600">
                         {formatHours(member.totalHours)}
                         {project.hourly_rate && (
