@@ -291,7 +291,7 @@ export function upsert(project, userName) {
  */
 export async function getUserProjectsWithStats(userName) {
   const { data, error } = await supabaseServer.rpc(
-    "get_user_projects_with_stats_v2",
+    "get_user_projects_with_stats_v3",
     {
       p_user_name: userName,
     }
@@ -317,6 +317,7 @@ export async function getUserProjectsWithStats(userName) {
     member_count: row.member_count,
     total_hours: row.total_hours,
     is_over_budget: row.is_over_budget,
+    status: row.status || "active", // ✅ NEW: Include status field
   }));
 }
 

@@ -30,7 +30,7 @@ export default function ProjectsListClient({ user, initialProjects }) {
   const [editingProject, setEditingProject] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [copiedProjectId, setCopiedProjectId] = useState(null);
-  const [activeTab, setActiveTab] = useState("user"); // "user" or "shared"
+  const [activeTab, setActiveTab] = useState("user"); // "user", "shared", or "archived"
   const toast = useToast();
 
   // Use projects from store, fallback to initialProjects if store is empty
@@ -99,33 +99,41 @@ export default function ProjectsListClient({ user, initialProjects }) {
     }
   }
 
+  // Helper function to check if project is archived
+  const isArchived = (project) => {
+    return project.status === "archived" || project.archived === true;
+  };
+
   // Filter projects based on active tab
   const filteredProjects = displayProjects
     .filter((project) => {
-      if (activeTab === "shared") {
-        return project.is_shared === true;
+      const archived = isArchived(project);
+      
+      if (activeTab === "archived") {
+        return archived;
+      } else if (activeTab === "shared") {
+        return project.is_shared === true && !archived;
       } else {
-        return !project.is_shared;
+        // "user" tab - show non-shared, non-archived projects
+        return !project.is_shared && !archived;
       }
     })
     .sort((a, b) => {
-      // Sort: non-archived first, then archived
-      const aIsArchived = a.status === "archived" || a.archived === true;
-      const bIsArchived = b.status === "archived" || b.archived === true;
-
-      if (aIsArchived && !bIsArchived) return 1;
-      if (!aIsArchived && bIsArchived) return -1;
-
-      // If both archived or both not archived, sort by archived_at (desc) or name
-      if (aIsArchived && bIsArchived) {
-        if (a.archived_at && b.archived_at) {
-          return new Date(b.archived_at) - new Date(a.archived_at);
+      // For archived tab, sort by archived_at (desc) or name
+      if (activeTab === "archived") {
+        const aIsArchived = isArchived(a);
+        const bIsArchived = isArchived(b);
+        
+        if (aIsArchived && bIsArchived) {
+          if (a.archived_at && b.archived_at) {
+            return new Date(b.archived_at) - new Date(a.archived_at);
+          }
+          if (a.archived_at) return -1;
+          if (b.archived_at) return 1;
         }
-        if (a.archived_at) return -1;
-        if (b.archived_at) return 1;
       }
-
-      // Sort by name for non-archived projects
+      
+      // Sort by name for all tabs
       return a.name.localeCompare(b.name);
     });
 
@@ -142,7 +150,8 @@ export default function ProjectsListClient({ user, initialProjects }) {
               : "text-gray-600 hover:text-gray-900"
           }`}
         >
-          Mijn Projecten ({displayProjects.filter((p) => !p.is_shared).length})
+          Mijn Projecten (
+          {displayProjects.filter((p) => !p.is_shared && !isArchived(p)).length})
         </button>
         <button
           type="button"
@@ -154,7 +163,19 @@ export default function ProjectsListClient({ user, initialProjects }) {
           }`}
         >
           Gedeelde Projecten (
-          {displayProjects.filter((p) => p.is_shared).length})
+          {displayProjects.filter((p) => p.is_shared && !isArchived(p)).length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("archived")}
+          className={`px-4 py-2 text-sm font-medium ${
+            activeTab === "archived"
+              ? "text-[#008eff] border-b-2 border-[#008eff]"
+              : "text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          Gearchiveerd (
+          {displayProjects.filter((p) => isArchived(p)).length})
         </button>
       </div>
 
