@@ -2767,11 +2767,33 @@ export default function DayEntriesListClient({
 
           {/* Add Entry Button / Save Button */}
           <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 mt-4">
-            {currentEditingEntryId ? (
+            {expandedEntries.size > 0 ? (
               (() => {
-                const currentIndex = getCurrentEditingEntryIndex();
+                // Find the first expanded entry (or use currentEditingEntryId if set)
+                const editingId =
+                  currentEditingEntryId ||
+                  Array.from(expandedEntries).find((id) =>
+                    localEntries.some((e) => e.id === id)
+                  );
+                const currentIndex = editingId
+                  ? localEntries.findIndex((entry) => entry.id === editingId)
+                  : -1;
                 const currentEntry =
                   currentIndex >= 0 ? localEntries[currentIndex] : null;
+
+                if (currentIndex < 0 || !currentEntry) {
+                  // Fallback to add button if no valid entry found
+                  return (
+                    <button
+                      onClick={handleAddEntry}
+                      disabled={isSaving || isDeleting}
+                      className="w-full px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
+                    >
+                      <span>Tijdregistratie toevoegen</span>
+                    </button>
+                  );
+                }
+
                 return (
                   <button
                     onClick={() => {
@@ -2782,15 +2804,13 @@ export default function DayEntriesListClient({
                     disabled={
                       isSaving ||
                       isDeleting ||
-                      savingEntryId === currentEditingEntryId ||
+                      savingEntryId === editingId ||
                       !currentEntry?.project_editable
                     }
                     className="w-full px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
                   >
                     <span>
-                      {savingEntryId === currentEditingEntryId
-                        ? "Opslaan..."
-                        : "Opslaan"}
+                      {savingEntryId === editingId ? "Opslaan..." : "Opslaan"}
                     </span>
                   </button>
                 );
@@ -3057,11 +3077,35 @@ export default function DayEntriesListClient({
 
           {/* Add Expense Button / Save Button */}
           <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 mt-4">
-            {currentEditingExpenseId ? (
+            {expandedExpenses.size > 0 ? (
               (() => {
-                const currentIndex = getCurrentEditingExpenseIndex();
+                // Find the first expanded expense (or use currentEditingExpenseId if set)
+                const editingId =
+                  currentEditingExpenseId ||
+                  Array.from(expandedExpenses).find((id) =>
+                    localExpenses.some((e) => e.id === id)
+                  );
+                const currentIndex = editingId
+                  ? localExpenses.findIndex(
+                      (expense) => expense.id === editingId
+                    )
+                  : -1;
                 const currentExpense =
                   currentIndex >= 0 ? localExpenses[currentIndex] : null;
+
+                if (currentIndex < 0 || !currentExpense) {
+                  // Fallback to add button if no valid expense found
+                  return (
+                    <button
+                      onClick={handleAddExpense}
+                      disabled={isSaving || isDeleting}
+                      className="w-full sm:w-auto px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
+                    >
+                      <span>Uitgave toevoegen</span>
+                    </button>
+                  );
+                }
+
                 return (
                   <button
                     onClick={() => {
@@ -3072,7 +3116,7 @@ export default function DayEntriesListClient({
                     disabled={
                       isSaving ||
                       isDeleting ||
-                      savingExpenseId === currentEditingExpenseId ||
+                      savingExpenseId === editingId ||
                       !currentExpense?.project_editable ||
                       !currentExpense?.name_editable ||
                       !currentExpense?.price_editable
@@ -3080,9 +3124,7 @@ export default function DayEntriesListClient({
                     className="w-full sm:w-auto px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
                   >
                     <span>
-                      {savingExpenseId === currentEditingExpenseId
-                        ? "Opslaan..."
-                        : "Opslaan"}
+                      {savingExpenseId === editingId ? "Opslaan..." : "Opslaan"}
                     </span>
                   </button>
                 );

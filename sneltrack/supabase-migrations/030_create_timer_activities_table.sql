@@ -28,3 +28,4 @@ COMMENT ON COLUMN timer_activities.hourly_rate IS 'Hourly rate for this specific
 COMMENT ON COLUMN timer_activities.end_time IS 'End time of activity (NULL if currently active)';
 
 
+

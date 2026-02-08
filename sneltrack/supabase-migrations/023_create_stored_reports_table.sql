@@ -67,3 +67,4 @@ COMMENT ON TABLE public.stored_reports IS 'Stores user-created report snapshots 
 COMMENT ON COLUMN public.stored_reports.report_data IS 'JSONB blob containing projects array, totals object, and filters object';
 
 
+

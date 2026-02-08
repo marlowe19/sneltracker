@@ -12,3 +12,4 @@ CREATE INDEX IF NOT EXISTS idx_projects_actual_end_date ON projects(actual_end_d
 COMMENT ON COLUMN projects.actual_end_date IS 'Actual end date when the project was completed/archived';
 
 
+

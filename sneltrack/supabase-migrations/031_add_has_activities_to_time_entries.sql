@@ -15,3 +15,4 @@ COMMENT ON COLUMN time_entries.has_activities IS 'Indicates if this timer entry 
 COMMENT ON COLUMN time_entries.current_activity_id IS 'Reference to the currently active activity (NULL if no activities or timer stopped)';
 
 
+

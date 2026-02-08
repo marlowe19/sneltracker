@@ -135,3 +135,4 @@ even if has_activities flag is false in time_entries table.
 Performance: Single query with LATERAL join for activities, uses indexed time_entry_id lookup.';
 
 
+

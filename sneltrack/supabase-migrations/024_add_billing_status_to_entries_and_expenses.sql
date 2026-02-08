@@ -35,3 +35,4 @@ COMMENT ON COLUMN public.expenses.billing_status IS
 'Billing workflow status: draft (default, not ready), pending (ready to bill), billed (included in invoice), paid (payment received)';
 
 
+

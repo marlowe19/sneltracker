@@ -17,3 +17,4 @@ COMMENT ON COLUMN users.apple_calendar_username IS 'Apple ID email for CalDAV au
 COMMENT ON COLUMN users.apple_calendar_password IS 'App-specific password for CalDAV authentication (should be encrypted at application level)';
 COMMENT ON COLUMN users.apple_calendar_connected_at IS 'Timestamp when Apple Calendar was connected';
 
+
