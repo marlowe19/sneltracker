@@ -496,7 +496,7 @@ export default function DayEntriesListClient({
           [entryId]: (prev[entryId] || []).filter((a) => a.id !== activityId),
         }));
         toast.show("Activiteit verwijderd");
-        // Refresh entries to get updated activities
+        // Refresh entries     get updated activities
         await fetchDayEntries(user, selectedDate);
         startTransition(() => router.refresh());
       } else {
@@ -1681,6 +1681,8 @@ export default function DayEntriesListClient({
     const entryCount = localEntries.length;
     let totalHoursMs = 0;
     let totalPrice = 0;
+    let myTotalHoursMs = 0;
+    let myTotalPrice = 0;
 
     localEntries.forEach((entry) => {
       const durationMs =
@@ -1701,12 +1703,33 @@ export default function DayEntriesListClient({
           totalPrice += hours * hourlyRate;
         }
       }
+
+      // Calculate individual totals (only user's own entries)
+      if (entry.user_name === user) {
+        myTotalHoursMs += durationMs || 0;
+        if (durationMs) {
+          const hourlyRate =
+            entry.hourly_rate_editable !== undefined &&
+            entry.hourly_rate_editable !== ""
+              ? parseFloat(entry.hourly_rate_editable)
+              : entry.hourly_rate;
+          if (hourlyRate) {
+            const hours = durationMs / (1000 * 60 * 60);
+            myTotalPrice += hours * hourlyRate;
+          }
+        }
+      }
     });
+
+    const hasOtherUsersEntries = myTotalHoursMs !== totalHoursMs || myTotalPrice !== totalPrice;
 
     return {
       count: entryCount,
       totalHours: formatHoursMinutes(totalHoursMs),
       totalPrice: totalPrice.toFixed(2),
+      myTotalHours: formatHoursMinutes(myTotalHoursMs),
+      myTotalPrice: myTotalPrice.toFixed(2),
+      hasOtherUsersEntries,
     };
   };
 
@@ -1800,22 +1823,48 @@ export default function DayEntriesListClient({
             </div>
             <div className="flex-1 inline-flex flex-col justify-start items-start gap-1">
               <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-sm font-normal line-clamp-1">
-                {activeTab === "expenses" ? "Totaal prijs" : "Uren"}
+                {activeTab === "expenses"
+                  ? "Totaal prijs"
+                  : entrySummary.hasOtherUsersEntries
+                  ? "Mijn uren"
+                  : "Uren"}
               </div>
               <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-lg font-bold">
                 {activeTab === "expenses"
                   ? `€${expenseSummary.totalPrice}`
+                  : entrySummary.hasOtherUsersEntries
+                  ? entrySummary.myTotalHours
                   : entrySummary.totalHours}
               </div>
+              {activeTab !== "expenses" && entrySummary.hasOtherUsersEntries && (
+                <>
+                  <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-sm font-normal line-clamp-1">
+                    Totaal uren
+                  </div>
+                  <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-lg font-bold">
+                    {entrySummary.totalHours}
+                  </div>
+                </>
+              )}
             </div>
             {activeTab !== "expenses" && (
               <div className="flex-1 inline-flex flex-col justify-start items-start gap-1">
                 <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-sm font-normal line-clamp-1">
-                  Totaal prijs
+                  {entrySummary.hasOtherUsersEntries ? "Mijn prijs" : "Totaal prijs"}
                 </div>
                 <div className="self-stretch justify-center text-Color-Solids-color-solid-aqua-green text-lg font-bold">
-                  €{entrySummary.totalPrice}
+                  €{entrySummary.hasOtherUsersEntries ? entrySummary.myTotalPrice : entrySummary.totalPrice}
                 </div>
+                {entrySummary.hasOtherUsersEntries && (
+                  <>
+                    <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-sm font-normal line-clamp-1">
+                      Totaal prijs
+                    </div>
+                    <div className="self-stretch justify-center text-Color-Solids-color-solid-aqua-green text-lg font-bold">
+                      €{entrySummary.totalPrice}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

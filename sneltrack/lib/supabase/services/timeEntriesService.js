@@ -850,10 +850,30 @@ export async function getWeekEntries(userName, weekStartIso, weekEndIso) {
     throw error;
   }
 
+  const rows = data || [];
+  const uniqueUserNames = [...new Set(rows.map((row) => row.user_name).filter(Boolean))];
+  const displayNameMap = new Map();
+
+  if (uniqueUserNames.length > 0) {
+    const { data: usersData, error: usersError } = await supabaseServer
+      .from("users")
+      .select("user_name, name")
+      .in("user_name", uniqueUserNames);
+
+    if (usersError) {
+      console.error("Error fetching user display names for week entries:", usersError);
+    } else {
+      for (const userRow of usersData || []) {
+        displayNameMap.set(userRow.user_name, userRow.name);
+      }
+    }
+  }
+
   // Return entries with Supabase UUID as primary identifier (clean cutover)
-  return (data || []).map((row) => ({
+  return rows.map((row) => ({
     id: row.id, // Use Supabase UUID as the entry ID
     user_name: row.user_name,
+    user_display_name: displayNameMap.get(row.user_name) ?? row.user_name,
     start_time: row.start_time,
     end_time: row.end_time,
     duration_ms: row.duration_ms ?? null,

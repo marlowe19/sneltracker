@@ -35,13 +35,13 @@ export default function WeekEntriesClient({ user, weekOffset }) {
   const fetchWeekExpenses = useStore((state) => state.fetchWeekExpenses);
   const storeWeekOffset = useStore((state) => state.weekOffset);
   const setWeekOffset = useStore((state) => state.setWeekOffset);
-  const projects = useStore((state) => state.projects);
 
   // State for notes with due dates
   const [notesWithDueDatePerDay, setNotesWithDueDatePerDay] = useState(
-    Array(7).fill(false)
+    Array(7).fill(false),
   );
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
+  const [isWeekSummaryExpanded, setIsWeekSummaryExpanded] = useState(false);
 
   // Sync weekOffset with store
   useEffect(() => {
@@ -53,7 +53,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
   useEffect(() => {
     // Calculate week bounds ONCE
     const referenceDate = new Date(
-      new Date().getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000
+      new Date().getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000,
     );
     const { start: weekStart, end: weekEnd } = getWeekBounds(referenceDate);
     const weekStartIso = toIso(weekStart);
@@ -67,7 +67,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
 
   // Calculate week bounds for rendering
   const referenceDate = new Date(
-    new Date().getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000
+    new Date().getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000,
   );
   const { start: weekStart, end: weekEnd } = getWeekBounds(referenceDate);
 
@@ -75,7 +75,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
   // Calculate dates inside useMemo to avoid Date object dependencies
   const weekStartIso = useMemo(() => {
     const refDate = new Date(
-      new Date().getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000
+      new Date().getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000,
     );
     const { start } = getWeekBounds(refDate);
     return start.toISOString().split("T")[0];
@@ -83,7 +83,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
 
   const weekEndIso = useMemo(() => {
     const refDate = new Date(
-      new Date().getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000
+      new Date().getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000,
     );
     const { end } = getWeekBounds(refDate);
     return end.toISOString().split("T")[0];
@@ -164,7 +164,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
       e.end_time,
       weekStart,
       weekEnd,
-      e.duration_ms ?? null
+      e.duration_ms ?? null,
     );
 
     // Only process entries that have duration within the week
@@ -214,10 +214,97 @@ export default function WeekEntriesClient({ user, weekOffset }) {
     }
   }
 
-  const maxMs = Math.max(1, ...perDay);
   const weekTotalTime = perDay.reduce((sum, val) => sum + val, 0);
   const weekTotalMoney = perDayMoney.reduce((sum, val) => sum + val, 0);
   const weekTotalExpenses = perDayExpenses.reduce((sum, val) => sum + val, 0);
+
+  // Calculate individual totals (only user's own entries)
+  let myWeekTotalTime = 0;
+  let myWeekTotalMoney = 0;
+  let myWeekTotalExpenses = 0;
+
+  for (const e of entries) {
+    // Only count entries belonging to the current user
+    if (e.user_name !== user) continue;
+
+    const duration = computeEntryDurationMsClipped(
+      e.start_time,
+      e.end_time,
+      weekStart,
+      weekEnd,
+      e.duration_ms ?? null,
+    );
+
+    if (duration === 0) continue;
+
+    myWeekTotalTime += duration;
+
+    if (e.hourly_rate) {
+      const hours = duration / (1000 * 60 * 60);
+      const money = hours * e.hourly_rate;
+      myWeekTotalMoney += money;
+    }
+  }
+
+  // Calculate individual expenses (only user's own expenses)
+  for (const expense of weekExpenses) {
+    if (expense.user_name === user && expense.date) {
+      const price = expense.price || 0;
+      myWeekTotalExpenses += price;
+    }
+  }
+
+  // Check if there's a difference (entries from other users in shared projects)
+  const hasOtherUsersEntries =
+    myWeekTotalTime !== weekTotalTime ||
+    myWeekTotalMoney !== weekTotalMoney ||
+    myWeekTotalExpenses !== weekTotalExpenses;
+  const perUserWeekTotalsMap = new Map();
+
+  for (const e of entries) {
+    const duration = computeEntryDurationMsClipped(
+      e.start_time,
+      e.end_time,
+      weekStart,
+      weekEnd,
+      e.duration_ms ?? null,
+    );
+
+    if (duration === 0) continue;
+
+    const userName = e.user_name || "Onbekend";
+    if (!perUserWeekTotalsMap.has(userName)) {
+      perUserWeekTotalsMap.set(userName, {
+        userName,
+        displayName: e.user_display_name || userName,
+        timeMs: 0,
+        money: 0,
+        expenses: 0,
+      });
+    }
+
+    const userTotals = perUserWeekTotalsMap.get(userName);
+    userTotals.timeMs += duration;
+    if (e.hourly_rate) {
+      const hours = duration / (1000 * 60 * 60);
+      userTotals.money += hours * e.hourly_rate;
+    }
+  }
+
+  for (const expense of weekExpenses) {
+    const expenseUserName = expense.user_name;
+    if (!expenseUserName || !perUserWeekTotalsMap.has(expenseUserName))
+      continue;
+    const userTotals = perUserWeekTotalsMap.get(expenseUserName);
+    userTotals.expenses += expense.price || 0;
+  }
+
+  const perUserWeekTotals = Array.from(perUserWeekTotalsMap.values()).sort(
+    (a, b) => b.timeMs - a.timeMs,
+  );
+  const weekSummaryDetailsId = "week-summary-details";
+  const weekSummaryGridCols =
+    "grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_16px]";
 
   // Show spinner while loading
   if (loadingEntries) {
@@ -276,7 +363,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
             "Zondag",
           ].map((d, i) => {
             const dayDate = new Date(
-              weekStart.getTime() + i * 24 * 60 * 60 * 1000
+              weekStart.getTime() + i * 24 * 60 * 60 * 1000,
             );
             const isToday =
               new Date().toDateString() === dayDate.toDateString();
@@ -346,33 +433,90 @@ export default function WeekEntriesClient({ user, weekOffset }) {
           })}
         </div>
       </div>
-      <div className="w-full px-3 py-2 mt-2 bg-white shadow-[inset_0px_1px_0px_0px_rgba(240,240,240,1.00)] flex justify-between items-center">
-        <div className="flex flex-col justify-center items-start gap-0.5">
-          <div className="text-gray-900 text-xs font-bold font-sans">Week</div>
-          <div className="text-gray-900 text-xs font-bold font-sans">
-            Totaal
+      <div className="w-full mt-2 bg-white shadow-[inset_0px_1px_0px_0px_rgba(240,240,240,1.00)]">
+        <button
+          type="button"
+          className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors"
+          onClick={() => setIsWeekSummaryExpanded((prev) => !prev)}
+          aria-expanded={isWeekSummaryExpanded}
+          aria-controls={weekSummaryDetailsId}
+        >
+          <div className={`grid ${weekSummaryGridCols} items-start gap-2`}>
+            <div className="flex flex-col justify-center items-start gap-0.5">
+              <div className="text-gray-900 text-xs font-bold font-sans">
+                Week
+              </div>
+              <div className="text-gray-900 text-xs font-bold font-sans">
+                Totaal
+              </div>
+            </div>
+            <div className="flex flex-col justify-center items-end gap-0.5 text-right">
+              <div className="text-[#808080] text-xs font-bold font-sans">Tijd</div>
+              <div className="text-gray-900 text-xs font-bold font-sans tabular-nums">
+                {formatHoursHMM(weekTotalTime)}
+              </div>
+            </div>
+            <div className="flex flex-col justify-center items-end gap-0.5 text-right">
+              <div className="text-[#808080] text-xs font-bold font-sans">Euro&apos;s</div>
+              <div className="text-teal-500 text-xs font-bold font-sans tabular-nums">
+                {formatMoney(weekTotalMoney)}
+              </div>
+            </div>
+            <div className="flex flex-col justify-center items-end gap-0.5 text-right">
+              <div className="text-[#808080] text-xs font-bold font-sans">Uitgaven</div>
+              <div className="text-red-500 text-xs font-bold font-sans tabular-nums">
+                {formatMoney(weekTotalExpenses)}
+              </div>
+            </div>
+            <div
+              className={`text-gray-400 text-xs font-bold pt-0.5 transition-transform duration-300 ${
+                isWeekSummaryExpanded ? "rotate-180" : "rotate-0"
+              }`}
+              aria-hidden="true"
+            >
+              ▼
+            </div>
           </div>
-        </div>
-        <div className="flex flex-col justify-center items-start gap-0.5">
-          <div className="text-[#808080] text-xs font-bold font-sans">Tijd</div>
-          <div className="text-gray-900 text-xs font-bold font-sans tabular-nums">
-            {formatHoursHMM(weekTotalTime)}
-          </div>
-        </div>
-        <div className="flex flex-col justify-center items-start gap-0.5">
-          <div className="text-[#808080] text-xs font-bold font-sans">
-            Euro&apos;s
-          </div>
-          <div className="text-teal-500 text-xs font-bold font-sans tabular-nums">
-            {formatMoney(weekTotalMoney)}
-          </div>
-        </div>
-        <div className="flex flex-col justify-center items-start gap-0.5">
-          <div className="text-[#808080] text-xs font-bold font-sans">
-            Uitgaven
-          </div>
-          <div className="text-red-500 text-xs font-bold font-sans tabular-nums">
-            {formatMoney(weekTotalExpenses)}
+        </button>
+
+        <div
+          id={weekSummaryDetailsId}
+          className={`grid transition-all duration-300 ease-out ${
+            isWeekSummaryExpanded
+              ? "grid-rows-[1fr] opacity-100"
+              : "grid-rows-[0fr] opacity-0"
+          }`}
+        >
+          <div className="overflow-hidden">
+            <div className="border-t border-gray-100 px-3 py-2">
+              <div className="flex flex-col gap-1">
+                {perUserWeekTotals.map((userTotals) => (
+                  <div
+                    key={userTotals.userName}
+                    className={`grid ${weekSummaryGridCols} gap-2 text-xs font-bold font-sans`}
+                  >
+                    <div className="text-gray-700 truncate">
+                      {userTotals.displayName}
+                    </div>
+                    <div className="text-right text-gray-900 tabular-nums">
+                      {formatHoursHMM(userTotals.timeMs)}
+                    </div>
+                    <div className="text-right text-teal-500 tabular-nums">
+                      {formatMoney(userTotals.money)}
+                    </div>
+                    <div className="text-right text-red-500 tabular-nums">
+                      {formatMoney(userTotals.expenses)}
+                    </div>
+                    <div aria-hidden="true"></div>
+                  </div>
+                ))}
+                {perUserWeekTotals.length === 0 && (
+                  <div className="text-xs text-gray-500 py-1">
+                    Geen uren gelogd deze week.
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
