@@ -5,3 +5,4 @@
 COMMENT ON COLUMN projects.status IS 'Project status: planned, active, on_hold, completed, cancelled, archived';
 
 
+

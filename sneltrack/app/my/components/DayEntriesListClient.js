@@ -496,7 +496,7 @@ export default function DayEntriesListClient({
           [entryId]: (prev[entryId] || []).filter((a) => a.id !== activityId),
         }));
         toast.show("Activiteit verwijderd");
-        // Refresh entries to get updated activities
+        // Refresh entries     get updated activities
         await fetchDayEntries(user, selectedDate);
         startTransition(() => router.refresh());
       } else {
@@ -528,31 +528,39 @@ export default function DayEntriesListClient({
   };
 
   const handleToggleExpand = (entryId) => {
-    setExpandedEntries((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(entryId)) {
+    const isCurrentlyExpanded = expandedEntries.has(entryId);
+
+    if (isCurrentlyExpanded) {
+      // Sluiten: verwijder deze entry en reset current editing
+      setExpandedEntries((prev) => {
+        const newSet = new Set(prev);
         newSet.delete(entryId);
-        setCurrentEditingEntryId(null); // Reset state when closing
-      } else {
-        newSet.add(entryId);
-        setCurrentEditingEntryId(entryId); // Set current editing entry
-      }
-      return newSet;
-    });
+        return newSet;
+      });
+      setCurrentEditingEntryId(null);
+    } else {
+      // Openen: sluit alle andere entries en open alleen deze
+      setExpandedEntries(new Set([entryId])); // Alleen deze entry expanded
+      setCurrentEditingEntryId(entryId); // Direct zetten, niet binnen updater
+    }
   };
 
   const handleToggleExpandExpense = (expenseId) => {
-    setExpandedExpenses((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(expenseId)) {
+    const isCurrentlyExpanded = expandedExpenses.has(expenseId);
+
+    if (isCurrentlyExpanded) {
+      // Sluiten: verwijder deze expense en reset current editing
+      setExpandedExpenses((prev) => {
+        const newSet = new Set(prev);
         newSet.delete(expenseId);
-        setCurrentEditingExpenseId(null); // Reset state when closing
-      } else {
-        newSet.add(expenseId);
-        setCurrentEditingExpenseId(expenseId); // Set current editing expense
-      }
-      return newSet;
-    });
+        return newSet;
+      });
+      setCurrentEditingExpenseId(null);
+    } else {
+      // Openen: sluit alle andere expenses en open alleen deze
+      setExpandedExpenses(new Set([expenseId])); // Alleen deze expense expanded
+      setCurrentEditingExpenseId(expenseId); // Direct zetten, niet binnen updater
+    }
   };
 
   const getCurrentEditingEntryIndex = () => {
@@ -1673,6 +1681,8 @@ export default function DayEntriesListClient({
     const entryCount = localEntries.length;
     let totalHoursMs = 0;
     let totalPrice = 0;
+    let myTotalHoursMs = 0;
+    let myTotalPrice = 0;
 
     localEntries.forEach((entry) => {
       const durationMs =
@@ -1693,12 +1703,33 @@ export default function DayEntriesListClient({
           totalPrice += hours * hourlyRate;
         }
       }
+
+      // Calculate individual totals (only user's own entries)
+      if (entry.user_name === user) {
+        myTotalHoursMs += durationMs || 0;
+        if (durationMs) {
+          const hourlyRate =
+            entry.hourly_rate_editable !== undefined &&
+            entry.hourly_rate_editable !== ""
+              ? parseFloat(entry.hourly_rate_editable)
+              : entry.hourly_rate;
+          if (hourlyRate) {
+            const hours = durationMs / (1000 * 60 * 60);
+            myTotalPrice += hours * hourlyRate;
+          }
+        }
+      }
     });
+
+    const hasOtherUsersEntries = myTotalHoursMs !== totalHoursMs || myTotalPrice !== totalPrice;
 
     return {
       count: entryCount,
       totalHours: formatHoursMinutes(totalHoursMs),
       totalPrice: totalPrice.toFixed(2),
+      myTotalHours: formatHoursMinutes(myTotalHoursMs),
+      myTotalPrice: myTotalPrice.toFixed(2),
+      hasOtherUsersEntries,
     };
   };
 
@@ -1792,22 +1823,48 @@ export default function DayEntriesListClient({
             </div>
             <div className="flex-1 inline-flex flex-col justify-start items-start gap-1">
               <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-sm font-normal line-clamp-1">
-                {activeTab === "expenses" ? "Totaal prijs" : "Uren"}
+                {activeTab === "expenses"
+                  ? "Totaal prijs"
+                  : entrySummary.hasOtherUsersEntries
+                  ? "Mijn uren"
+                  : "Uren"}
               </div>
               <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-lg font-bold">
                 {activeTab === "expenses"
                   ? `€${expenseSummary.totalPrice}`
+                  : entrySummary.hasOtherUsersEntries
+                  ? entrySummary.myTotalHours
                   : entrySummary.totalHours}
               </div>
+              {activeTab !== "expenses" && entrySummary.hasOtherUsersEntries && (
+                <>
+                  <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-sm font-normal line-clamp-1">
+                    Totaal uren
+                  </div>
+                  <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-lg font-bold">
+                    {entrySummary.totalHours}
+                  </div>
+                </>
+              )}
             </div>
             {activeTab !== "expenses" && (
               <div className="flex-1 inline-flex flex-col justify-start items-start gap-1">
                 <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-sm font-normal line-clamp-1">
-                  Totaal prijs
+                  {entrySummary.hasOtherUsersEntries ? "Mijn prijs" : "Totaal prijs"}
                 </div>
                 <div className="self-stretch justify-center text-Color-Solids-color-solid-aqua-green text-lg font-bold">
-                  €{entrySummary.totalPrice}
+                  €{entrySummary.hasOtherUsersEntries ? entrySummary.myTotalPrice : entrySummary.totalPrice}
                 </div>
+                {entrySummary.hasOtherUsersEntries && (
+                  <>
+                    <div className="self-stretch justify-center text-App-settings-color-color-app-text-black text-sm font-normal line-clamp-1">
+                      Totaal prijs
+                    </div>
+                    <div className="self-stretch justify-center text-Color-Solids-color-solid-aqua-green text-lg font-bold">
+                      €{entrySummary.totalPrice}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -2759,11 +2816,33 @@ export default function DayEntriesListClient({
 
           {/* Add Entry Button / Save Button */}
           <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 mt-4">
-            {currentEditingEntryId ? (
+            {expandedEntries.size > 0 ? (
               (() => {
-                const currentIndex = getCurrentEditingEntryIndex();
+                // Find the first expanded entry (or use currentEditingEntryId if set)
+                const editingId =
+                  currentEditingEntryId ||
+                  Array.from(expandedEntries).find((id) =>
+                    localEntries.some((e) => e.id === id)
+                  );
+                const currentIndex = editingId
+                  ? localEntries.findIndex((entry) => entry.id === editingId)
+                  : -1;
                 const currentEntry =
                   currentIndex >= 0 ? localEntries[currentIndex] : null;
+
+                if (currentIndex < 0 || !currentEntry) {
+                  // Fallback to add button if no valid entry found
+                  return (
+                    <button
+                      onClick={handleAddEntry}
+                      disabled={isSaving || isDeleting}
+                      className="w-full px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
+                    >
+                      <span>Tijdregistratie toevoegen</span>
+                    </button>
+                  );
+                }
+
                 return (
                   <button
                     onClick={() => {
@@ -2774,15 +2853,13 @@ export default function DayEntriesListClient({
                     disabled={
                       isSaving ||
                       isDeleting ||
-                      savingEntryId === currentEditingEntryId ||
+                      savingEntryId === editingId ||
                       !currentEntry?.project_editable
                     }
                     className="w-full px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
                   >
                     <span>
-                      {savingEntryId === currentEditingEntryId
-                        ? "Opslaan..."
-                        : "Opslaan"}
+                      {savingEntryId === editingId ? "Opslaan..." : "Opslaan"}
                     </span>
                   </button>
                 );
@@ -3049,11 +3126,35 @@ export default function DayEntriesListClient({
 
           {/* Add Expense Button / Save Button */}
           <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 mt-4">
-            {currentEditingExpenseId ? (
+            {expandedExpenses.size > 0 ? (
               (() => {
-                const currentIndex = getCurrentEditingExpenseIndex();
+                // Find the first expanded expense (or use currentEditingExpenseId if set)
+                const editingId =
+                  currentEditingExpenseId ||
+                  Array.from(expandedExpenses).find((id) =>
+                    localExpenses.some((e) => e.id === id)
+                  );
+                const currentIndex = editingId
+                  ? localExpenses.findIndex(
+                      (expense) => expense.id === editingId
+                    )
+                  : -1;
                 const currentExpense =
                   currentIndex >= 0 ? localExpenses[currentIndex] : null;
+
+                if (currentIndex < 0 || !currentExpense) {
+                  // Fallback to add button if no valid expense found
+                  return (
+                    <button
+                      onClick={handleAddExpense}
+                      disabled={isSaving || isDeleting}
+                      className="w-full sm:w-auto px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
+                    >
+                      <span>Uitgave toevoegen</span>
+                    </button>
+                  );
+                }
+
                 return (
                   <button
                     onClick={() => {
@@ -3064,7 +3165,7 @@ export default function DayEntriesListClient({
                     disabled={
                       isSaving ||
                       isDeleting ||
-                      savingExpenseId === currentEditingExpenseId ||
+                      savingExpenseId === editingId ||
                       !currentExpense?.project_editable ||
                       !currentExpense?.name_editable ||
                       !currentExpense?.price_editable
@@ -3072,9 +3173,7 @@ export default function DayEntriesListClient({
                     className="w-full sm:w-auto px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
                   >
                     <span>
-                      {savingExpenseId === currentEditingExpenseId
-                        ? "Opslaan..."
-                        : "Opslaan"}
+                      {savingExpenseId === editingId ? "Opslaan..." : "Opslaan"}
                     </span>
                   </button>
                 );

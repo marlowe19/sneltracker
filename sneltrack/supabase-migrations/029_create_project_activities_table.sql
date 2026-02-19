@@ -24,3 +24,4 @@ COMMENT ON COLUMN project_activities.hourly_rate IS 'Hourly rate for this activi
 COMMENT ON COLUMN project_activities.display_order IS 'Order in which activities should be displayed in UI';
 
 
+

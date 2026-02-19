@@ -103,3 +103,4 @@ COMMENT ON FUNCTION get_day_entries_v2 IS
 Includes has_activities and current_activity_id fields for timer activity feature.';
 
 
+

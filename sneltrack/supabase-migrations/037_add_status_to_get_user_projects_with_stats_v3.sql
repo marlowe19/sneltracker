@@ -105,3 +105,4 @@ Returns null for member_role if user is not a member (e.g., for their own non-sh
 Status defaults to ''active'' if not set.
 v1 and v2 remain available for backward compatibility.';
 
+
