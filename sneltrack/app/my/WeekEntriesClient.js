@@ -451,19 +451,25 @@ export default function WeekEntriesClient({ user, weekOffset }) {
               </div>
             </div>
             <div className="flex flex-col justify-center items-end gap-0.5 text-right">
-              <div className="text-[#808080] text-xs font-bold font-sans">Tijd</div>
+              <div className="text-[#808080] text-xs font-bold font-sans">
+                Tijd
+              </div>
               <div className="text-gray-900 text-xs font-bold font-sans tabular-nums">
                 {formatHoursHMM(weekTotalTime)}
               </div>
             </div>
             <div className="flex flex-col justify-center items-end gap-0.5 text-right">
-              <div className="text-[#808080] text-xs font-bold font-sans">Euro&apos;s</div>
+              <div className="text-[#808080] text-xs font-bold font-sans">
+                Euro&apos;s
+              </div>
               <div className="text-teal-500 text-xs font-bold font-sans tabular-nums">
                 {formatMoney(weekTotalMoney)}
               </div>
             </div>
             <div className="flex flex-col justify-center items-end gap-0.5 text-right">
-              <div className="text-[#808080] text-xs font-bold font-sans">Uitgaven</div>
+              <div className="text-[#808080] text-xs font-bold font-sans">
+                Uitgaven
+              </div>
               <div className="text-red-500 text-xs font-bold font-sans tabular-nums">
                 {formatMoney(weekTotalExpenses)}
               </div>
@@ -488,7 +494,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
           }`}
         >
           <div className="overflow-hidden">
-            <div className="border-t border-gray-100 px-3 py-2">
+            <div className="px-3 py-2">
               <div className="flex flex-col gap-1">
                 {perUserWeekTotals.map((userTotals) => (
                   <div
