@@ -1,21 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  createProject,
-  updateProject,
-  deleteProject,
-  getProjectStatistics,
-  createSharedProject,
-  updateSharedProject,
-  deleteSharedProject,
-  addMemberToProject,
-  removeMemberFromProject,
-  getProjectMembers,
-  isProjectOwner,
-  isProjectMember,
-  getProjectStatisticsByMember,
   convertToSharedProject,
-  getProjectById,
-  updateMemberHourlyRate,
 } from "@/lib/dbFirestore";
 import {
   getProjectDetail,
@@ -34,6 +19,74 @@ import { auth0 } from "@/lib/auth/auth0";
 
 export const dynamic = "force-dynamic";
 
+function buildLegacyStatistics(projectDetail) {
+  const totalHours = Number(projectDetail?.statistics?.totalHours || 0);
+  const totalMoney = Number(projectDetail?.statistics?.totalMoney || 0);
+  const entryCount = Number(projectDetail?.statistics?.entryCount || 0);
+  const budgetHours =
+    projectDetail?.budget_hours !== null &&
+    projectDetail?.budget_hours !== undefined
+      ? Number(projectDetail.budget_hours)
+      : null;
+  const projectHourlyRate =
+    projectDetail?.hourly_rate !== null &&
+    projectDetail?.hourly_rate !== undefined
+      ? Number(projectDetail.hourly_rate)
+      : null;
+
+  const budgetPercentage =
+    budgetHours !== null && budgetHours > 0 ? (totalHours / budgetHours) * 100 : null;
+  const budgetPrice =
+    budgetHours !== null &&
+    budgetHours > 0 &&
+    projectHourlyRate !== null &&
+    projectHourlyRate > 0
+      ? budgetHours * projectHourlyRate
+      : null;
+  const isOverBudget = budgetPercentage !== null && budgetPercentage > 100;
+  const hoursSaved =
+    budgetHours !== null && budgetHours > 0 ? budgetHours - totalHours : null;
+  const hoursSavedPercentage =
+    budgetHours !== null && budgetHours > 0
+      ? (hoursSaved / budgetHours) * 100
+      : null;
+  const moneySaved =
+    hoursSaved !== null &&
+    hoursSaved > 0 &&
+    projectHourlyRate !== null &&
+    projectHourlyRate > 0
+      ? hoursSaved * projectHourlyRate
+      : null;
+  const profitabilityStatus =
+    budgetPercentage !== null
+      ? budgetPercentage < 80
+        ? "profitable"
+        : budgetPercentage <= 100
+          ? "at_risk"
+          : "underperforming"
+      : null;
+
+  return {
+    totalHours,
+    totalMoney,
+    entryCount,
+    budgetHours,
+    budgetPercentage,
+    budgetPrice,
+    isOverBudget,
+    hoursSaved,
+    hoursSavedPercentage,
+    moneySaved,
+    profitabilityStatus,
+    // Keep old fields for backwards compatibility
+    revenueVariance: moneySaved !== null ? moneySaved : null,
+    profitabilityRatio:
+      hoursSavedPercentage !== null && budgetPercentage !== null
+        ? 100 - budgetPercentage
+        : null,
+  };
+}
+
 export const GET = auth0.withApiAuthRequired(async (req) => {
   try {
     const session = await auth0.getSession(req);
@@ -45,8 +98,14 @@ export const GET = auth0.withApiAuthRequired(async (req) => {
     const action = url.searchParams.get("action");
 
     if (action === "members" && projectId) {
-      // Get project members
-      const members = await getProjectMembers(projectId);
+      const projectDetail = await getProjectDetail(user, projectId);
+      if (!projectDetail) {
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 404 }
+        );
+      }
+      const members = projectDetail.members || [];
       return NextResponse.json({ members });
     }
 
@@ -67,13 +126,19 @@ export const GET = auth0.withApiAuthRequired(async (req) => {
           { status: 403 }
         );
       }
-      const statistics = await getProjectStatisticsByMember(projectId);
+      const statistics = projectDetail.memberStatistics || [];
       return NextResponse.json({ statistics });
     }
 
     if (projectId && stats) {
-      // Return statistics for a specific project
-      const statistics = await getProjectStatistics(user, projectId);
+      const projectDetail = await getProjectDetail(user, projectId);
+      if (!projectDetail) {
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 404 }
+        );
+      }
+      const statistics = buildLegacyStatistics(projectDetail);
       return NextResponse.json({ statistics });
     }
 
@@ -188,55 +253,30 @@ export const POST = auth0.withApiAuthRequired(async (req) => {
     const dueDate = body.due_date || null;
     const startDate = body.start_date || null;
 
-    if (isShared) {
-      // Create in Supabase
-      let newProject;
-      try {
-        newProject = await createProjectSupabase(user, {
-          name,
-          hourly_rate: hourlyRate,
-          budget_hours: budgetHours,
-          is_shared: true,
-          is_default: false,
-          due_date: dueDate,
-          start_date: startDate,
-        });
-      } catch (error) {
-        console.error("Failed to create project in Supabase:", error);
-        return NextResponse.json(
-          {
-            error: "Failed to create project in Supabase",
-            message: error.message,
-          },
-          { status: 500 }
-        );
-      }
-      return NextResponse.json({ project: newProject }, { status: 201 });
-    } else {
-      const newProject = await createProject(
-        user,
+    // Create in Supabase only (Firestore migration completed)
+    let newProject;
+    try {
+      newProject = await createProjectSupabase(user, {
         name,
-        hourlyRate,
-        isDefault,
-        budgetHours
+        hourly_rate: hourlyRate,
+        budget_hours: budgetHours,
+        is_shared: isShared,
+        is_default: isShared ? false : isDefault,
+        due_date: dueDate,
+        start_date: startDate,
+      });
+    } catch (error) {
+      console.error("Failed to create project in Supabase:", error);
+      return NextResponse.json(
+        {
+          error: "Failed to create project in Supabase",
+          message: error.message,
+        },
+        { status: 500 }
       );
-      // Also create in Supabase
-      try {
-        await createProjectSupabase(user, {
-          name,
-          hourly_rate: hourlyRate,
-          budget_hours: budgetHours,
-          is_shared: false,
-          is_default: isDefault,
-          due_date: dueDate,
-          start_date: startDate,
-        });
-      } catch (error) {
-        console.error("Failed to create project in Supabase:", error);
-        // Continue anyway - Firestore is still written
-      }
-      return NextResponse.json({ project: newProject }, { status: 201 });
     }
+
+    return NextResponse.json({ project: newProject }, { status: 201 });
   } catch (error) {
     console.error("Error creating project:", error);
     return NextResponse.json(
