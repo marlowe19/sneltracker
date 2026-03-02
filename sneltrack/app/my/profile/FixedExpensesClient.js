@@ -124,6 +124,7 @@ export default function FixedExpensesClient({ userId }) {
       const refDate = formatDateForAPI(new Date());
       const res = await fetch(
         `/my/reports/api?rangeType=month&referenceDate=${refDate}&billableFilter=billable`,
+        { credentials: "include" },
       );
       if (res.ok) {
         const data = await res.json();
@@ -145,7 +146,9 @@ export default function FixedExpensesClient({ userId }) {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch("/my/api/fixed-expenses");
+      const res = await fetch("/my/api/fixed-expenses", {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Kon onkosten niet ophalen");
       const data = await res.json();
       setExpenses(data.expenses || []);
@@ -188,6 +191,7 @@ export default function FixedExpensesClient({ userId }) {
       const displayName = getDisplayName();
       const res = await fetch("/my/api/fixed-expenses", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: displayName,
@@ -253,6 +257,7 @@ export default function FixedExpensesClient({ userId }) {
       setError(null);
       const res = await fetch(`/my/api/fixed-expenses/${editingId}`, {
         method: "PATCH",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: editName.trim(),
@@ -286,6 +291,7 @@ export default function FixedExpensesClient({ userId }) {
       setError(null);
       const res = await fetch(`/my/api/fixed-expenses/${id}`, {
         method: "DELETE",
+        credentials: "include",
       });
 
       if (!res.ok) {
