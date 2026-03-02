@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Activity, Receipt, ChevronRight } from "@carbon/icons-react";
+import { Activity, Receipt, ChevronRight, Trophy, Plug } from "@carbon/icons-react";
 import FullScreenModal from "@/app/components/FullScreenModal";
+import AppleCalendarConnectionClient from "../components/AppleCalendarConnectionClient";
+import FixedExpensesClient from "./FixedExpensesClient";
 
 const ITEMS = [
   {
@@ -18,6 +20,20 @@ const ITEMS = [
     subtitle: "Beheer je onkosten",
     icon: Receipt,
     modalTitle: "Onkosten",
+  },
+  {
+    id: "leaderboard",
+    title: "Leader board",
+    subtitle: "Bekijk de ranglijst",
+    icon: Trophy,
+    modalTitle: "Leader board",
+  },
+  {
+    id: "integraties",
+    title: "Integraties",
+    subtitle: "Koppel externe diensten",
+    icon: Plug,
+    modalTitle: "Integraties",
   },
 ];
 
@@ -40,7 +56,7 @@ function SettingsListItem({ icon: Icon, title, subtitle, onClick }) {
   );
 }
 
-export default function ProfileSettingsClient() {
+export default function ProfileSettingsClient({ userId }) {
   const [openModal, setOpenModal] = useState(null);
 
   return (
@@ -66,11 +82,17 @@ export default function ProfileSettingsClient() {
           title={item.modalTitle}
         >
           <div className="p-4">
-            <p className="text-gray-600">
-              {item.id === "activiteiten"
-                ? "Activiteiten-instellingen – binnenkort beschikbaar."
-                : "Onkosten-instellingen – binnenkort beschikbaar."}
-            </p>
+            {item.id === "integraties" ? (
+              <AppleCalendarConnectionClient user={userId} embedded />
+            ) : item.id === "onkosten" ? (
+              <FixedExpensesClient userId={userId} />
+            ) : (
+              <p className="text-gray-600">
+                {item.id === "activiteiten"
+                  ? "Activiteiten-instellingen – binnenkort beschikbaar."
+                  : "Binnenkort beschikbaar."}
+              </p>
+            )}
           </div>
         </FullScreenModal>
       ))}

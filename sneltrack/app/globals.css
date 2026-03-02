@@ -130,6 +130,23 @@ body {
 .animate-fade-in {
   animation: fade-in 0.3s ease-out;
 }
+
+@keyframes status-pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-status-pulse {
+  animation: status-pulse 0.6s ease-out;
+}
+
 .week {
   display: grid;
   min-width: 100%;
