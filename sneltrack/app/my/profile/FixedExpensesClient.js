@@ -4,10 +4,18 @@ import { useState, useEffect, useMemo } from "react";
 import {
   CurrencyEuro,
   Receipt,
-  ArrowUp,
-  ArrowDown,
+  Add,
+  Home,
+  Car,
+  Security,
+  ShoppingCart,
+  Time,
 } from "@carbon/icons-react";
-import { PREDEFINED_EXPENSE_TYPES, PERIOD_OPTIONS } from "@/lib/expenseTypes";
+import {
+  PREDEFINED_EXPENSE_TYPES,
+  PERIOD_OPTIONS,
+  getExpenseIconKey,
+} from "@/lib/expenseTypes";
 import { formatDateForAPI } from "@/lib/dateRangeUtils";
 
 function formatMoney(amount) {
@@ -17,6 +25,15 @@ function formatMoney(amount) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount ?? 0);
+}
+
+function formatHours(hours) {
+  return (
+    new Intl.NumberFormat("nl-NL", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }).format(hours ?? 0) + " uur"
+  );
 }
 
 function toMonthlyPrice(price, period) {
@@ -31,12 +48,27 @@ function getPeriodLabel(period) {
   return PERIOD_OPTIONS.find((p) => p.value === period)?.label ?? period;
 }
 
+const EXPENSE_ICONS = {
+  Home,
+  Car,
+  Security,
+  ShoppingCart,
+  Receipt,
+};
+
+function ExpenseIcon({ name, size = 18, className }) {
+  const key = getExpenseIconKey(name);
+  const Icon = EXPENSE_ICONS[key] ?? Receipt;
+  return <Icon size={size} className={className} />;
+}
+
 export default function FixedExpensesClient({ userId }) {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const [earningsThisMonth, setEarningsThisMonth] = useState(null);
+  const [hoursThisMonth, setHoursThisMonth] = useState(null);
   const [earningsLoading, setEarningsLoading] = useState(true);
 
   // Form state
@@ -53,6 +85,8 @@ export default function FixedExpensesClient({ userId }) {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [managingId, setManagingId] = useState(null);
 
   const totalPerMonth = useMemo(() => {
     return expenses.reduce(
@@ -70,6 +104,12 @@ export default function FixedExpensesClient({ userId }) {
 
   const isProfit = remaining !== null && remaining >= 0;
 
+  const expensePercentage = useMemo(() => {
+    const earnings = earningsThisMonth ?? 0;
+    if (earnings <= 0) return 0;
+    return Math.min(100, Math.round((totalPerMonth / earnings) * 100));
+  }, [earningsThisMonth, totalPerMonth]);
+
   useEffect(() => {
     fetchExpenses();
   }, []);
@@ -83,16 +123,19 @@ export default function FixedExpensesClient({ userId }) {
       setEarningsLoading(true);
       const refDate = formatDateForAPI(new Date());
       const res = await fetch(
-        `/my/reports/api?rangeType=month&referenceDate=${refDate}&billableFilter=billable`
+        `/my/reports/api?rangeType=month&referenceDate=${refDate}&billableFilter=billable`,
       );
       if (res.ok) {
         const data = await res.json();
         setEarningsThisMonth(data.totals?.totalBillableAmount ?? 0);
+        setHoursThisMonth(data.totals?.totalBillableHours ?? 0);
       } else {
         setEarningsThisMonth(0);
+        setHoursThisMonth(0);
       }
     } catch {
       setEarningsThisMonth(0);
+      setHoursThisMonth(0);
     } finally {
       setEarningsLoading(false);
     }
@@ -164,6 +207,7 @@ export default function FixedExpensesClient({ userId }) {
       setCustomName("");
       setPrice("");
       setPeriod("month");
+      setShowAddForm(false);
       setSuccessMessage("Onkosten toegevoegd");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
@@ -185,6 +229,7 @@ export default function FixedExpensesClient({ userId }) {
     setEditName("");
     setEditPrice("");
     setEditPeriod("month");
+    setManagingId(null);
   }
 
   async function handleUpdate() {
@@ -250,6 +295,7 @@ export default function FixedExpensesClient({ userId }) {
 
       setExpenses((prev) => prev.filter((e) => e.id !== id));
       if (editingId === id) cancelEdit();
+      if (managingId === id) setManagingId(null);
       setSuccessMessage("Onkosten verwijderd");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
@@ -280,15 +326,16 @@ export default function FixedExpensesClient({ userId }) {
         </div>
       )}
 
-      {/* Vergelijkingsblok: verdiensten vs onkosten */}
-      <div className="rounded-lg border border-gray-200 overflow-hidden bg-white">
-        <div className="divide-y divide-gray-100">
-          <div className="flex items-center gap-3 p-4">
+      {/* Financiële widget – light theme */}
+      <div className="rounded-lg border border-gray-200 bg-[#f5f5f5] overflow-hidden ">
+        {/* Top: Verdiensten + netto-badge */}
+        <div className="flex items-center justify-between gap-3 p-4">
+          <div className="flex items-center gap-3 min-w-0 shrink">
             <div className="shrink-0 w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
               <CurrencyEuro size={20} className="text-[#008eff]" />
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium text-gray-700">
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-gray-500 whitespace-nowrap">
                 Verdiensten deze maand
               </div>
               <div className="text-lg font-semibold text-gray-900">
@@ -298,168 +345,165 @@ export default function FixedExpensesClient({ userId }) {
                   formatMoney(earningsThisMonth ?? 0)
                 )}
               </div>
+              {hoursThisMonth !== null && (
+                <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
+                  <Time size={14} className="text-gray-500" />
+                  {formatHours(hoursThisMonth)}
+                </div>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-3 p-4">
+          <div className="flex items-center gap-2 shrink-0">
+            {remaining !== null && (
+              <span
+                className={`px-2.5 py-1 rounded-md text-sm font-medium transition-colors duration-300 ${
+                  isProfit
+                    ? "bg-green-100 text-green-700"
+                    : "bg-red-100 text-red-700"
+                }`}
+              >
+                {isProfit
+                  ? `+ ${formatMoney(remaining)}`
+                  : `- ${formatMoney(Math.abs(remaining))}`}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Midden: VASTE KOSTEN */}
+        <div className="flex items-center justify-between gap-3 px-4 pb-2">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="shrink-0 w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
               <Receipt size={20} className="text-gray-600" />
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium text-gray-700">
-                Vaste onkosten (per maand)
+            <div>
+              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Vaste kosten
               </div>
               <div className="text-lg font-semibold text-gray-900">
                 {formatMoney(totalPerMonth)}
               </div>
             </div>
           </div>
-          <div
-            className={`flex items-center gap-3 p-4 transition-colors duration-300 animate-status-pulse ${
-              remaining === null
-                ? "bg-gray-50"
-                : isProfit
-                  ? "bg-green-50"
-                  : "bg-red-50"
-            }`}
-          >
+        </div>
+
+        {/* Progress bar */}
+        <div className="px-4 pb-2">
+          <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
             <div
-              className={`shrink-0 w-10 h-10 rounded-lg flex items-center justify-center transition-colors duration-300 ${
-                remaining === null
-                  ? "bg-gray-200"
-                  : isProfit
-                    ? "bg-green-100"
-                    : "bg-red-100"
-              }`}
-            >
-              {remaining === null ? (
-                <span className="text-gray-400 text-sm">–</span>
-              ) : isProfit ? (
-                <ArrowUp size={20} className="text-green-600" />
-              ) : (
-                <ArrowDown size={20} className="text-red-600" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium text-gray-700">
-                Resterend
-              </div>
-              <div
-                className={`text-lg font-semibold transition-colors duration-300 ${
-                  remaining === null
-                    ? "text-gray-900"
-                    : isProfit
-                      ? "text-green-700"
-                      : "text-red-700"
-                }`}
-              >
-                {remaining === null
-                  ? "–"
-                  : formatMoney(remaining)}
-              </div>
-              {remaining !== null && (
-                <div
-                  className={`text-xs font-medium mt-0.5 transition-colors duration-300 ${
-                    isProfit ? "text-green-600" : "text-red-600"
-                  }`}
-                >
-                  {isProfit ? "Uit de kosten" : "Achter"}
-                </div>
-              )}
-            </div>
+              className="h-full rounded-full bg-[#008eff] transition-all duration-300"
+              style={{ width: `${expensePercentage}%` }}
+            />
           </div>
         </div>
-      </div>
 
-      <div className="rounded-lg bg-gray-50 border border-gray-200 p-4">
-        <div className="text-sm font-medium text-gray-700 mb-1">
-          Totaal per maand
-        </div>
-        <div className="text-xl font-semibold text-gray-900">
-          {formatMoney(totalPerMonth)}
-        </div>
-        <div className="text-xs text-gray-500 mt-1">
-          Totaal per jaar: {formatMoney(totalPerYear)}
+        {/* Onder de bar: X% van inkomen | Totaal per jaar */}
+        <div className="flex items-center justify-between px-4 pb-4 text-xs text-gray-500">
+          <span>{expensePercentage}% van je inkomen</span>
+          <span>Totaal per jaar: {formatMoney(totalPerYear)}</span>
         </div>
       </div>
 
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-gray-900">
-          Nieuwe vaste onkosten toevoegen
-        </h3>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Naam *
-            </label>
-            <select
-              value={nameType}
-              onChange={(e) => setNameType(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
-            >
-              <option value="">Selecteer een type</option>
-              {PREDEFINED_EXPENSE_TYPES.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          {nameType === "__custom__" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Custom naam *
-              </label>
-              <input
-                type="text"
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                placeholder="Vul uw onkosten in"
-                maxLength={100}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
-              />
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Prijs (€) *
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Periode *
-              </label>
-              <select
-                value={period}
-                onChange={(e) => setPeriod(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
+        {showAddForm ? (
+          <>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-900">
+                Nieuwe vaste onkosten toevoegen
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddForm(false)}
+                className="text-sm text-gray-500 hover:text-gray-700"
               >
-                {PERIOD_OPTIONS.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
+                Sluiten
+              </button>
             </div>
-          </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Naam *
+                </label>
+                <select
+                  value={nameType}
+                  onChange={(e) => setNameType(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
+                >
+                  <option value="">Selecteer een type</option>
+                  {PREDEFINED_EXPENSE_TYPES.map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {nameType === "__custom__" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Custom naam *
+                  </label>
+                  <input
+                    type="text"
+                    value={customName}
+                    onChange={(e) => setCustomName(e.target.value)}
+                    placeholder="Vul uw onkosten in"
+                    maxLength={100}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
+                  />
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Prijs (€) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Periode *
+                  </label>
+                  <select
+                    value={period}
+                    onChange={(e) => setPeriod(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
+                  >
+                    {PERIOD_OPTIONS.map((p) => (
+                      <option key={p.value} value={p.value}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleAdd}
+                disabled={isSaving}
+                className="w-full px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              >
+                {isSaving ? "Toevoegen..." : "Toevoegen"}
+              </button>
+            </div>
+          </>
+        ) : (
           <button
             type="button"
-            onClick={handleAdd}
-            disabled={isSaving}
-            className="w-full px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+            onClick={() => setShowAddForm(true)}
+            className="flex items-center gap-2 text-sm font-medium text-[#008eff] hover:text-[#0066b3]"
           >
-            {isSaving ? "Toevoegen..." : "Toevoegen"}
+            <Add size={16} />
+            Toevoegen
           </button>
-        </div>
+        )}
       </div>
 
       <div className="space-y-3">
@@ -528,7 +572,10 @@ export default function FixedExpensesClient({ userId }) {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="shrink-0 w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <ExpenseIcon name={expense.name} className="text-gray-600" />
+                    </div>
                     <div className="min-w-0 flex-1">
                       <div className="font-medium text-gray-900 truncate">
                         {expense.name}
@@ -538,23 +585,42 @@ export default function FixedExpensesClient({ userId }) {
                         {getPeriodLabel(expense.period)}
                       </div>
                     </div>
-                    <div className="flex gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => startEdit(expense)}
-                        disabled={isDeleting}
-                        className="px-2 py-1 text-sm text-[#008eff] hover:bg-[#008eff]/10 rounded disabled:opacity-50"
-                      >
-                        Bewerken
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(expense.id)}
-                        disabled={isDeleting}
-                        className="px-2 py-1 text-sm text-red-500 hover:bg-red-50 rounded disabled:opacity-50"
-                      >
-                        Verwijderen
-                      </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {managingId === expense.id ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => startEdit(expense)}
+                            disabled={isDeleting}
+                            className="px-2 py-1 text-sm text-[#008eff] hover:bg-[#008eff]/10 rounded disabled:opacity-50"
+                          >
+                            Bewerken
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(expense.id)}
+                            disabled={isDeleting}
+                            className="px-2 py-1 text-sm text-red-500 hover:bg-red-50 rounded disabled:opacity-50"
+                          >
+                            Verwijderen
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setManagingId(null)}
+                            className="px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 rounded"
+                          >
+                            Sluiten
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setManagingId(expense.id)}
+                          className="text-sm font-medium text-[#008eff] hover:text-[#0066b3]"
+                        >
+                          Beheren
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
