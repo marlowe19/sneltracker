@@ -506,7 +506,7 @@ function ReportsContent({ onReportDataReady }) {
             url.searchParams.set("rangeType", rangeType);
             url.searchParams.set(
               "referenceDate",
-              formatDateForAPI(referenceDate)
+              formatDateForAPI(referenceDate),
             );
           }
         }
@@ -527,7 +527,7 @@ function ReportsContent({ onReportDataReady }) {
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(
-            errorData.error || `Failed to fetch reports (${res.status})`
+            errorData.error || `Failed to fetch reports (${res.status})`,
           );
         }
 
@@ -538,7 +538,7 @@ function ReportsContent({ onReportDataReady }) {
             totalBillableHours: 0,
             totalUnbillableHours: 0,
             totalBillableAmount: 0,
-          }
+          },
         );
         setFilters(data.filters || null);
 
@@ -593,7 +593,7 @@ function ReportsContent({ onReportDataReady }) {
     cards.push({
       id: "category-breakdown",
       title: `Verdeling van totale opbrengst van ${formatMoney(
-        totals.totalBillableAmount
+        totals.totalBillableAmount,
       )}`,
       content: <CategoryBreakdownPieChart totals={totals} />,
     });

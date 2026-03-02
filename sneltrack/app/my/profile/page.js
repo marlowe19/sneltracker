@@ -3,6 +3,7 @@ import { auth0 } from "@/lib/auth/auth0";
 import Link from "next/link";
 import AppleCalendarConnectionClient from "../components/AppleCalendarConnectionClient";
 import WeeklyHoursClient from "../components/WeeklyHoursClient";
+import ProfileSettingsClient from "./ProfileSettingsClient";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +77,12 @@ export default async function ProfilePage({ request }) {
           <WeeklyHoursClient />
 
           <AppleCalendarConnectionClient user={user.sub} />
-
+          <section className="flex flex-col gap-2">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4">
+              Instellingen
+            </h3>
+            <ProfileSettingsClient />
+          </section>
           <div className="mt-6">
             <Link
               href="/auth/logout"
