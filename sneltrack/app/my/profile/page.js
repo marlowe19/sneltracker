@@ -3,6 +3,7 @@ import { auth0 } from "@/lib/auth/auth0";
 import Link from "next/link";
 import WeeklyHoursClient from "../components/WeeklyHoursClient";
 import ProfileSettingsClient from "./ProfileSettingsClient";
+import XPClient from "./XPClient";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +75,10 @@ export default async function ProfilePage({ request }) {
             </div>
           </div>
           {/* <WeeklyHoursClient /> */}
+
+          <section className="mt-6">
+            <XPClient />
+          </section>
 
           <section className="flex flex-col gap-2">
             <h1 className="text-xl pt-4 font-semibold text-gray-900 mb-4">
