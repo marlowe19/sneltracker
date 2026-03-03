@@ -247,6 +247,92 @@ export async function getUserXP(userName, period = "month", date = null, streakO
   };
 }
 
+/**
+ * Get leaderboard data for all users in a period
+ * @param {string} currentUserName - Auth0 sub (for current user highlight)
+ * @param {string} period - week | month | year
+ * @param {string} date - YYYY-MM-DD or YYYY-MM or YYYY
+ * @returns {Promise<Object>} { period, periodLabel, entries, currentUserRank, totalCount, topPercent }
+ */
+export async function getLeaderboard(currentUserName, period = "month", date = null) {
+  const refDate = parseRefDate(period, date);
+  const { start: thisStart, end: thisEnd } = getPeriodBounds(period, refDate);
+  const { start: lastStart, end: lastEnd } = getPreviousPeriodBounds(period, refDate);
+
+  const [
+    { data: thisData, error: thisError },
+    { data: lastData, error: lastError },
+  ] = await Promise.all([
+    supabaseServer.rpc("get_leaderboard_inputs", {
+      p_start_date: thisStart.toISOString(),
+      p_end_date: thisEnd.toISOString(),
+    }),
+    supabaseServer.rpc("get_leaderboard_inputs", {
+      p_start_date: lastStart.toISOString(),
+      p_end_date: lastEnd.toISOString(),
+    }),
+  ]);
+
+  if (thisError) {
+    console.error("Error fetching leaderboard:", thisError);
+    throw thisError;
+  }
+
+  const thisRows = thisData || [];
+  const lastByUser = new Map();
+  for (const row of lastData || []) {
+    lastByUser.set(row.user_name, {
+      total_hours: Number(row.total_hours) || 0,
+      total_revenue: Number(row.total_revenue) || 0,
+      active_days_count: Number(row.active_days_count) || 0,
+      active_weeks_count: Number(row.active_weeks_count) || 0,
+      weeks_in_month: Number(row.weeks_in_period) || 4,
+    });
+  }
+
+  const entries = [];
+  for (const row of thisRows) {
+    const thisInputs = {
+      total_hours: Number(row.total_hours) || 0,
+      total_revenue: Number(row.total_revenue) || 0,
+      active_days_count: Number(row.active_days_count) || 0,
+      active_weeks_count: Number(row.active_weeks_count) || 0,
+      weeks_in_month: Number(row.weeks_in_period) || 4,
+    };
+    const lastInputs = lastByUser.get(row.user_name) || null;
+    const result = calculateMonthlyXP(thisInputs, lastInputs, { daily: 0, weekly: 0 });
+    entries.push({
+      user_name: row.user_name,
+      display_name: row.display_name || row.user_name,
+      totalXP: result.total,
+    });
+  }
+
+  entries.sort((a, b) => b.totalXP - a.totalXP);
+
+  const ranked = entries.map((e, i) => ({
+    ...e,
+    rank: i + 1,
+  }));
+
+  const totalCount = ranked.length;
+  const currentEntry = ranked.find((e) => e.user_name === currentUserName);
+  const currentUserRank = currentEntry?.rank ?? null;
+  const topPercent =
+    currentUserRank && totalCount > 0
+      ? Math.round((currentUserRank / totalCount) * 100)
+      : null;
+
+  return {
+    period,
+    periodLabel: formatPeriodLabel(period, refDate),
+    entries: ranked,
+    currentUserRank,
+    totalCount,
+    topPercent,
+  };
+}
+
 function parseRefDate(period, dateStr) {
   if (!dateStr) return new Date();
   if (period === "year" && /^\d{4}$/.test(dateStr)) {

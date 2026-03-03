@@ -5,6 +5,7 @@ import { Activity, Receipt, ChevronRight, Trophy, Plug } from "@carbon/icons-rea
 import FullScreenModal from "@/app/components/FullScreenModal";
 import AppleCalendarConnectionClient from "../components/AppleCalendarConnectionClient";
 import FixedExpensesClient from "./FixedExpensesClient";
+import LeaderboardClient from "./LeaderboardClient";
 
 const ITEMS = [
   {
@@ -82,7 +83,9 @@ export default function ProfileSettingsClient({ userId }) {
           title={item.modalTitle}
         >
           <div className="p-4">
-            {item.id === "integraties" ? (
+            {item.id === "leaderboard" ? (
+              <LeaderboardClient currentUserId={userId} />
+            ) : item.id === "integraties" ? (
               <AppleCalendarConnectionClient user={userId} embedded />
             ) : item.id === "onkosten" ? (
               <FixedExpensesClient userId={userId} />

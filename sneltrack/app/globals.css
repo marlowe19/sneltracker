@@ -182,3 +182,12 @@ body {
 .slick-dots {
   bottom: -2.1rem !important;
 }
+
+/* Hide scrollbar for overflow-x-auto */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
