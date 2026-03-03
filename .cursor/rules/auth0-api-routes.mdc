@@ -1,0 +1,55 @@
+---
+description: Auth0 API route auth pattern – explicit getSession(request), geen withApiAuthRequired
+globs: **/api/**/route.js
+alwaysApply: false
+---
+
+# Auth0 API route auth
+
+## Gebruik getSession(request), niet withApiAuthRequired
+
+De `withApiAuthRequired` wrapper roept `getSession()` aan zonder request. Dat kan in sommige contexten (Next.js 15/16, modals) falen. Gebruik daarom expliciet `getSession(request)` en controleer de session zelf.
+
+- **Niet doen**: `auth0.withApiAuthRequired(async (request) => { ... })`
+- **Wel doen**: `export async function GET(request, { params })` met handmatige session-check
+
+```javascript
+// ❌ NIET
+export const GET = auth0.withApiAuthRequired(async (request) => {
+  const session = await auth0.getSession(request);
+  const user = session.user.sub;
+  // ...
+});
+
+// ✅ WEL
+export async function GET(request, { params }) {
+  const session = await auth0.getSession(request);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const user = session.user.sub;
+  if (!user) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+  // ...
+}
+```
+
+## Voor routes met dynamische params
+
+Gebruik `context` voor params (bijv. `[id]`):
+
+```javascript
+export async function PATCH(request, context) {
+  const session = await auth0.getSession(request);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const user = session.user.sub;
+  if (!user) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+  const { id } = await context.params;
+  // ...
+}
+```

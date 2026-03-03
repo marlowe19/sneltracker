@@ -2,10 +2,16 @@ import { NextResponse } from "next/server";
 import { fixedExpensesService } from "@/lib/supabase/services";
 import { auth0 } from "@/lib/auth/auth0";
 
-export const GET = auth0.withApiAuthRequired(async (request) => {
+export async function GET(request, { params }) {
   try {
     const session = await auth0.getSession(request);
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const user = session.user.sub;
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
 
     const expenses = await fixedExpensesService.getAll(user);
     return NextResponse.json({ expenses });
@@ -16,12 +22,19 @@ export const GET = auth0.withApiAuthRequired(async (request) => {
       { status: 500 }
     );
   }
-});
+}
 
-export const POST = auth0.withApiAuthRequired(async (request) => {
+export async function POST(request, { params }) {
   try {
     const session = await auth0.getSession(request);
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const user = session.user.sub;
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
     const body = await request.json();
 
     if (!body.name || body.name.trim() === "") {
@@ -73,4 +86,4 @@ export const POST = auth0.withApiAuthRequired(async (request) => {
       { status: 500 }
     );
   }
-});
+}

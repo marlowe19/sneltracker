@@ -2,10 +2,17 @@ import { NextResponse } from "next/server";
 import { fixedExpensesService } from "@/lib/supabase/services";
 import { auth0 } from "@/lib/auth/auth0";
 
-export const PATCH = auth0.withApiAuthRequired(async (request, context) => {
+export async function PATCH(request, context) {
   try {
     const session = await auth0.getSession(request);
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const user = session.user.sub;
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
     const { id } = await context.params;
     const body = await request.json();
 
@@ -37,12 +44,19 @@ export const PATCH = auth0.withApiAuthRequired(async (request, context) => {
       { status: 500 }
     );
   }
-});
+}
 
-export const DELETE = auth0.withApiAuthRequired(async (request, context) => {
+export async function DELETE(request, context) {
   try {
     const session = await auth0.getSession(request);
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const user = session.user.sub;
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
     const { id } = await context.params;
 
     if (!id) {
@@ -61,4 +75,4 @@ export const DELETE = auth0.withApiAuthRequired(async (request, context) => {
       { status: 500 }
     );
   }
-});
+}

@@ -1,0 +1,30 @@
+---
+description: Supabase RLS en policies – geen anon, geen RLS bij service role
+globs: **/supabase-migrations/*.sql
+alwaysApply: false
+---
+
+# Supabase RLS en policies
+
+## Geen Row Level Security
+
+De app gebruikt Auth0 + Supabase service role server-side. Alle database-access gaat via de API; autorisatie gebeurt in de service layer (bijv. `user_name` check). RLS is niet nodig en wordt omzeild door de service role.
+
+- **Niet doen**: `ENABLE ROW LEVEL SECURITY` + policies
+- **Wel doen**: `DISABLE ROW LEVEL SECURITY` + `GRANT ... TO authenticated`
+
+```sql
+-- ❌ NIET
+ALTER TABLE public.X ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "..." ON public.X TO authenticated USING (...);
+
+-- ✅ WEL
+ALTER TABLE public.X DISABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.X TO authenticated;
+```
+
+## Geen anon policies of grants
+
+De app gebruikt Auth0; alle gebruikers zijn geauthenticeerd. Er zijn geen anon gebruikers.
+
+- **Niet doen**: `CREATE POLICY ... TO anon` of `GRANT ... TO anon`

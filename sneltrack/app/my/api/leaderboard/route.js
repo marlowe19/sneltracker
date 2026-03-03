@@ -4,10 +4,16 @@ import { getLeaderboard } from "@/lib/supabase/services/xpService";
 
 export const dynamic = "force-dynamic";
 
-export const GET = auth0.withApiAuthRequired(async (request) => {
+export async function GET(request, { params }) {
   try {
     const session = await auth0.getSession(request);
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const user = session.user.sub;
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
 
     const url = new URL(request.url);
     const period = url.searchParams.get("period") || "month";
@@ -23,4 +29,4 @@ export const GET = auth0.withApiAuthRequired(async (request) => {
       { status: 500 }
     );
   }
-});
+}
