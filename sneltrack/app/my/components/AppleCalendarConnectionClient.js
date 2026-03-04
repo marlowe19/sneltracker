@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-export default function AppleCalendarConnectionClient({ user }) {
+export default function AppleCalendarConnectionClient({ user, embedded }) {
   const router = useRouter();
   const [checkingCalendar, setCheckingCalendar] = useState(true);
   const [calendarConnected, setCalendarConnected] = useState(false);
@@ -100,7 +100,11 @@ export default function AppleCalendarConnectionClient({ user }) {
   }
 
   return (
-    <div className="mt-6 pt-6 border-t border-gray-200">
+    <div
+      className={
+        embedded ? "space-y-3" : "mt-6 pt-6 border-t border-gray-200"
+      }
+    >
       <h3 className="text-sm font-semibold text-gray-900 mb-4">
         Apple Calendar Integratie
       </h3>

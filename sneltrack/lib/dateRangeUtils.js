@@ -5,6 +5,10 @@ import {
   endOfWeek,
   startOfQuarter,
   endOfQuarter,
+  startOfYear,
+  endOfYear,
+  startOfDay,
+  endOfDay,
 } from "date-fns";
 import { UTCDate } from "@date-fns/utc";
 
@@ -116,6 +120,34 @@ export function getQuarterBoundsUTC(dateInput) {
   return {
     start: startOfQuarter(date),
     end: endOfQuarter(date),
+  };
+}
+
+/**
+ * Get day bounds in UTC
+ *
+ * @param {string|Date} dateInput - Reference date
+ * @returns {{start: Date, end: Date}} Day start and end dates
+ */
+export function getDayBoundsUTC(dateInput) {
+  const date = parseToUTCDate(dateInput);
+  return {
+    start: startOfDay(date),
+    end: endOfDay(date),
+  };
+}
+
+/**
+ * Get year bounds in UTC
+ *
+ * @param {string|Date} dateInput - Reference date (year extracted)
+ * @returns {{start: Date, end: Date}} Year start and end dates
+ */
+export function getYearBoundsUTC(dateInput) {
+  const date = parseToUTCDate(dateInput);
+  return {
+    start: startOfYear(date),
+    end: endOfYear(date),
   };
 }
 

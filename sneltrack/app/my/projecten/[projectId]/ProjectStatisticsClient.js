@@ -65,7 +65,7 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
         // Fetch statistics from API without date range parameters
         const url = new URL(
           `/my/projecten/${projectId}/api`,
-          window.location.origin
+          window.location.origin,
         );
 
         const res = await fetch(url);
@@ -78,7 +78,7 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
             url: url.toString(),
           });
           throw new Error(
-            errorData.error || `Failed to fetch statistics (${res.status})`
+            errorData.error || `Failed to fetch statistics (${res.status})`,
           );
         }
 
@@ -165,7 +165,7 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
                 <Tooltip
                   formatter={(value, name, props) => [
                     `${formatHours(props.payload.hours)} (${value.toFixed(
-                      2
+                      2,
                     )}u)`,
                     "Uren",
                   ]}
@@ -203,8 +203,8 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
                     statistics.isOverBudget
                       ? "bg-red-500"
                       : statistics.budgetPercentage > 80
-                      ? "bg-yellow-500"
-                      : "bg-green-500"
+                        ? "bg-yellow-500"
+                        : "bg-green-500"
                   }`}
                   style={{
                     width: `${
@@ -301,8 +301,8 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
                     statistics.isOverBudget
                       ? "bg-red-500"
                       : statistics.budgetPercentage > 80
-                      ? "bg-yellow-500"
-                      : "bg-green-500"
+                        ? "bg-yellow-500"
+                        : "bg-green-500"
                   }`}
                   style={{
                     width: `${
@@ -409,7 +409,7 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
     cards.push({
       id: "hourly-rate-breakdown",
       title: `Verdeling van een uurtarief van ${formatMoney(
-        project.hourly_rate
+        project.hourly_rate,
       )}`,
       content: (
         <div className="w-full">
@@ -493,7 +493,7 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
     cards.push({
       id: "total-money-breakdown",
       title: `Verdeling van totale opbrengst van ${formatMoney(
-        statistics.totalMoney
+        statistics.totalMoney,
       )}`,
       content: (
         <div className="w-full">
@@ -579,7 +579,7 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
     const maxHours = Math.max(statistics.budgetHours, statistics.totalHours);
     const maxMoney = Math.max(
       statistics.budgetPrice || statistics.budgetHours * project.hourly_rate,
-      statistics.totalMoney
+      statistics.totalMoney,
     );
 
     cards.push({
@@ -680,8 +680,8 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
                 statistics.isOverBudget
                   ? "bg-red-500"
                   : statistics.budgetPercentage > 80
-                  ? "bg-yellow-500"
-                  : "bg-green-500"
+                    ? "bg-yellow-500"
+                    : "bg-green-500"
               }`}
               style={{
                 width: `${
@@ -745,7 +745,7 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
                 labelFormatter={(label, payload) => {
                   if (payload && payload[0]) {
                     return new Date(
-                      payload[0].payload.fullDate
+                      payload[0].payload.fullDate,
                     ).toLocaleDateString("nl-NL", {
                       weekday: "long",
                       year: "numeric",
@@ -780,14 +780,14 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
       velocity.trendDirection === "increasing"
         ? "📈"
         : velocity.trendDirection === "decreasing"
-        ? "📉"
-        : "➡️";
+          ? "📉"
+          : "➡️";
     const trendColor =
       velocity.trendDirection === "increasing"
         ? "text-green-600"
         : velocity.trendDirection === "decreasing"
-        ? "text-red-600"
-        : "text-gray-600";
+          ? "text-red-600"
+          : "text-gray-600";
 
     cards.push({
       id: "velocity-metrics",
@@ -837,8 +837,8 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
                   {velocity.trendDirection === "increasing"
                     ? "Toenemend"
                     : velocity.trendDirection === "decreasing"
-                    ? "Afnemend"
-                    : "Stabiel"}
+                      ? "Afnemend"
+                      : "Stabiel"}
                 </span>
                 {Math.abs(velocity.trendPercentage) > 0 && (
                   <span className="text-xs">
@@ -893,7 +893,7 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
                   labelFormatter={(label, payload) => {
                     if (payload && payload[0]) {
                       const weekStart = new Date(
-                        payload[0].payload.fullWeekStart
+                        payload[0].payload.fullWeekStart,
                       );
                       const weekEnd = new Date(weekStart);
                       weekEnd.setDate(weekEnd.getDate() + 6);

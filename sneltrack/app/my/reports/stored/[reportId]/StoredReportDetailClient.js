@@ -59,8 +59,8 @@ function formatFilters(filters) {
   if (filters.customStartDate && filters.customEndDate) {
     parts.push(
       `Periode: ${formatDateShort(filters.customStartDate)} - ${formatDateShort(
-        filters.customEndDate
-      )}`
+        filters.customEndDate,
+      )}`,
     );
   } else if (filters.rangeType && filters.referenceDate) {
     const rangeTypeLabels = {
@@ -78,7 +78,7 @@ function formatFilters(filters) {
     parts.push(
       `${filters.selectedProjectIds.length} ${
         filters.selectedProjectIds.length === 1 ? "project" : "projecten"
-      } geselecteerd`
+      } geselecteerd`,
     );
   } else {
     parts.push("Alle projecten");
@@ -92,14 +92,14 @@ function formatFilters(filters) {
   };
   parts.push(
     billableLabels[filters.billableFilter] ||
-      "Factureerbaar en niet factureerbaar"
+      "Factureerbaar en niet factureerbaar",
   );
 
   // Include expenses
   parts.push(
     filters.includeExpenses !== false
       ? "Uitgaven inbegrepen"
-      : "Uitgaven uitgesloten"
+      : "Uitgaven uitgesloten",
   );
 
   return parts;
@@ -487,7 +487,7 @@ export default function StoredReportDetailClient({ report, userName }) {
         selectedProjectIds: filters.selectedProjectIds || [],
         billableFilter: filters.billableFilter || "both",
         includeExpenses: filters.includeExpenses !== false,
-      }
+      },
     );
 
     // Navigate to main reports page
@@ -514,7 +514,7 @@ export default function StoredReportDetailClient({ report, userName }) {
     cards.push({
       id: "category-breakdown",
       title: `Verdeling van totale opbrengst van ${formatMoney(
-        totals.totalBillableAmount
+        totals.totalBillableAmount,
       )}`,
       content: <CategoryBreakdownPieChart totals={totals} />,
     });

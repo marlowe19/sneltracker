@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { auth0 } from "@/lib/auth/auth0";
 import Link from "next/link";
-import AppleCalendarConnectionClient from "../components/AppleCalendarConnectionClient";
 import WeeklyHoursClient from "../components/WeeklyHoursClient";
+import ProfileSettingsClient from "./ProfileSettingsClient";
+import XPClient from "./XPClient";
 
 export const dynamic = "force-dynamic";
 
@@ -70,13 +71,21 @@ export default async function ProfilePage({ request }) {
               </p>
             </div> */}
             <div className="border-t border-gray-200 pt-4">
-              <div className="text-xs px-4">App versie: 2.5.1</div>
+              <div className="text-xs px-4">App versie: 2.6.0</div>
             </div>
           </div>
-          <WeeklyHoursClient />
+          {/* <WeeklyHoursClient /> */}
 
-          <AppleCalendarConnectionClient user={user.sub} />
+          <section className="mt-6">
+            <XPClient />
+          </section>
 
+          <section className="flex flex-col gap-2">
+            <h1 className="text-xl pt-4 font-semibold text-gray-900 mb-4">
+              Instellingen
+            </h1>
+            <ProfileSettingsClient userId={user.sub} />
+          </section>
           <div className="mt-6">
             <Link
               href="/auth/logout"
