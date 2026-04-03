@@ -2,7 +2,6 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useStore } from "@/stores/useStore";
 
 export default function StartStopButtonsClient({ user, active, onStopClick }) {
@@ -16,6 +15,11 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [loadingActivities, setLoadingActivities] = useState(false);
 
+  // User-level activities (Activiteiten) - can start without project
+  const [userActivities, setUserActivities] = useState([]);
+  const [selectedUserActivity, setSelectedUserActivity] = useState(null);
+  const [loadingUserActivities, setLoadingUserActivities] = useState(false);
+
   // Pre-select default project when projects are loaded
   useEffect(() => {
     if (projects.length > 0 && !selectedProjectId) {
@@ -26,7 +30,30 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
     }
   }, [projects, selectedProjectId]);
 
-  // Fetch activities when project is selected
+  // Fetch user activities (non-archived)
+  useEffect(() => {
+    fetchUserActivities();
+  }, []);
+
+  async function fetchUserActivities() {
+    setLoadingUserActivities(true);
+    try {
+      const res = await fetch("/my/api/activities", { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        setUserActivities(data.activities || []);
+      } else {
+        setUserActivities([]);
+      }
+    } catch (error) {
+      console.error("Error fetching user activities:", error);
+      setUserActivities([]);
+    } finally {
+      setLoadingUserActivities(false);
+    }
+  }
+
+  // Fetch project activities when project is selected
   useEffect(() => {
     if (selectedProjectId) {
       fetchProjectActivities(selectedProjectId);
@@ -65,16 +92,25 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
     try {
       const url = new URL(`/my/${action}`, window.location.origin);
       if (action === "start") {
-        if (selectedProjectId) {
-          url.searchParams.set("project", selectedProjectId);
-        }
-        if (selectedActivity) {
-          url.searchParams.set("activity_type", selectedActivity.name);
-          if (selectedActivity.hourly_rate) {
-            url.searchParams.set(
-              "activity_hourly_rate",
-              selectedActivity.hourly_rate.toString()
-            );
+        // Activity-first: user activity (no project required)
+        if (selectedUserActivity) {
+          url.searchParams.set("activity_id", selectedUserActivity.id);
+          if (selectedProjectId) {
+            url.searchParams.set("project", selectedProjectId);
+          }
+        } else {
+          // Project flow: project + optional project activity
+          if (selectedProjectId) {
+            url.searchParams.set("project", selectedProjectId);
+          }
+          if (selectedActivity) {
+            url.searchParams.set("activity_type", selectedActivity.name);
+            if (selectedActivity.hourly_rate) {
+              url.searchParams.set(
+                "activity_hourly_rate",
+                selectedActivity.hourly_rate.toString()
+              );
+            }
           }
         }
       }
@@ -87,6 +123,45 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
 
   return (
     <div className="mt-4 space-y-3">
+      {/* User activities - start without project */}
+      {!active && userActivities.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-xs text-gray-500">Start op activiteit</div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedUserActivity(null)}
+              className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                !selectedUserActivity
+                  ? "bg-[#008eff] text-white border-[#008eff]"
+                  : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+              }`}
+            >
+              Geen
+            </button>
+            {userActivities.map((activity) => (
+              <button
+                key={activity.id}
+                type="button"
+                onClick={() => setSelectedUserActivity(activity)}
+                className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+                  selectedUserActivity?.id === activity.id
+                    ? "bg-[#008eff] text-white border-[#008eff]"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                {activity.name}
+                {activity.hourly_rate != null && (
+                  <span className="ml-1 text-xs">
+                    (€{parseFloat(activity.hourly_rate).toFixed(2)}/uur)
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {projects.length > 0 && (
         <div>
           <button
@@ -98,7 +173,9 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
               {selectedProjectId
                 ? projects.find((p) => p.id === selectedProjectId)?.name ||
                   "Selecteer project"
-                : "Selecteer project (optioneel)"}
+                : selectedUserActivity
+                  ? "Selecteer project (optioneel)"
+                  : "Selecteer project (optioneel)"}
             </span>
             <span className="text-gray-400">▼</span>
           </button>
@@ -155,8 +232,9 @@ export default function StartStopButtonsClient({ user, active, onStopClick }) {
         </div>
       )}
 
-      {/* Activity Selector - only show if project has activities and not active */}
+      {/* Project activity selector - only when project selected and no user activity */}
       {!active &&
+        !selectedUserActivity &&
         selectedProjectId &&
         projectActivities.length > 0 && (
           <div className="space-y-2">

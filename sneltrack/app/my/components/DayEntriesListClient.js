@@ -2138,13 +2138,13 @@ export default function DayEntriesListClient({
                         )}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Projectnaam *
+                            Projectnaam
                           </label>
                           <select
                             value={
                               entry.project_editable !== undefined
                                 ? entry.project_editable || ""
-                                : entry.project_name || ""
+                                : entry.project_id || ""
                             }
                             onChange={(e) =>
                               handleEntryChange(
@@ -2155,9 +2155,8 @@ export default function DayEntriesListClient({
                             }
                             disabled={isSaving || isDeleting}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                            required
                           >
-                            <option value="">Selecteer een project</option>
+                            <option value="">Geen project</option>
                             {projects
                               .filter((x) => x.status !== "archived")
                               .map((project) => (
@@ -2170,7 +2169,9 @@ export default function DayEntriesListClient({
                           </select>
                         </div>
 
-                        {(entry.project_editable || entry.project) && (
+                        {(entry.project_editable !== undefined ||
+                          entry.project ||
+                          entry.project_id === null) && (
                           <>
                             {entry.is_running === true ? (
                               <>

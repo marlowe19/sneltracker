@@ -20,6 +20,7 @@ import {
   getCurrentActivity,
   updateTimerActivity,
 } from "./timerActivitiesService";
+import { getUserActivityById } from "./userActivitiesService";
 
 /**
  * Looks up a Supabase project UUID by Firestore project ID
@@ -1065,11 +1066,13 @@ export async function createEntry(
  * Starts a new time entry in Supabase
  * Creates a running entry with is_running = true
  * Handles project lookup (Firestore ID or Supabase UUID), rate determination, and shared project membership
+ * Supports activity-first flow: activity_id (user_activity) can start without project
  *
  * @param {string} userName - Username starting the entry
  * @param {number|null} hourlyRate - Optional hourly rate (will be overridden by project/member rate if available)
  * @param {string|null} project - Project identifier (Firestore ID or Supabase UUID)
- * @param {string|null} activityType - Optional activity type to start with
+ * @param {string|null} activityId - Optional user_activity UUID (activity-first flow, no project required)
+ * @param {string|null} activityType - Optional activity type name (project activity flow)
  * @param {number|null} activityHourlyRate - Optional hourly rate for the activity
  * @returns {Promise<Object>} Created time entry matching Firestore format
  */
@@ -1077,6 +1080,7 @@ export async function startEntry(
   userName,
   hourlyRate = null,
   project = null,
+  activityId = null,
   activityType = null,
   activityHourlyRate = null
 ) {
@@ -1085,6 +1089,36 @@ export async function startEntry(
   // Resolve project and determine hourly rate
   const { supabaseProjectId, firestoreProjectId, finalHourlyRate } =
     await resolveProjectAndRate(userName, project, hourlyRate);
+
+  // Activity-first: resolve user_activity when activity_id provided
+  let resolvedActivityType = activityType;
+  let resolvedActivityHourlyRate = activityHourlyRate;
+  let resolvedUserActivityId = null;
+
+  if (activityId) {
+    const userActivity = await getUserActivityById(activityId);
+    if (!userActivity) {
+      throw new Error(`User activity ${activityId} not found`);
+    }
+    const userIdForAuth = await lookupUserIdByUsername(userName);
+    if (userActivity.user_id !== userIdForAuth) {
+      throw new Error("User activity does not belong to user");
+    }
+    resolvedActivityType = userActivity.name;
+    resolvedActivityHourlyRate =
+      userActivity.hourly_rate != null ? userActivity.hourly_rate : activityHourlyRate;
+    resolvedUserActivityId = activityId;
+  }
+
+  // Use user activity rate when no project rate
+  const entryHourlyRate =
+    finalHourlyRate !== null && finalHourlyRate !== undefined
+      ? finalHourlyRate
+      : resolvedActivityHourlyRate != null
+        ? (typeof resolvedActivityHourlyRate === "string"
+            ? parseFloat(resolvedActivityHourlyRate)
+            : resolvedActivityHourlyRate)
+        : null;
 
   // Look up user_id from user_name
   const userId = await lookupUserIdByUsername(userName);
@@ -1096,12 +1130,7 @@ export async function startEntry(
     start_time: now.toISOString(),
     end_time: null,
     duration_ms: null,
-    hourly_rate:
-      finalHourlyRate !== null && finalHourlyRate !== undefined
-        ? typeof finalHourlyRate === "string"
-          ? parseFloat(finalHourlyRate)
-          : finalHourlyRate
-        : null,
+    hourly_rate: entryHourlyRate,
     project_id: supabaseProjectId,
     firestore_project_id: firestoreProjectId,
     billable: true, // Default to billable
@@ -1116,10 +1145,15 @@ export async function startEntry(
   const entry = await insertEntryWithProjectInfo(entryData, userName);
 
   // If activity type is provided, start the first activity
-  if (activityType && entry.id) {
+  if (resolvedActivityType && entry.id) {
     try {
-      // Pass userId to startActivity
-      await startActivity(entry.id, activityType, activityHourlyRate, userId);
+      await startActivity(
+        entry.id,
+        resolvedActivityType,
+        resolvedActivityHourlyRate,
+        userId,
+        resolvedUserActivityId
+      );
     } catch (error) {
       console.error("Error starting activity:", error);
       // Don't fail the entry creation if activity creation fails

@@ -8,14 +8,15 @@ export const GET = auth0.withApiAuthRequired(async (req, context) => {
   const url = new URL(req.url);
   const rate = url.searchParams.get("rate");
   const project = url.searchParams.get("project");
+  const activityId = url.searchParams.get("activity_id");
   const activityType = url.searchParams.get("activity_type");
   const activityHourlyRate = url.searchParams.get("activity_hourly_rate");
 
-  console.log("startEntry--------------------", user);
   await startEntry(
     user,
     rate ? parseFloat(rate) : null,
     project,
+    activityId,
     activityType,
     activityHourlyRate ? parseFloat(activityHourlyRate) : null
   );
@@ -31,6 +32,7 @@ export const POST = auth0.withApiAuthRequired(async (req, context) => {
   // Support both query params and body
   const rate = body.rate || url.searchParams.get("rate");
   const project = body.project || url.searchParams.get("project");
+  const activityId = body.activity_id || url.searchParams.get("activity_id");
   const activityType =
     body.activity_type || url.searchParams.get("activity_type");
   const activityHourlyRate =
@@ -40,6 +42,7 @@ export const POST = auth0.withApiAuthRequired(async (req, context) => {
     user,
     rate ? parseFloat(rate) : null,
     project,
+    activityId,
     activityType,
     activityHourlyRate ? parseFloat(activityHourlyRate) : null
   );

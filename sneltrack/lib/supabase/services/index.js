@@ -10,5 +10,6 @@ export * as projectsService from "./projectsService";
 export * as reportsService from "./reportsService";
 export * as expensesService from "./expensesService";
 export * as fixedExpensesService from "./fixedExpensesService";
+export * as userActivitiesService from "./userActivitiesService";
 export * as xpService from "./xpService";
 
