@@ -46,7 +46,7 @@ export default function TimerSectionWrapperClient({
   return (
     <>
       {/* <HeaderSectionClient user={user} onAddTimer={handleAddTimer} /> */}
-      <section className="flex-1 min-h-0 border-t border-gray-200 overflow-y-auto overscroll-contain relative flex flex-col justify-between">
+      <section className="flex-1 min-h-0  overflow-y-auto overscroll-contain relative flex flex-col justify-between">
         {/* {todaysQuote && (
           <div className="absolute bottom-0 left-0 right-0 pointer-events-none flex items-end justify-center pb-4">
             <div className="text-center px-4 max-w-md mx-auto">
