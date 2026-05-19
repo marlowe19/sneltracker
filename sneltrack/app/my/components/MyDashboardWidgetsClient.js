@@ -134,6 +134,7 @@ export default function MyDashboardWidgetsClient() {
     try {
       const res = await fetch("/my/api/dashboard-stats", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildDashboardStatsBody()),
       });
@@ -169,11 +170,20 @@ export default function MyDashboardWidgetsClient() {
   }
 
   if (error || !data) {
-    return error ? (
+    return (
       <section className="w-full px-4 pt-2 pb-1 shrink-0">
-        <p className="text-center text-xs text-gray-500">{error}</p>
+        <p className="text-center text-xs text-rose-600">
+          {error || "Kon statistieken niet laden"}
+        </p>
+        <button
+          type="button"
+          onClick={load}
+          className="mt-2 mx-auto block text-xs font-medium text-[#008eff] underline"
+        >
+          Opnieuw proberen
+        </button>
       </section>
-    ) : null;
+    );
   }
 
   const { weekly, monthGap } = data;
@@ -187,7 +197,10 @@ export default function MyDashboardWidgetsClient() {
   });
 
   return (
-    <section className="w-full px-4 pt-3 pb-2 shrink-0 space-y-3">
+    <section
+      className="w-full px-4 pt-3 pb-2 shrink-0 space-y-3 relative z-20 bg-white border-b border-gray-100"
+      aria-label="Dashboard statistieken"
+    >
       <div>
         <h2 className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase mb-2">
           Deze week t.o.v. gemiddelde vorige 2 weken
