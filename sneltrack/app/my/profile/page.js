@@ -81,7 +81,7 @@ export default async function ProfilePage({ request }) {
 
           <section className="flex flex-col gap-2">
             <h1 className="text-xl pt-4 font-semibold text-gray-900 mb-4">
-              Instellingenn
+              Instellingen
             </h1>
             <ProfileSettingsClient userId={user.sub} />
           </section>

@@ -21,6 +21,7 @@ import {
   updateTimerActivity,
 } from "./timerActivitiesService";
 import { getUserActivityById } from "./userActivitiesService";
+import { resolveEffectiveProjectActivityHourlyRate } from "./projectActivitiesService";
 
 /**
  * Looks up a Supabase project UUID by Firestore project ID
@@ -133,6 +134,12 @@ async function resolveProjectAndRate(
   }
 
   return { supabaseProjectId, firestoreProjectId, finalHourlyRate };
+}
+
+function coerceHourlyRate(v) {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "string" ? parseFloat(v) : Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 /**
@@ -340,33 +347,66 @@ export async function updateEntry(userName, entryId, updates) {
 
           if (!detailError && projectDetail && projectDetail.length > 0) {
             const detail = projectDetail[0];
-            let finalHourlyRate = currentEntry?.hourly_rate ?? null;
 
+            const { data: activeTa } = await supabaseServer
+              .from("timer_activities")
+              .select("activity_type, user_activity_id")
+              .eq("time_entry_id", entryId)
+              .is("end_time", null)
+              .order("start_time", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            let activityRow = activeTa;
+            if (!activityRow) {
+              const { data: firstTa } = await supabaseServer
+                .from("timer_activities")
+                .select("activity_type, user_activity_id")
+                .eq("time_entry_id", entryId)
+                .order("start_time", { ascending: true })
+                .limit(1)
+                .maybeSingle();
+              activityRow = firstTa;
+            }
+
+            let explicitProjectActivityRate = null;
+            if (activityRow?.activity_type) {
+              explicitProjectActivityRate =
+                await resolveEffectiveProjectActivityHourlyRate(
+                  projectData.id,
+                  activityRow.activity_type,
+                  activityRow.user_activity_id,
+                  userName
+                );
+            }
+
+            let memberOrProject = null;
             if (detail.is_shared) {
-              // For shared projects: member rate takes priority
               if (
                 detail.member_hourly_rate !== null &&
                 detail.member_hourly_rate !== undefined
               ) {
-                finalHourlyRate = detail.member_hourly_rate;
+                memberOrProject = detail.member_hourly_rate;
               } else if (
                 detail.hourly_rate !== null &&
                 detail.hourly_rate !== undefined
               ) {
-                finalHourlyRate = detail.hourly_rate;
+                memberOrProject = detail.hourly_rate;
               }
-            } else {
-              // For non-shared projects: use project rate if available
-              if (
-                detail.hourly_rate !== null &&
-                detail.hourly_rate !== undefined
-              ) {
-                finalHourlyRate = detail.hourly_rate;
-              }
+            } else if (
+              detail.hourly_rate !== null &&
+              detail.hourly_rate !== undefined
+            ) {
+              memberOrProject = detail.hourly_rate;
             }
 
-            if (finalHourlyRate !== null && finalHourlyRate !== undefined) {
-              fieldsToUpdate.hourly_rate = finalHourlyRate;
+            const effective =
+              explicitProjectActivityRate ??
+              coerceHourlyRate(memberOrProject) ??
+              coerceHourlyRate(currentEntry?.hourly_rate);
+
+            if (effective !== null && Number.isFinite(effective)) {
+              fieldsToUpdate.hourly_rate = effective;
             }
           }
         }
@@ -920,6 +960,8 @@ export async function getActiveEntries(userName) {
       creation_method,
       is_running,
       firestore_id,
+      has_activities,
+      current_activity_id,
       projects:project_id (
         id,
         name,
@@ -959,6 +1001,8 @@ export async function getActiveEntries(userName) {
       creation_method: row.creation_method ?? null,
       is_running: row.is_running ?? false,
       firestore_id: row.firestore_id,
+      has_activities: row.has_activities ?? false,
+      current_activity_id: row.current_activity_id ?? null,
     };
   });
 }
@@ -1110,15 +1154,27 @@ export async function startEntry(
     resolvedUserActivityId = activityId;
   }
 
-  // Use user activity rate when no project rate
-  const entryHourlyRate =
-    finalHourlyRate !== null && finalHourlyRate !== undefined
-      ? finalHourlyRate
-      : resolvedActivityHourlyRate != null
-        ? (typeof resolvedActivityHourlyRate === "string"
-            ? parseFloat(resolvedActivityHourlyRate)
-            : resolvedActivityHourlyRate)
-        : null;
+  const userOrParamActivityRate = coerceHourlyRate(resolvedActivityHourlyRate);
+  let explicitProjectActivityRate = null;
+  if (resolvedActivityType && supabaseProjectId) {
+    explicitProjectActivityRate =
+      await resolveEffectiveProjectActivityHourlyRate(
+        supabaseProjectId,
+        resolvedActivityType,
+        resolvedUserActivityId,
+        userName
+      );
+  }
+
+  // Precedence: project activity rate → member/project default → user global / param
+  const memberOrProjectRate = coerceHourlyRate(finalHourlyRate);
+  const effectiveHourlyRate =
+    explicitProjectActivityRate ??
+    memberOrProjectRate ??
+    userOrParamActivityRate;
+
+  const entryHourlyRate = effectiveHourlyRate;
+  resolvedActivityHourlyRate = effectiveHourlyRate;
 
   // Look up user_id from user_name
   const userId = await lookupUserIdByUsername(userName);

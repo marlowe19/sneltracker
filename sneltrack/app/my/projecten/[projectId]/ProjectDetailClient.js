@@ -35,6 +35,7 @@ export default function ProjectDetailClient({
   projectId,
   project,
   isOwner,
+  canManageActivities = false,
   initialMembers = [],
   initialMemberStats = null,
   isShared,
@@ -673,7 +674,13 @@ export default function ProjectDetailClient({
 
       {activeTab === "activities" && (
         <div>
-          <ProjectActivitiesTab projectId={projectId} isOwner={isOwner} />
+          <ProjectActivitiesTab
+            projectId={projectId}
+            canManageActivities={canManageActivities}
+            isShared={isShared}
+            members={members}
+            ownerUserName={project?.owner ?? null}
+          />
         </div>
       )}
       {activeTab === "settings" && (

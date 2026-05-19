@@ -8,7 +8,7 @@ import TimerSectionWrapperClient from "./TimerSectionWrapperClient";
 import WeekEntriesClient from "./WeekEntriesClient";
 import ProjectsHydrator from "./ProjectsHydrator";
 import { useStore } from "@/stores/useStore";
-import CalendarViewClient from "./components/CalendarViewClient";
+import MyDashboardWidgetsClient from "./components/MyDashboardWidgetsClient";
 import SyncOnLoginClient from "../components/SyncOnLoginClient";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +53,7 @@ async function UserPageContent({ user, weekOffset }) {
       <ProjectsHydrator user={user} initialProjects={projects} />
       <SyncOnLoginClient user={user} />
       <main className=" mx-auto max-w-md sm:max-w-xl md:max-w-2xl flex flex-col h-dvh overflow-hidden">
+        <MyDashboardWidgetsClient />
         {/* Week entries section - client component with spinner */}
         <WeekEntriesClient user={user} weekOffset={weekOffset} />
         {/* <CalendarViewClient viewType="week" user={user} /> */}

@@ -363,6 +363,7 @@ export const GET = async (req) => {
           user,
           rate ? parseFloat(rate) : null,
           selectedProject,
+          null,
           activityType,
           activityHourlyRate
         );
@@ -493,6 +494,7 @@ export const POST = async (req) => {
           user,
           rate ? parseFloat(rate) : null,
           selectedProject,
+          null,
           activityType,
           activityHourlyRate
         );

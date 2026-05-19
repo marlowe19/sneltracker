@@ -42,6 +42,9 @@ export default async function ProjectDetailPage({ params, request }) {
   const isOwner = projectDetail.is_owner;
   const members = projectDetail.members || [];
   const memberStats = projectDetail.memberStatistics || null;
+  const currentUserMember = members.find((m) => m.user_name === user);
+  const canManageActivities =
+    isOwner || currentUserMember?.role === "owner";
 
   return (
     <main className="flex flex-col h-screen overflow-hidden">
@@ -79,6 +82,7 @@ export default async function ProjectDetailPage({ params, request }) {
             projectId={projectId}
             project={project}
             isOwner={isOwner}
+            canManageActivities={canManageActivities}
             initialMembers={members}
             initialMemberStats={memberStats}
             isShared={project.is_shared}

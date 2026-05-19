@@ -232,7 +232,7 @@ export default function ActivitiesClient({ userId }) {
       toast.show("Link gekopieerd!");
     } catch (err) {
       console.error("Error copying link:", err);
-      toast.show("Fout bij kopiëren van link");
+      toast.show("Fout bij kopiëren van link", { variant: "error" });
     }
   }
 

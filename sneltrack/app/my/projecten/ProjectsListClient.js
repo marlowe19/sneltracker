@@ -47,7 +47,9 @@ export default function ProjectsListClient({ user, initialProjects }) {
     if (project.is_shared && project.owner !== user) {
       // Also check if user has owner role in project members
       if (project.member_role !== "owner") {
-        toast.show("alleen de eigenaar heeft toegang tot het project");
+        toast.show("alleen de eigenaar heeft toegang tot het project", {
+          variant: "error",
+        });
         return;
       }
     }

@@ -468,11 +468,13 @@ export default function DayEntriesListClient({
         startTransition(() => router.refresh());
       } else {
         const error = await res.json();
-        toast.show(error.message || "Fout bij bijwerken van activiteit");
+        toast.show(error.message || "Fout bij bijwerken van activiteit", {
+          variant: "error",
+        });
       }
     } catch (error) {
       console.error("Error updating activity:", error);
-      toast.show("Fout bij bijwerken van activiteit");
+      toast.show("Fout bij bijwerken van activiteit", { variant: "error" });
     }
   };
 
@@ -501,11 +503,13 @@ export default function DayEntriesListClient({
         startTransition(() => router.refresh());
       } else {
         const error = await res.json();
-        toast.show(error.message || "Fout bij verwijderen van activiteit");
+        toast.show(error.message || "Fout bij verwijderen van activiteit", {
+          variant: "error",
+        });
       }
     } catch (error) {
       console.error("Error deleting activity:", error);
-      toast.show("Fout bij verwijderen van activiteit");
+      toast.show("Fout bij verwijderen van activiteit", { variant: "error" });
     }
   };
 

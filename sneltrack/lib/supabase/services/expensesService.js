@@ -179,6 +179,31 @@ export async function getWeekExpenses(userName, weekStart, weekEnd) {
 }
 
 /**
+ * Gets expenses between two calendar dates (inclusive), by user.
+ *
+ * @param {string} userName - Username
+ * @param {string} fromDateStr - YYYY-MM-DD
+ * @param {string} toDateStr - YYYY-MM-DD
+ * @returns {Promise<Array>} Expenses in client format
+ */
+export async function getExpensesBetweenDates(userName, fromDateStr, toDateStr) {
+  const { data, error } = await supabaseServer
+    .from("expenses")
+    .select("*, users!user_id(name)")
+    .eq("user_name", userName)
+    .gte("date", fromDateStr)
+    .lte("date", toDateStr)
+    .order("date", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching expenses in date range:", error);
+    throw error;
+  }
+
+  return (data || []).map(mapExpenseToClient);
+}
+
+/**
  * Get expenses matching stored report filters
  * Reconstructs the exact query that generated the report
  *
