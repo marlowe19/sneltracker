@@ -29,8 +29,9 @@ function formatMoney(amount) {
 }
 
 function formatHours(totalHours) {
-  const hours = Math.floor(totalHours);
-  const minutes = Math.round((totalHours - hours) * 60);
+  const h = Number(totalHours ?? 0);
+  const hours = Math.floor(h);
+  const minutes = Math.round((h - hours) * 60);
   if (hours === 0) {
     return `${minutes}m`;
   }
@@ -139,8 +140,8 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
                 <Pie
                   data={memberStatistics.map((member) => ({
                     name: member.user_display_name || member.user_name,
-                    value: parseFloat(member.totalHours.toFixed(2)),
-                    hours: member.totalHours,
+                    value: Number(member.totalHours ?? 0),
+                    hours: Number(member.totalHours ?? 0),
                   }))}
                   cx="50%"
                   cy="50%"
