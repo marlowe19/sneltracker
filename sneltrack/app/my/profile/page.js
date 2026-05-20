@@ -77,7 +77,7 @@ export default async function ProfilePage({ request }) {
               </p>
             </div> */}
             <div className="border-t border-gray-200 pt-4">
-              <div className="text-xs px-4">App versie: 2.7.2</div>
+              <div className="text-xs px-4">App versie: 2.7.3</div>
             </div>
           </div>
           {/* <WeeklyHoursClient /> */}
