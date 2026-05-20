@@ -11,11 +11,20 @@ import MyDashboardWidgetsClient from "./MyDashboardWidgetsClient";
 export default function DashboardWidgetsGateClient({ initialActiveEntries = [] }) {
   const activeEntries = useStore((state) => state.activeEntries);
   const pendingTimers = useStore((state) => state.pendingTimers);
+  const showDashboardWidgets = useStore((state) => state.showDashboardWidgets);
+  const hydrateDashboardWidgetsPreference = useStore(
+    (state) => state.hydrateDashboardWidgetsPreference,
+  );
   const [storeSynced, setStoreSynced] = useState(false);
 
   useEffect(() => {
+    hydrateDashboardWidgetsPreference();
     setStoreSynced(true);
-  }, []);
+  }, [hydrateDashboardWidgetsPreference]);
+
+  if (!showDashboardWidgets) {
+    return null;
+  }
 
   const hasTimerTakingSpace = storeSynced
     ? activeEntries.length > 0 || pendingTimers.length > 0

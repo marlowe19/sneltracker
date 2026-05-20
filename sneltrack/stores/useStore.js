@@ -1,5 +1,9 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
+import {
+  getShowDashboardWidgets,
+  setShowDashboardWidgets as persistShowDashboardWidgets,
+} from "@/lib/preferences/dashboardWidgets";
 
 // Format date as YYYY-MM-DD in local timezone (not UTC)
 // This ensures the correct day is used regardless of timezone
@@ -43,8 +47,25 @@ export const useStore = create(
       userDisplayName: null,
       loadingUserDisplayName: false,
       userDisplayNameError: null,
+      showDashboardWidgets: true,
+      dashboardWidgetsPreferenceHydrated: false,
 
       // ========== User Actions ==========
+      hydrateDashboardWidgetsPreference: () => {
+        const { dashboardWidgetsPreferenceHydrated } = get();
+        if (dashboardWidgetsPreferenceHydrated) {
+          return;
+        }
+        set({
+          showDashboardWidgets: getShowDashboardWidgets(),
+          dashboardWidgetsPreferenceHydrated: true,
+        });
+      },
+
+      setShowDashboardWidgets: (enabled) => {
+        persistShowDashboardWidgets(enabled);
+        set({ showDashboardWidgets: enabled });
+      },
       fetchUserDisplayName: async () => {
         const currentState = get();
         // Prevent concurrent fetches
