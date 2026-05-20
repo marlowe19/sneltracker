@@ -25,7 +25,8 @@ export const POST = auth0.withApiAuthRequired(async (req, context) => {
       entryId,
       body.activity_type,
       body.hourly_rate ?? null,
-      userId
+      userId,
+      body.user_activity_id ?? null
     );
 
     return NextResponse.json({ activity });

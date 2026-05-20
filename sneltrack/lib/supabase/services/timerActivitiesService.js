@@ -154,7 +154,8 @@ export async function switchActivity(
   timeEntryId,
   activityType,
   hourlyRate,
-  userId = null
+  userId = null,
+  userActivityId = null
 ) {
   if (!timeEntryId || !activityType) {
     throw new Error("Time entry ID and activity type are required");
@@ -207,8 +208,9 @@ export async function switchActivity(
     end_time: null,
     duration_ms: null,
     billable: true,
-    display_order: (count || 0),
+    display_order: count || 0,
     user_id: finalUserId,
+    user_activity_id: userActivityId ?? null,
     created_at: now,
     modified_at: now,
   };
@@ -224,12 +226,13 @@ export async function switchActivity(
     throw error;
   }
 
-  // Update time entry current activity
+  // Update time entry current activity and rate when switching
   await supabaseServer
     .from("time_entries")
     .update({
       has_activities: true,
       current_activity_id: data.id,
+      hourly_rate: hourlyRate ?? null,
       modified_at: now,
     })
     .eq("id", timeEntryId);

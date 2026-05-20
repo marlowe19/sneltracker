@@ -453,7 +453,8 @@ export default function ProjectDetailClient({
   }
 
   async function handleAddMember() {
-    if (!newMemberName.trim()) return;
+    const memberEmail = newMemberName.trim().toLowerCase();
+    if (!memberEmail) return;
 
     setMemberError(null);
     setIsAdding(true);
@@ -464,7 +465,7 @@ export default function ProjectDetailClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectId,
-          memberName: newMemberName.trim(),
+          memberName: memberEmail,
           hourly_rate: newMemberRate ? parseFloat(newMemberRate) : null,
         }),
       });
@@ -476,7 +477,7 @@ export default function ProjectDetailClient({
 
       // Optimistically update members list
       const newMember = {
-        user_name: newMemberName.trim(),
+        user_name: memberEmail,
         role: "member",
         hourly_rate: newMemberRate ? parseFloat(newMemberRate) : null,
       };
@@ -1058,7 +1059,7 @@ export default function ProjectDetailClient({
                           handleAddMember();
                         }
                       }}
-                      placeholder="Gebruikersnaam"
+                      placeholder="E-mailadres"
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-base"
                     />
                     <button
