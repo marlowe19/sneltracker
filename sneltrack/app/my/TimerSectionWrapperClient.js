@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useStore } from "@/stores/useStore";
-import HeaderSectionClient from "./HeaderSectionClient";
 import TimerSectionClient from "./TimerSectionClient";
-import { getTodaysQuote } from "@/lib/quotes";
 
 export default function TimerSectionWrapperClient({
   user,
@@ -15,16 +13,6 @@ export default function TimerSectionWrapperClient({
   const hydrateStoppedTimers = useStore((state) => state.hydrateStoppedTimers);
   const addPendingTimer = useStore((state) => state.addPendingTimer);
 
-  // Calculate quote only on client side to avoid hydration mismatch
-  const [todaysQuote] = useState(() => {
-    // Only calculate on client side
-    if (typeof window !== "undefined") {
-      return getTodaysQuote();
-    }
-    return null;
-  });
-
-  // Hydrate active entries and stopped timers from server on mount
   useEffect(() => {
     hydrateActiveEntries(activeEntries);
     hydrateStoppedTimers(stoppedTimers || []);
@@ -45,32 +33,26 @@ export default function TimerSectionWrapperClient({
 
   return (
     <>
-      {/* <HeaderSectionClient user={user} onAddTimer={handleAddTimer} /> */}
-      <section className="flex-1 min-h-0  overflow-y-auto overscroll-contain relative flex flex-col justify-between">
-        {/* {todaysQuote && (
-          <div className="absolute bottom-0 left-0 right-0 pointer-events-none flex items-end justify-center pb-4">
-            <div className="text-center px-4 max-w-md mx-auto">
-              <p className="text-gray-700 text-sm italic mb-1">
-                &ldquo;{todaysQuote.quote}&rdquo;
-              </p>
-              <p className="text-gray-600 text-xs">— {todaysQuote.author}</p>
-            </div>
-          </div>
-        )} */}
-        <div className="pt-4 relative z-10">
+      <section className="flex-1 min-h-0 overflow-y-auto overscroll-contain relative">
+        <div className="pt-4 pb-[calc(3.5rem+20px)] relative z-10">
           <TimerSectionClient user={user} />
         </div>
-        <div className="px-4 pb-4">
-          <button
-            type="button"
-            onClick={handleAddTimer}
-            className="btn px-4 text-base rounded-lg w-full flex items-center gap-2 min-h-[24px] "
-            aria-label="Timer toevoegen"
-          >
-            <span>Timer toevoegen</span>
-          </button>
-        </div>
       </section>
+      <div
+        className="fixed left-1/2 z-40 w-full max-w-md -translate-x-1/2 px-4 py-[22px] sm:max-w-xl md:max-w-2xl"
+        style={{
+          bottom: "calc(3.5rem + env(safe-area-inset-bottom) + 10px)",
+        }}
+      >
+        <button
+          type="button"
+          onClick={handleAddTimer}
+          className="btn px-4 text-base rounded-lg w-full flex items-center gap-2 min-h-[24px]"
+          aria-label="Timer toevoegen"
+        >
+          <span>Timer toevoegen</span>
+        </button>
+      </div>
     </>
   );
 }
