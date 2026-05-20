@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { auth0 } from "@/lib/auth/auth0";
-import WeeklyHoursClient from "../components/WeeklyHoursClient";
+import {
+  lookupUserByUsername,
+  syncUserWithAuth0,
+} from "@/lib/supabase/services/projectsService";
 import ProfileSettingsClient from "./ProfileSettingsClient";
 import XPClient from "./XPClient";
 
@@ -14,9 +17,13 @@ export default async function ProfilePage({ request }) {
   }
 
   const user = session.user;
+  const auth0Id = user.sub;
+  const dbUser =
+    (await syncUserWithAuth0(auth0Id, user)) ||
+    (await lookupUserByUsername(auth0Id));
   const nickname = user.nickname || "";
   const email = user.email || "";
-  const name = user.name || "";
+  const name = dbUser?.name || user.name || "";
   const address = user.user_metadata?.address || user.address || "";
 
   return (
@@ -83,7 +90,7 @@ export default async function ProfilePage({ request }) {
             <h1 className="text-xl pt-4 font-semibold text-gray-900 mb-4">
               Instellingen
             </h1>
-            <ProfileSettingsClient userId={user.sub} />
+            <ProfileSettingsClient userId={auth0Id} />
           </section>
           <div className="mt-6">
             <a
