@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { auth0 } from "@/lib/auth/auth0";
-import Link from "next/link";
 import WeeklyHoursClient from "../components/WeeklyHoursClient";
 import ProfileSettingsClient from "./ProfileSettingsClient";
 import XPClient from "./XPClient";
@@ -87,12 +86,12 @@ export default async function ProfilePage({ request }) {
             <ProfileSettingsClient userId={user.sub} />
           </section>
           <div className="mt-6">
-            <Link
+            <a
               href="/auth/logout"
               className="w-full flex items-center justify-center px-4 py-3 border border-transparent rounded-lg text-base font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
             >
               Uitloggen
-            </Link>
+            </a>
           </div>
         </div>
       </div>

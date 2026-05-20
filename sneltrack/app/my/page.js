@@ -3,12 +3,10 @@ import { getActiveEntries } from "@/lib/supabase/services/timeEntriesService";
 import { getUserProjectsWithStats } from "@/lib/supabase/services/projectsService";
 import { redirect } from "next/navigation";
 import { auth0 } from "@/lib/auth/auth0";
-import Link from "next/link";
 import TimerSectionWrapperClient from "./TimerSectionWrapperClient";
 import WeekEntriesClient from "./WeekEntriesClient";
 import ProjectsHydrator from "./ProjectsHydrator";
-import { useStore } from "@/stores/useStore";
-import CalendarViewClient from "./components/CalendarViewClient";
+import DashboardWidgetsGateClient from "./components/DashboardWidgetsGateClient";
 import SyncOnLoginClient from "../components/SyncOnLoginClient";
 
 export const dynamic = "force-dynamic";
@@ -52,10 +50,9 @@ async function UserPageContent({ user, weekOffset }) {
     <>
       <ProjectsHydrator user={user} initialProjects={projects} />
       <SyncOnLoginClient user={user} />
-      <main className=" mx-auto max-w-md sm:max-w-xl md:max-w-2xl flex flex-col h-dvh overflow-hidden">
-        {/* Week entries section - client component with spinner */}
+      <main className="mx-auto max-w-md sm:max-w-xl md:max-w-2xl flex flex-col h-dvh overflow-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
         <WeekEntriesClient user={user} weekOffset={weekOffset} />
-        {/* <CalendarViewClient viewType="week" user={user} /> */}
+        <DashboardWidgetsGateClient initialActiveEntries={activeEntries} />
         <TimerSectionWrapperClient
           user={user}
           activeEntries={activeEntries}

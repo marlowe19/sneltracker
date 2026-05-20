@@ -67,13 +67,15 @@ export async function getCurrentActivity(timeEntryId) {
  * @param {string} activityType - Activity type name
  * @param {number|null} hourlyRate - Hourly rate for this activity
  * @param {string|null} userId - User ID (UUID) who created this activity
+ * @param {string|null} userActivityId - User activity UUID when started from user_activities (no project)
  * @returns {Promise<Object>} Created activity
  */
 export async function startActivity(
   timeEntryId,
   activityType,
   hourlyRate,
-  userId = null
+  userId = null,
+  userActivityId = null
 ) {
   if (!timeEntryId || !activityType) {
     throw new Error("Time entry ID and activity type are required");
@@ -111,6 +113,7 @@ export async function startActivity(
     billable: true,
     display_order: (count || 0),
     user_id: finalUserId,
+    user_activity_id: userActivityId ?? null,
     created_at: now,
     modified_at: now,
   };

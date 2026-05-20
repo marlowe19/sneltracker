@@ -7,7 +7,6 @@ export default function TimerActivitySwitcher({
   entryId,
   projectId,
   currentTime,
-  currentEarnings,
   onActivitySwitched,
 }) {
   const [activities, setActivities] = useState([]);
@@ -183,6 +182,10 @@ export default function TimerActivitySwitcher({
   const currentProjectActivity = activities.find(
     (a) => a.name === currentActivity?.activity_type
   );
+  const currentProjectDisplayRate = currentProjectActivity
+    ? currentProjectActivity.effective_hourly_rate ??
+      currentProjectActivity.hourly_rate
+    : null;
 
   return (
     <div className="mt-4 space-y-2">
@@ -214,9 +217,10 @@ export default function TimerActivitySwitcher({
                 <span className="text-lg">{getActivityIcon(currentProjectActivity)}</span>
                 <span>
                   {currentProjectActivity.name}
-                  {currentProjectActivity.hourly_rate && (
+                  {currentProjectDisplayRate != null &&
+                    currentProjectDisplayRate !== "" && (
                     <span className="ml-1 text-sm text-gray-500">
-                      {formatMoney(currentProjectActivity.hourly_rate)}/u
+                      {formatMoney(currentProjectDisplayRate)}/u
                     </span>
                   )}
                 </span>
@@ -260,6 +264,8 @@ export default function TimerActivitySwitcher({
           <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 z-50 min-w-[280px] max-h-60 overflow-y-auto">
             {activities.map((activity) => {
               const isActive = currentActivity?.activity_type === activity.name;
+              const displayRate =
+                activity.effective_hourly_rate ?? activity.hourly_rate;
               return (
                 <div key={activity.id}>
                   {activity.id !== activities[0]?.id && (
@@ -268,7 +274,7 @@ export default function TimerActivitySwitcher({
                   <button
                     type="button"
                     onClick={() =>
-                      handleSwitchActivity(activity.name, activity.hourly_rate)
+                      handleSwitchActivity(activity.name, displayRate ?? null)
                     }
                     disabled={switching || isActive}
                     className={`w-full px-3 py-2 text-base text-left hover:bg-gray-100 text-gray-700 flex items-center gap-2 ${
@@ -277,9 +283,9 @@ export default function TimerActivitySwitcher({
                   >
                     <span className="text-lg">{getActivityIcon(activity)}</span>
                     <span className="flex-1">{activity.name}</span>
-                    {activity.hourly_rate && (
+                    {displayRate != null && displayRate !== "" && (
                       <span className="text-sm text-gray-500">
-                        {formatMoney(activity.hourly_rate)}/u
+                        {formatMoney(displayRate)}/u
                       </span>
                     )}
                     {isActive && (

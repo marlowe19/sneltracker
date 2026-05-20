@@ -5,6 +5,7 @@ import { Activity, Receipt, ChevronRight, Trophy, Plug } from "@carbon/icons-rea
 import FullScreenModal from "@/app/components/FullScreenModal";
 import AppleCalendarConnectionClient from "../components/AppleCalendarConnectionClient";
 import FixedExpensesClient from "./FixedExpensesClient";
+import ActivitiesClient from "./ActivitiesClient";
 import LeaderboardClient from "./LeaderboardClient";
 
 const ITEMS = [
@@ -89,12 +90,10 @@ export default function ProfileSettingsClient({ userId }) {
               <AppleCalendarConnectionClient user={userId} embedded />
             ) : item.id === "onkosten" ? (
               <FixedExpensesClient userId={userId} />
+            ) : item.id === "activiteiten" ? (
+              <ActivitiesClient userId={userId} />
             ) : (
-              <p className="text-gray-600">
-                {item.id === "activiteiten"
-                  ? "Activiteiten-instellingen – binnenkort beschikbaar."
-                  : "Binnenkort beschikbaar."}
-              </p>
+              <p className="text-gray-600">Binnenkort beschikbaar.</p>
             )}
           </div>
         </FullScreenModal>
