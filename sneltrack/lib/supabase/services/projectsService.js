@@ -32,10 +32,12 @@ export async function lookupUserIdByUsername(username) {
 
 export async function lookupUserByEmail(email) {
   if (!email) return null;
+
+  const normalizedEmail = email.trim().toLowerCase();
   const { data, error } = await supabaseServer
     .from("users")
     .select("id, name, user_name")
-    .eq("email", email)
+    .ilike("email", normalizedEmail)
     .single();
 
   if (!error && data?.id) {
@@ -74,7 +76,9 @@ export async function syncUserWithAuth0(userName, auth0User) {
 
   const displayName =
     auth0User.name || auth0User.nickname || auth0User.email || null;
-  const email = auth0User.email || null;
+  const email = auth0User.email
+    ? auth0User.email.trim().toLowerCase()
+    : null;
 
   // First, check if user exists
   const existingUser = await lookupUserByUsername(userName);

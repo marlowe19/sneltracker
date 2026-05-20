@@ -181,8 +181,7 @@ export const POST = auth0.withApiAuthRequired(async (req) => {
       }
       // check if users exists in table based on the email and return the user by email
 
-      //lookup user by email
-      const foundUser = await lookupUserByEmail(memberName);
+      const foundUser = await lookupUserByEmail(memberName.trim());
       if (!foundUser) {
         return NextResponse.json(
           { error: "Gebruiker niet gevonden" },

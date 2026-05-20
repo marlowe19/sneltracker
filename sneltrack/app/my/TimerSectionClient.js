@@ -103,7 +103,10 @@ export default function TimerSectionClient({ user }) {
 
   useEffect(() => {
     const projectIds = [
-      ...new Set(pendingTimers.map((t) => t.projectId).filter(Boolean)),
+      ...new Set([
+        ...pendingTimers.map((t) => t.projectId).filter(Boolean),
+        ...activeEntries.map((e) => e.project_id).filter(Boolean),
+      ]),
     ];
     projectIds.forEach((projectId) => {
       setProjectActivitiesCache((prev) => {
@@ -134,7 +137,7 @@ export default function TimerSectionClient({ user }) {
           }));
         });
     });
-  }, [pendingTimers]);
+  }, [pendingTimers, activeEntries]);
 
   // Real-time update effect for cumulative earnings calculation
   useEffect(() => {
@@ -176,11 +179,9 @@ export default function TimerSectionClient({ user }) {
       const activitiesMap = {};
 
       for (const entry of activeEntries) {
-        if (entry.has_activities || entry.project_id) {
-          const activitiesData = await fetchEntryActivities(entry.id);
-          if (activitiesData) {
-            activitiesMap[entry.id] = activitiesData;
-          }
+        const activitiesData = await fetchEntryActivities(entry.id);
+        if (activitiesData) {
+          activitiesMap[entry.id] = activitiesData;
         }
       }
 
@@ -752,23 +753,16 @@ export default function TimerSectionClient({ user }) {
             )}
           </div>
 
-          {/* Activity Switcher - only show for active timers with project */}
-          {!isPendingTimer &&
-            entry &&
-            (entry.has_activities || entry.project_id) && (
-              <div className="mt-2 w-full">
-                <TimerActivitySwitcher
-                  entryId={entry.id}
-                  projectId={entry.project_id || entry.project}
-                  onActivitySwitched={() => refreshEntryActivities(entry.id)}
-                  currentTime={computeEntryDurationMs(
-                    entry.start_time,
-                    entry.end_time,
-                    entry.duration_ms
-                  )}
-                />
-              </div>
-            )}
+          {/* Activity switcher + breakdown for running timers */}
+          {!isPendingTimer && entry && (
+            <TimerActivitySwitcher
+              entryId={entry.id}
+              projectId={entry.project_id || null}
+              userActivities={userActivities}
+              onActivitySwitched={() => refreshEntryActivities(entry.id)}
+              currentTime={now}
+            />
+          )}
         </div>
 
         {/* Right column: Play/Stop button */}
