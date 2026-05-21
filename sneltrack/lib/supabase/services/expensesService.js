@@ -46,9 +46,11 @@ function mapExpenseToClient(row) {
   return {
     id: row.id, // Supabase UUID
     user_name: row.user_name,
-    user_display_name: row.users?.name ?? null, // ✅ User's display name from users table
+    user_display_name:
+      row.user_display_name ?? row.users?.name ?? null,
     project: row.firestore_project_id ?? null, // Firestore project ID for client compatibility
     project_id: row.project_id ?? null, // Supabase project UUID
+    project_name: row.project_name ?? row.projects?.name ?? null,
     name: row.name,
     price: row.price ?? null,
     includes_vat: row.includes_vat ?? false,
@@ -58,7 +60,119 @@ function mapExpenseToClient(row) {
     modified_at: row.modified_at
       ? new Date(row.modified_at).toISOString()
       : null,
+    billing_status: row.billing_status ?? "draft",
   };
+}
+
+/**
+ * Shared projects where the user is creator or has role 'owner' in project_members.
+ * @param {string} userName
+ * @returns {Promise<string[]>}
+ */
+async function getOwnerLevelSharedProjectIds(userName) {
+  const ids = new Set();
+
+  const { data: creatorProjects, error: creatorError } = await supabaseServer
+    .from("projects")
+    .select("id")
+    .eq("is_shared", true)
+    .eq("owner_name", userName);
+
+  if (creatorError) {
+    console.error("Error fetching creator shared projects:", creatorError);
+    throw creatorError;
+  }
+
+  for (const row of creatorProjects || []) {
+    if (row.id) ids.add(row.id);
+  }
+
+  const { data: ownerMembers, error: memberError } = await supabaseServer
+    .from("project_members")
+    .select("project_id")
+    .eq("user_name", userName)
+    .eq("role", "owner");
+
+  if (memberError) {
+    console.error("Error fetching owner-role memberships:", memberError);
+    throw memberError;
+  }
+
+  for (const row of ownerMembers || []) {
+    if (row.project_id) ids.add(row.project_id);
+  }
+
+  return Array.from(ids);
+}
+
+const EXPENSE_SELECT_WITH_JOINS = `
+  *,
+  users!user_id(name),
+  projects:project_id (
+    id,
+    name,
+    owner_name,
+    is_shared
+  )
+`;
+
+/**
+ * Own expenses plus team expenses on shared projects where user is creator or owner-role member.
+ * @param {string} userName
+ * @param {{ dateEq?: string, dateGte?: string, dateLte?: string }} dateFilter
+ * @returns {Promise<Array>}
+ */
+async function fetchVisibleExpenses(userName, dateFilter) {
+  const sharedProjectIds = await getOwnerLevelSharedProjectIds(userName);
+  const rowsById = new Map();
+
+  const applyDateFilter = (query) => {
+    if (dateFilter.dateEq) {
+      return query.eq("date", dateFilter.dateEq);
+    }
+    if (dateFilter.dateGte && dateFilter.dateLte) {
+      return query
+        .gte("date", dateFilter.dateGte)
+        .lte("date", dateFilter.dateLte);
+    }
+    return query;
+  };
+
+  const { data: ownRows, error: ownError } = await applyDateFilter(
+    supabaseServer
+      .from("expenses")
+      .select(EXPENSE_SELECT_WITH_JOINS)
+      .eq("user_name", userName)
+  ).order("date", { ascending: false });
+
+  if (ownError) {
+    console.error("Error fetching own expenses:", ownError);
+    throw ownError;
+  }
+
+  for (const row of ownRows || []) {
+    rowsById.set(row.id, row);
+  }
+
+  if (sharedProjectIds.length > 0) {
+    const { data: teamRows, error: teamError } = await applyDateFilter(
+      supabaseServer
+        .from("expenses")
+        .select(EXPENSE_SELECT_WITH_JOINS)
+        .in("project_id", sharedProjectIds)
+    ).order("date", { ascending: false });
+
+    if (teamError) {
+      console.error("Error fetching team expenses:", teamError);
+      throw teamError;
+    }
+
+    for (const row of teamRows || []) {
+      rowsById.set(row.id, row);
+    }
+  }
+
+  return Array.from(rowsById.values()).map((row) => mapExpenseToClient(row));
 }
 
 /**
@@ -126,26 +240,12 @@ export async function create(
  * @returns {Promise<Array>} Array of expenses
  */
 export async function getDayExpenses(userName, dayDate) {
-  // Build YYYY-MM-DD in *local* time so it matches what you expect as "that day"
   const year = dayDate.getFullYear();
   const month = String(dayDate.getMonth() + 1).padStart(2, "0");
   const day = String(dayDate.getDate()).padStart(2, "0");
   const dateString = `${year}-${month}-${day}`;
 
-  const { data, error } = await supabaseServer
-    .from("expenses")
-    .select("*, users!user_id(name)") // ✅ Join with users table on user_id FK
-    .eq("user_name", userName)
-    .eq("date", dateString) // DATE column, so equality on YYYY-MM-DD is enough
-    .order("date", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching day expenses:", error);
-    throw error;
-  }
-
-  // Map results
-  return (data || []).map(mapExpenseToClient);
+  return fetchVisibleExpenses(userName, { dateEq: dateString });
 }
 
 /**
@@ -157,25 +257,13 @@ export async function getDayExpenses(userName, dayDate) {
  * @returns {Promise<Array>} Array of expenses
  */
 export async function getWeekExpenses(userName, weekStart, weekEnd) {
-  // Parse ISO strings to Date objects for querying
   const weekStartDate = formatDateForAPI(weekStart);
   const weekEndDate = formatDateForAPI(weekEnd);
 
-  const { data, error } = await supabaseServer
-    .from("expenses")
-    .select("*, users!user_id(name)") // ✅ Join with users table on user_id FK
-    .eq("user_name", userName)
-    .gte("date", weekStartDate)
-    .lte("date", weekEndDate)
-    .order("date", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching week expenses:", error);
-    throw error;
-  }
-
-  // Map results
-  return (data || []).map(mapExpenseToClient);
+  return fetchVisibleExpenses(userName, {
+    dateGte: weekStartDate,
+    dateLte: weekEndDate,
+  });
 }
 
 /**
@@ -216,24 +304,8 @@ export async function getExpensesByReportFilters(userName, filters) {
     throw new Error("Filters are required");
   }
 
-  let query = supabaseServer
-    .from("expenses")
-    .select(
-      `
-      *,
-      users!user_id(name),
-      projects:project_id (
-        id,
-        name,
-        owner_name,
-        is_shared
-      )
-    `
-    )
-    .eq("user_name", userName);
-
-  // Apply date range filter
-  let startDate, endDate;
+  let startDate;
+  let endDate;
   if (filters.customStartDate && filters.customEndDate) {
     startDate = formatDateForAPI(filters.customStartDate);
     endDate = formatDateForAPI(filters.customEndDate);
@@ -255,39 +327,62 @@ export async function getExpensesByReportFilters(userName, filters) {
     }
   }
 
-  if (startDate && endDate) {
-    query = query.gte("date", startDate);
-    query = query.lte("date", endDate);
+  const applyFilters = (query) => {
+    let q = query;
+    if (startDate && endDate) {
+      q = q.gte("date", startDate).lte("date", endDate);
+    }
+    if (
+      filters.selectedProjectIds &&
+      Array.isArray(filters.selectedProjectIds) &&
+      filters.selectedProjectIds.length > 0
+    ) {
+      q = q.in("project_id", filters.selectedProjectIds);
+    }
+    return q.order("date", { ascending: false });
+  };
+
+  const sharedProjectIds = await getOwnerLevelSharedProjectIds(userName);
+  const rowsById = new Map();
+
+  const { data: ownRows, error: ownError } = await applyFilters(
+    supabaseServer
+      .from("expenses")
+      .select(EXPENSE_SELECT_WITH_JOINS)
+      .eq("user_name", userName)
+  );
+
+  if (ownError) {
+    console.error("Error fetching own expenses by report filters:", ownError);
+    throw ownError;
   }
 
-  // Apply project filter
-  if (
-    filters.selectedProjectIds &&
-    Array.isArray(filters.selectedProjectIds) &&
-    filters.selectedProjectIds.length > 0
-  ) {
-    query = query.in("project_id", filters.selectedProjectIds);
+  for (const row of ownRows || []) {
+    rowsById.set(row.id, row);
   }
 
-  // Note: Expenses don't have a billable filter, so we skip that
+  if (sharedProjectIds.length > 0) {
+    const { data: teamRows, error: teamError } = await applyFilters(
+      supabaseServer
+        .from("expenses")
+        .select(EXPENSE_SELECT_WITH_JOINS)
+        .in("project_id", sharedProjectIds)
+    );
 
-  query = query.order("date", { ascending: false });
+    if (teamError) {
+      console.error(
+        "Error fetching team expenses by report filters:",
+        teamError
+      );
+      throw teamError;
+    }
 
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("Error fetching expenses by report filters:", error);
-    throw error;
+    for (const row of teamRows || []) {
+      rowsById.set(row.id, row);
+    }
   }
 
-  // Map results to include billing_status
-  return (data || []).map((row) => {
-    const expense = mapExpenseToClient(row);
-    return {
-      ...expense,
-      billing_status: row.billing_status ?? "draft",
-    };
-  });
+  return Array.from(rowsById.values()).map((row) => mapExpenseToClient(row));
 }
 
 /**
@@ -349,15 +444,25 @@ export async function getExpensesByProjectId(userName, projectId, isOwner) {
  * @param {string} projectId - Supabase project UUID
  * @returns {Promise<{ totalExpenses: number, expenseCount: number }>}
  */
-export async function getProjectExpensesSummary(projectId) {
+export async function getProjectExpensesSummary(
+  projectId,
+  userName,
+  isOwnerLevel = false
+) {
   if (!projectId) {
     throw new Error("projectId is required to get expenses summary");
   }
 
-  const { data, error } = await supabaseServer
+  let query = supabaseServer
     .from("expenses")
     .select("price")
     .eq("project_id", projectId);
+
+  if (!isOwnerLevel) {
+    query = query.eq("user_name", userName);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error fetching project expenses summary:", error);

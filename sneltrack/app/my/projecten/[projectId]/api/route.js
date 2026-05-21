@@ -23,8 +23,18 @@ export const GET = auth0.withApiAuthRequired(async (req, context) => {
     const endDateParam = url.searchParams.get("endDate");
 
     if (action === "expensesSummary") {
+      const projectDetail = await getProjectDetail(user, projectId);
+      if (!projectDetail) {
+        return NextResponse.json(
+          { error: "Project not found or access denied" },
+          { status: 404 }
+        );
+      }
+
       const summary = await expensesService.getProjectExpensesSummary(
-        projectId
+        projectId,
+        user,
+        isProjectOwnerLevel(projectDetail, user)
       );
       return NextResponse.json(summary);
     }
