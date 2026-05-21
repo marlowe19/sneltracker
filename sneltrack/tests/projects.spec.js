@@ -17,18 +17,19 @@ test.describe("Projects Management @mobile", () => {
     const heading = page.getByRole("heading", { name: /Projecten/i });
     await expect(heading).toBeVisible();
 
-    // Check for back button
-    const backLink = page.getByRole("link", { name: /Terug|←/i });
-    await expect(backLink).toBeVisible();
+    // BackButtonClient is a <button>, not a link
+    const backButton = page.getByRole("button", { name: "Terug", exact: true });
+    await expect(backButton).toBeVisible();
   });
 
   test("should navigate back to main page from projects", async ({ page }) => {
+    await navigateToUserPage(page, testUser);
+    await waitForApiCalls(page);
     await navigateToProjects(page, testUser);
     await waitForApiCalls(page);
 
-    // Click back link
-    const backLink = page.getByRole("link", { name: /Terug|←/i });
-    await backLink.click();
+    const backButton = page.getByRole("button", { name: "Terug", exact: true });
+    await backButton.click();
     await waitForApiCalls(page);
 
     // Verify we're back on main page
@@ -56,24 +57,15 @@ test.describe("Projects Management @mobile", () => {
     await waitForApiCalls(page);
     await waitForProjectsToLoad(page);
 
-    // Look for clickable project elements
-    const projectLinks = page
-      .locator('a[href*="/projecten/"]')
-      .or(page.locator("button").filter({ hasText: /.+/ }));
+    const projectCard = page
+      .locator("div.cursor-pointer")
+      .filter({ has: page.getByRole("heading", { level: 3 }) })
+      .first();
+    await expect(projectCard).toBeVisible({ timeout: 10_000 });
+    await projectCard.click();
+    await waitForApiCalls(page);
 
-    const count = await projectLinks.count();
-
-    if (count > 0) {
-      // Click on first project
-      const firstProject = projectLinks.first();
-      const projectName = await firstProject.textContent();
-
-      await firstProject.click();
-      await waitForApiCalls(page);
-
-      // Verify we're on project detail page
-      await expect(page).toHaveURL(new RegExp(`/my/projecten/\\w+`));
-    }
+    await expect(page).toHaveURL(/\/my\/projecten\/[^/]+$/);
   });
 
   test("should display project creation form when create button is clicked", async ({
@@ -85,7 +77,7 @@ test.describe("Projects Management @mobile", () => {
 
     // Look for create/new project button
     const createButton = page.getByRole("button", {
-      name: /Nieuw|Create|Toevoegen|Add/i,
+      name: /Nieuw Project/i,
     });
 
     if (await createButton.isVisible().catch(() => false)) {
@@ -176,22 +168,18 @@ test.describe("Projects Management @mobile", () => {
     await waitForApiCalls(page);
     await waitForProjectsToLoad(page);
 
-    // Try to navigate to a project detail page
-    const projectLinks = page.locator('a[href*="/projecten/"]');
-    const count = await projectLinks.count();
+    const projectCard = page
+      .locator("div.cursor-pointer")
+      .filter({ has: page.getByRole("heading", { level: 3 }) })
+      .first();
+    await expect(projectCard).toBeVisible({ timeout: 10_000 });
+    await projectCard.click();
+    await waitForApiCalls(page);
 
-    if (count > 0) {
-      await projectLinks.first().click();
-      await waitForApiCalls(page);
-
-      // Look for statistics or project details
-      const stats = page.locator("text=/Uur|Hours|Tijd|Time|€|EUR/i");
-      const statsCount = await stats.count();
-
-      // Should have some statistics displayed
-      // This is a basic check - adjust based on actual implementation
-      expect(statsCount).toBeGreaterThanOrEqual(0);
-    }
+    await expect(page).toHaveURL(/\/my\/projecten\/[^/]+$/);
+    await expect(
+      page.getByRole("heading", { name: "Project", exact: true })
+    ).toBeVisible();
   });
 
   test("should handle touch interactions on project items", async ({
@@ -201,39 +189,33 @@ test.describe("Projects Management @mobile", () => {
     await waitForApiCalls(page);
     await waitForProjectsToLoad(page);
 
-    // Look for project items
-    const projectItems = page.locator("button, a").filter({ hasText: /.+/ });
-    const count = await projectItems.count();
-
-    if (count > 0) {
-      const firstItem = projectItems.first();
-      const box = await firstItem.boundingBox();
-
-      // Touch targets should be appropriately sized
-      if (box) {
-        expect(box.height).toBeGreaterThan(30); // Minimum touch target
-      }
-    }
+    const projectCard = page
+      .locator("div.cursor-pointer")
+      .filter({ has: page.getByRole("heading", { level: 3 }) })
+      .first();
+    await expect(projectCard).toBeVisible({ timeout: 10_000 });
+    const box = await projectCard.boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThan(30);
   });
 
   test("should maintain state when navigating between pages", async ({
     page,
   }) => {
+    await navigateToUserPage(page, testUser);
+    await waitForApiCalls(page);
     await navigateToProjects(page, testUser);
     await waitForApiCalls(page);
     await waitForProjectsToLoad(page);
 
-    // Navigate back
-    const backLink = page.getByRole("link", { name: /Terug|←/i });
-    await backLink.click();
+    await page.getByRole("button", { name: "Terug", exact: true }).click();
     await waitForApiCalls(page);
+    await expect(page).toHaveURL(/\/my\/?$/);
 
-    // Navigate to projects again
     await navigateToProjects(page, testUser);
     await waitForApiCalls(page);
 
-    // Projects should still be visible
-    const heading = page.getByRole("heading", { name: /Projecten/i });
-    await expect(heading).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Projecten", exact: true })
+    ).toBeVisible();
   });
 });

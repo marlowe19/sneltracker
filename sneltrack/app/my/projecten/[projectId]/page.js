@@ -1,4 +1,5 @@
 import { getProjectDetail } from "@/lib/supabase/services/projectsService";
+import { isProjectOwnerLevel } from "@/lib/projectPermissions";
 import Link from "next/link";
 import MemberHoursChart from "../MemberHoursChart";
 import ProjectDetailClient from "./ProjectDetailClient";
@@ -39,12 +40,10 @@ export default async function ProjectDetailPage({ params, request }) {
 
   // Extract data from single query result
   const project = projectDetail;
-  const isOwner = projectDetail.is_owner;
+  const isOwner = isProjectOwnerLevel(projectDetail, user);
   const members = projectDetail.members || [];
   const memberStats = projectDetail.memberStatistics || null;
-  const currentUserMember = members.find((m) => m.user_name === user);
-  const canManageActivities =
-    isOwner || currentUserMember?.role === "owner";
+  const canManageActivities = isOwner;
 
   return (
     <main className="flex flex-col h-screen overflow-hidden">

@@ -295,7 +295,7 @@ export function upsert(project, userName) {
  */
 export async function getUserProjectsWithStats(userName) {
   const { data, error } = await supabaseServer.rpc(
-    "get_user_projects_with_stats_v3",
+    "get_user_projects_with_stats_v4", // v4: member role='owner' sees all team hours
     {
       p_user_name: userName,
     }
@@ -342,8 +342,8 @@ export async function getProjectDetail(
   startDate = null,
   endDate = null
 ) {
-  const { data, error } = await supabaseServer.rpc("get_project_detail_v4", {
-    // ✅ Updated to v4 for user_display_name in both members and member_statistics
+  const { data, error } = await supabaseServer.rpc("get_project_detail_v5", {
+    // ✅ v5: member with role='owner' sees all team data, same as creator
     p_user_name: userName,
     p_project_id: projectId,
     p_start_date: startDate ? startDate.toISOString() : null,
@@ -367,6 +367,12 @@ export async function getProjectDetail(
   }
 
   const row = data[0];
+
+  // Derive member_role from the members array so API routes and pages
+  // can use isProjectOwnerLevel() without an extra query
+  const members = row.members || [];
+  const currentUserMemberRole =
+    members.find((m) => m.user_name === userName)?.role ?? null;
 
   // Fetch additional fields directly from projects table since function doesn't return them yet
   const { data: projectData, error: projectError } = await supabaseServer
@@ -392,6 +398,7 @@ export async function getProjectDetail(
     is_default: row.is_default,
     owner: row.owner_name,
     is_owner: row.is_owner,
+    member_role: currentUserMemberRole,
     due_date: projectData?.due_date || null,
     start_date: projectData?.start_date || null,
     end_date: projectData?.end_date || null,
@@ -406,7 +413,7 @@ export async function getProjectDetail(
       entryCount: Number(row.entry_count),
       totalMoney: row.total_billable,
     },
-    members: row.members || [],
+    members: members,
     memberStatistics: row.member_statistics || [],
   };
 }
@@ -526,7 +533,7 @@ export async function updateProject(userName, projectId, updates) {
     );
 
     if (hasRestrictedFields) {
-      throw new Error("Only project owners can update shared projects");
+      throw new Error("Alleen projecteigenaren kunnen gedeelde projecten bijwerken");
     }
   }
 

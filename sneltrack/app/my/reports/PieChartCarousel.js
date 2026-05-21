@@ -40,13 +40,13 @@ export default function PieChartCarousel({ cards = [] }) {
             {cards.map((card) => (
               <div key={card.id} className="px-2 py-4">
                 <div
-                  className="bg-white rounded-3xl p-6 shadow-lg select-text"
+                  className="bg-white rounded-3xl p-6 shadow-lg select-text flex flex-col"
                   style={{ height: "450px" }}
                 >
-                  <div className="text-sm text-gray-600 mb-3 font-medium text-center">
+                  <div className="text-sm text-gray-600 mb-3 font-medium text-center shrink-0">
                     {card.title}
                   </div>
-                  <div style={{ height: "calc(100% - 2rem)" }}>
+                  <div className="flex-1 min-h-0 overflow-y-auto">
                     {card.content}
                   </div>
                 </div>

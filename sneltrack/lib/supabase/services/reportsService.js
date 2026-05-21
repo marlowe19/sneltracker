@@ -17,7 +17,7 @@ import { supabaseServer } from "@/lib/supabaseServer";
  */
 export async function getUserProjectReports(userName, startDate, endDate) {
   const { data, error } = await supabaseServer.rpc(
-    "get_user_project_reports_v3", // ✅ Updated to v3 for user_display_name
+    "get_user_project_reports_v4", // v4: member role='owner' sees all team data
     {
       p_user_name: userName,
       p_start_date: startDate.toISOString(),

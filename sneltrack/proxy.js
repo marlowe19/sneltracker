@@ -1,11 +1,7 @@
-import { NextRequest } from "next/server";
-import { auth0 } from "./lib/auth/auth0";
+import { getAuth0Client } from "./lib/auth/auth0";
 
 export async function proxy(request) {
-  const session = await auth0.getSession(request);
-  //console.log("session", session);
-
-  //console.log("proxying request", request);
+  const auth0 = getAuth0Client(request);
   return await auth0.middleware(request);
 }
 

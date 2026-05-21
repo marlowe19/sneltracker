@@ -6,6 +6,7 @@ import {
 } from "@/lib/supabase/services/projectsService";
 import { expensesService, timeEntriesService } from "@/lib/supabase/services";
 import { auth0 } from "@/lib/auth/auth0";
+import { isProjectOwnerLevel } from "@/lib/projectPermissions";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,7 @@ export const GET = auth0.withApiAuthRequired(async (req, context) => {
         );
       }
 
-      const isOwner = projectDetail.is_owner;
+      const isOwner = isProjectOwnerLevel(projectDetail, user);
 
       // Fetch time entries and expenses for the project
       const [timeEntries, expenses] = await Promise.all([

@@ -20,7 +20,7 @@ function formatMoney(amount) {
 function ProjectsLoading({ user }) {
   return (
     <>
-      <main className="container mx-auto max-w-md sm:max-w-xl md:max-w-2xl p-4 sm:p-2 flex flex-col gap-6">
+      <main className="container mx-auto max-w-md sm:max-w-xl md:max-w-2xl p-4 sm:p-2 flex flex-col gap-6 pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
         <section className="bg-white">
           <div className="flex items-center justify-between p-4">
             <div className="flex-1">
@@ -48,7 +48,7 @@ async function ProjectsContent({ user }) {
   return (
     <>
       <ProjectsHydrator user={user} initialProjects={projects} />
-      <main className=" flex flex-col gap-6">
+      <main className="flex flex-col gap-6 pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
         <section className=" bg-white  ">
           <div className="flex items-center justify-between p-4">
             <div className="flex-1">

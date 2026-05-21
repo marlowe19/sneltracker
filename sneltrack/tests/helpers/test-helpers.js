@@ -67,12 +67,47 @@ export async function stopTimer(page, username) {
 }
 
 /**
+ * Stop all running timers for the authenticated user (no entryId = stop all).
+ * Use in test setup to avoid leftover timers from parallel runs on the same account.
+ * @param {import('@playwright/test').Page} page
+ */
+export async function stopAllRunningTimers(page) {
+  const url = new URL(`/my/stop`, page.url()).toString();
+  try {
+    await page.request.post(url, {
+      data: {},
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch {
+    // Best-effort cleanup
+  }
+}
+
+/**
+ * Click a bottom navigation link (Timers, Projecten, etc.)
+ * @param {import('@playwright/test').Page} page
+ * @param {string} label - Exact nav label, e.g. "Projecten"
+ */
+export async function clickMainNavLink(page, label) {
+  const link = page
+    .getByRole("navigation")
+    .getByRole("link", { name: label, exact: true });
+  await link.click();
+  await waitForApiCalls(page);
+}
+
+/**
  * Click the start/stop button in the UI
  * @param {import('@playwright/test').Page} page
  */
 export async function clickStartStopButton(page) {
-  const button = page.getByRole("button", { name: /^(Start|Stop)$/ });
-  await button.click();
+  const startButton = page.getByRole("button", { name: /^Start timer$/i });
+  const stopButton = page.getByRole("button", { name: /^Stop timer$/i });
+  if (await stopButton.isVisible().catch(() => false)) {
+    await stopButton.click();
+  } else {
+    await startButton.click();
+  }
   await waitForApiCalls(page);
 }
 

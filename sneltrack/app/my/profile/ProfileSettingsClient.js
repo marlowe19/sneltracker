@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Activity, Receipt, ChevronRight, Trophy, Plug } from "@carbon/icons-react";
+import { useStore } from "@/stores/useStore";
 import FullScreenModal from "@/app/components/FullScreenModal";
 import AppleCalendarConnectionClient from "../components/AppleCalendarConnectionClient";
 import FixedExpensesClient from "./FixedExpensesClient";
@@ -58,12 +59,43 @@ function SettingsListItem({ icon: Icon, title, subtitle, onClick }) {
   );
 }
 
+function DashboardWidgetToggleRow() {
+  const showDashboardWidgets = useStore((state) => state.showDashboardWidgets);
+  const hydrateDashboardWidgetsPreference = useStore(
+    (state) => state.hydrateDashboardWidgetsPreference,
+  );
+  const setShowDashboardWidgets = useStore(
+    (state) => state.setShowDashboardWidgets,
+  );
+
+  useEffect(() => {
+    hydrateDashboardWidgetsPreference();
+  }, [hydrateDashboardWidgetsPreference]);
+
+  return (
+    <label className="flex items-center gap-4 py-4 px-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors">
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-gray-900">Dashboard-widget tonen</div>
+        <div className="text-sm text-gray-500">Statistieken op het hoofdscherm</div>
+      </div>
+      <input
+        type="checkbox"
+        checked={showDashboardWidgets}
+        onChange={(e) => setShowDashboardWidgets(e.target.checked)}
+        className="h-5 w-5 shrink-0 rounded border-gray-300 text-[#008eff] focus:ring-[#008eff]"
+        aria-label="Dashboard-widget tonen"
+      />
+    </label>
+  );
+}
+
 export default function ProfileSettingsClient({ userId }) {
   const [openModal, setOpenModal] = useState(null);
 
   return (
     <>
-      <section className="flex flex-col  bg-white rounded-lg overflow-hidden">
+      <section className="flex flex-col bg-white rounded-lg overflow-hidden">
+        <DashboardWidgetToggleRow />
         {ITEMS.map((item) => (
           <SettingsListItem
             key={item.id}
