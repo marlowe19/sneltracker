@@ -788,7 +788,7 @@ export async function getDayEntries(userName, dayDate) {
   // what the query needs to do is get all the entries for the user for the given day.
   // if a user is the owner of a project they should see all the entries for the project for the given day.
 
-  const { data, error } = await supabaseServer.rpc("get_day_entries_v3", {
+  const { data, error } = await supabaseServer.rpc("get_day_entries_v4", { // v4: owner-role members see team entries
     p_user_name: userName,
     p_day_date: dateStr,
   });
@@ -880,7 +880,7 @@ export async function getTimeEntryWithActivities(timeEntryId) {
  * @returns {Promise<Array>} Array of time entries matching Firestore format
  */
 export async function getWeekEntries(userName, weekStartIso, weekEndIso) {
-  const { data, error } = await supabaseServer.rpc("get_week_entries", {
+  const { data, error } = await supabaseServer.rpc("get_week_entries_v2", { // v2: owner-role members see team entries
     p_user_name: userName,
     p_week_start: weekStartIso,
     p_week_end: weekEndIso,

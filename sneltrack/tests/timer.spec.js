@@ -7,6 +7,7 @@ import {
   selectProject,
   waitForActiveTimer,
   waitForApiCalls,
+  stopAllRunningTimers,
 } from "./helpers/test-helpers";
 
 test.describe("Timer Functionality @mobile", () => {
@@ -14,18 +15,24 @@ test.describe("Timer Functionality @mobile", () => {
 
   test.beforeEach(async ({ page }) => {
     await navigateToUserPage(page, testUser);
+    await stopAllRunningTimers(page);
+    await page.reload();
     await waitForApiCalls(page);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await stopAllRunningTimers(page);
   });
 
   test("should display start button when no timer is active", async ({
     page,
   }) => {
     // Check that Start button is visible
-    const startButton = page.getByRole("button", { name: /^Start$/i });
+    const startButton = page.getByRole("button", { name: /^Start timer$/i });
     await expect(startButton).toBeVisible();
 
     // Check that Stop button is not visible
-    const stopButton = page.getByRole("button", { name: /^Stop$/i });
+    const stopButton = page.getByRole("button", { name: /^Stop timer$/i });
     await expect(stopButton).not.toBeVisible();
   });
 
@@ -37,11 +44,11 @@ test.describe("Timer Functionality @mobile", () => {
     await waitForApiCalls(page);
 
     // Verify that Stop button is now visible
-    const stopButton = page.getByRole("button", { name: /^Stop$/i });
+    const stopButton = page.getByRole("button", { name: /^Stop timer$/i });
     await expect(stopButton).toBeVisible({ timeout: 10000 });
 
     // Verify that Start button is no longer visible (or disabled)
-    const startButton = page.getByRole("button", { name: /^Start$/i });
+    const startButton = page.getByRole("button", { name: /^Start timer$/i });
     // Start button might still be visible but should be in a different state
     // or the UI might show Stop button instead
   });
@@ -52,7 +59,7 @@ test.describe("Timer Functionality @mobile", () => {
     await waitForApiCalls(page);
 
     // Verify timer is running (Stop button should be visible)
-    const stopButton = page.getByRole("button", { name: /^Stop$/i });
+    const stopButton = page.getByRole("button", { name: /^Stop timer$/i });
     await expect(stopButton).toBeVisible({ timeout: 10000 });
 
     // Click stop button
@@ -60,7 +67,7 @@ test.describe("Timer Functionality @mobile", () => {
     await waitForApiCalls(page);
 
     // Verify that Start button is visible again
-    const startButton = page.getByRole("button", { name: /^Start$/i });
+    const startButton = page.getByRole("button", { name: /^Start timer$/i });
     await expect(startButton).toBeVisible({ timeout: 10000 });
   });
 
@@ -112,7 +119,7 @@ test.describe("Timer Functionality @mobile", () => {
     await waitForApiCalls(page);
 
     // Verify timer started (Stop button should be visible)
-    const stopButton = page.getByRole("button", { name: /^Stop$/i });
+    const stopButton = page.getByRole("button", { name: /^Stop timer$/i });
     await expect(stopButton).toBeVisible({ timeout: 10000 });
   });
 
@@ -180,7 +187,7 @@ test.describe("Timer Functionality @mobile", () => {
 
   test("should be responsive on mobile viewport", async ({ page }) => {
     // Check that main elements are visible and properly sized
-    const startButton = page.getByRole("button", { name: /^Start$/i });
+    const startButton = page.getByRole("button", { name: /^Start timer$/i });
     await expect(startButton).toBeVisible();
 
     // Check viewport size

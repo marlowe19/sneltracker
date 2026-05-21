@@ -16,6 +16,7 @@ import {
   lookupUserByEmail,
 } from "@/lib/supabase/services/projectsService";
 import { auth0 } from "@/lib/auth/auth0";
+import { isProjectOwnerLevel } from "@/lib/projectPermissions";
 
 export const dynamic = "force-dynamic";
 
@@ -120,7 +121,7 @@ export const GET = auth0.withApiAuthRequired(async (req) => {
         );
       }
 
-      if (!projectDetail.is_owner) {
+      if (!isProjectOwnerLevel(projectDetail, user)) {
         return NextResponse.json(
           { error: "Only project owners can view member statistics" },
           { status: 403 }
@@ -189,7 +190,7 @@ export const POST = auth0.withApiAuthRequired(async (req) => {
         );
       }
 
-      if (!projectDetail.is_owner) {
+      if (!isProjectOwnerLevel(projectDetail, user)) {
         return NextResponse.json(
           { error: "Only project owners can add members" },
           { status: 403 }
@@ -368,7 +369,7 @@ export const PATCH = auth0.withApiAuthRequired(async (req) => {
         );
       }
 
-      if (!projectDetail.is_owner) {
+      if (!isProjectOwnerLevel(projectDetail, user)) {
         return NextResponse.json(
           { error: "Only project owners can update member rates" },
           { status: 403 }
@@ -407,7 +408,7 @@ export const PATCH = auth0.withApiAuthRequired(async (req) => {
         );
       }
 
-      if (!projectDetail.is_owner) {
+      if (!isProjectOwnerLevel(projectDetail, user)) {
         return NextResponse.json(
           { error: "Only project owners can update member capacity" },
           { status: 403 }
@@ -527,9 +528,11 @@ export const PATCH = auth0.withApiAuthRequired(async (req) => {
     if (error.message === "Project not found") {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
-    if (error.message === "Only project owners can update shared projects") {
+    if (
+      error.message === "Alleen projecteigenaren kunnen gedeelde projecten bijwerken"
+    ) {
       return NextResponse.json(
-        { error: "Only project owners can update shared projects" },
+        { error: "Alleen projecteigenaren kunnen gedeelde projecten bijwerken" },
         { status: 403 }
       );
     }
@@ -581,7 +584,7 @@ export const DELETE = auth0.withApiAuthRequired(async (req) => {
         );
       }
 
-      if (!projectDetail.is_owner) {
+      if (!isProjectOwnerLevel(projectDetail, user)) {
         return NextResponse.json(
           { error: "Only project owners can remove members" },
           { status: 403 }

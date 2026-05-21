@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { calculateForecast } from "@/lib/forecastService";
 import { getProjectDetail } from "@/lib/supabase/services/projectsService";
 import { auth0 } from "@/lib/auth/auth0";
+import { isProjectOwnerLevel } from "@/lib/projectPermissions";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +29,10 @@ export const POST = auth0.withApiAuthRequired(async (req, context) => {
       );
     }
 
-    // Check access: user must be owner or member (for shared projects) or owner (for user projects)
+    // Check access: creator, owner-role member, or any member on shared projects
     if (projectDetail.is_shared) {
       if (
-        !projectDetail.is_owner &&
+        !isProjectOwnerLevel(projectDetail, user) &&
         !projectDetail.members?.some((m) => m.user_name === user)
       ) {
         return NextResponse.json(
@@ -40,7 +41,6 @@ export const POST = auth0.withApiAuthRequired(async (req, context) => {
         );
       }
     } else {
-      // For user projects, only the owner can access
       if (!projectDetail.is_owner) {
         return NextResponse.json(
           { error: "Toegang geweigerd" },

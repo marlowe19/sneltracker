@@ -4,10 +4,18 @@ import {
   navigateToProjects,
   navigateToWeek,
   waitForApiCalls,
+  waitForProjectsToLoad,
+  stopAllRunningTimers,
+  clickMainNavLink,
 } from "./helpers/test-helpers";
 
 test.describe("Navigation and Layout @mobile", () => {
   const testUser = "testuser";
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/my");
+    await stopAllRunningTimers(page);
+  });
 
   test("should load main page with correct layout on mobile", async ({
     page,
@@ -25,40 +33,52 @@ test.describe("Navigation and Layout @mobile", () => {
     await expect(logo.first()).toBeVisible();
 
     // Check for navigation links
-    const projectsLink = page.getByRole("link", { name: /Projecten/i });
+    const projectsLink = page
+      .getByRole("navigation")
+      .getByRole("link", { name: "Projecten", exact: true });
     await expect(projectsLink).toBeVisible();
   });
 
   test("should navigate to projects page", async ({ page }) => {
-    await navigateToUserPage(page, testUser);
     await waitForApiCalls(page);
 
-    // Click on Projects link
-    const projectsLink = page.getByRole("link", { name: /Projecten/i });
-    await projectsLink.click();
-    await waitForApiCalls(page);
+    await clickMainNavLink(page, "Projecten");
 
-    // Verify we're on projects page
-    await expect(page).toHaveURL(new RegExp(`/my/projecten`));
+    await expect(page).toHaveURL(/\/my\/projecten/);
+    await expect(
+      page.getByRole("heading", { name: "Projecten", exact: true })
+    ).toBeVisible();
   });
 
-  test("should navigate back from projects page", async ({ page }) => {
+  test("should navigate back to projects list from project detail via header", async ({
+    page,
+  }) => {
     await navigateToProjects(page, testUser);
+    await waitForApiCalls(page);
+    await waitForProjectsToLoad(page);
 
-    // Check if there's a back button or use browser back
-    const backButton = page.getByRole("button", { name: /Back|Terug|←/i });
+    const projectCard = page
+      .locator("div.cursor-pointer")
+      .filter({ has: page.getByRole("heading", { level: 3 }) })
+      .first();
+    await expect(projectCard).toBeVisible({ timeout: 10_000 });
+    await projectCard.click();
+    await waitForApiCalls(page);
 
-    if (await backButton.isVisible().catch(() => false)) {
-      await backButton.click();
-      await waitForApiCalls(page);
-    } else {
-      // Use browser back
-      await page.goBack();
-      await waitForApiCalls(page);
-    }
+    await expect(page).toHaveURL(/\/my\/projecten\/[^/]+$/);
+    await expect(
+      page.getByRole("heading", { name: "Project", exact: true })
+    ).toBeVisible();
 
-    // Verify we're back on main page
-    await expect(page).toHaveURL(new RegExp(`/my(?:/)?$`));
+    const headerBackButton = page.getByRole("button", { name: "Terug" });
+    await expect(headerBackButton).toBeVisible();
+    await headerBackButton.click();
+    await waitForApiCalls(page);
+
+    await expect(page).toHaveURL(/\/my\/projecten\/?$/);
+    await expect(
+      page.getByRole("heading", { name: "Projecten", exact: true })
+    ).toBeVisible();
   });
 
   test("should navigate to different weeks", async ({ page }) => {
@@ -145,7 +165,9 @@ test.describe("Navigation and Layout @mobile", () => {
     await expect(main).toBeVisible();
 
     // Check that navigation is still accessible
-    const projectsLink = page.getByRole("link", { name: /Projecten/i });
+    const projectsLink = page
+      .getByRole("navigation")
+      .getByRole("link", { name: "Projecten", exact: true });
     await expect(projectsLink).toBeVisible();
   });
 
@@ -153,10 +175,8 @@ test.describe("Navigation and Layout @mobile", () => {
     await navigateToUserPage(page, testUser);
     await waitForApiCalls(page);
 
-    // Look for clickable day elements
-    const dayElements = page.locator("button, a").filter({
-      hasText: /Ma|Di|Wo|Do|Vr|Za|Zo|\d{1,2}/,
-    });
+    // Week row day buttons only (avoid timer clocks / other numeric UI)
+    const dayElements = page.locator("[data-day-index]");
 
     const count = await dayElements.count();
 
@@ -190,7 +210,9 @@ test.describe("Navigation and Layout @mobile", () => {
     await expect(logo.first()).toBeVisible();
 
     // Check for navigation links
-    const projectsLink = page.getByRole("link", { name: /Projecten/i });
+    const projectsLink = page
+      .getByRole("navigation")
+      .getByRole("link", { name: "Projecten", exact: true });
     await expect(projectsLink).toBeVisible();
 
     // Check header layout
@@ -212,7 +234,9 @@ test.describe("Navigation and Layout @mobile", () => {
     const main = page.locator("main");
     await expect(main).toBeVisible();
 
-    const projectsLink = page.getByRole("link", { name: /Projecten/i });
+    const projectsLink = page
+      .getByRole("navigation")
+      .getByRole("link", { name: "Projecten", exact: true });
     await expect(projectsLink).toBeVisible();
   });
 });

@@ -11,6 +11,8 @@
     "test:ui": "playwright test --ui",
     "test:mobile": "playwright test --grep @mobile",
     "test:debug": "playwright test --debug",
+    "test:auth-setup": "playwright test tests/auth.setup.js --headed",
+    "playwright:install": "playwright install webkit chromium",
     "backup:firebase": "node scripts/backup-firebase.mjs",
     "backup:firebase:dev": "ENV_FILE=.env.development node scripts/backup-firebase.mjs",
     "backup:firebase:local": "ENV_FILE=.env.local node scripts/backup-firebase.mjs"
