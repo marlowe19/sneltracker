@@ -15,7 +15,9 @@ const allMobileProjects = [
 
 // One device locally avoids N× duplicate runs on the same Auth0 user (shared timers DB).
 const mobileProjects =
-  process.env.E2E_ALL_DEVICES === "1" ? allMobileProjects : [allMobileProjects[0]];
+  process.env.E2E_ALL_DEVICES === "1"
+    ? allMobileProjects
+    : [allMobileProjects[0]];
 
 /**
  * @see https://playwright.dev/docs/test-configuration
@@ -25,7 +27,7 @@ export default defineConfig({
   fullyParallel: !!process.env.CI,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : 1,
+  workers: process.env.CI ? 1 : 6,
   reporter: "html",
   use: {
     baseURL: "http://localhost:3000",

@@ -1,0 +1,34 @@
+---
+description: Icon library conventions for this project
+globs: **/*.js,**/*.jsx,**/*.ts,**/*.tsx
+alwaysApply: false
+---
+
+# Icons — use @carbon/icons-react
+
+Always use `@carbon/icons-react` for icons. It is already installed.
+
+```js
+import { Folder, Tag } from "@carbon/icons-react";
+
+<Folder size={16} />
+```
+
+## Guidelines
+- Import only the icons you need (tree-shakeable)
+- Use `size={16}` for inline/label icons, `size={20}` for standalone UI elements
+- Do NOT use inline SVGs or other icon libraries (heroicons, lucide, etc.)
+
+## Common icon choices
+| Use case       | Icon name       |
+|----------------|-----------------|
+| Project        | `Portfolio`     |
+| Activity/tag   | `Tag`           |
+| Timer/clock    | `Timer`         |
+| Settings       | `Settings`      |
+| User/profile   | `UserAvatar`    |
+| Add/new        | `Add`           |
+| Delete         | `TrashCan`      |
+| Edit           | `Edit`          |
+| Archive        | `Archive`       |
+| Money/rate     | `Money`         |

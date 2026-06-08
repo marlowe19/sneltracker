@@ -4,20 +4,25 @@ import {
   navigateToProjects,
   waitForApiCalls,
   waitForProjectsToLoad,
+  openTimerProjectDropdown,
+  createProjectFromList,
+  openProjectDetail,
+  openProjectSettingsTab,
+  fillProjectSettings,
+  saveProjectSettings,
+  deleteProjectById,
 } from "./helpers/test-helpers";
 
 test.describe("Projects Management @mobile", () => {
   const testUser = "testuser";
 
-  test("should display projects list page", async ({ page }) => {
+  test("should display projects list page @smoke", async ({ page }) => {
     await navigateToProjects(page, testUser);
     await waitForApiCalls(page);
 
-    // Check for page title/heading
     const heading = page.getByRole("heading", { name: /Projecten/i });
     await expect(heading).toBeVisible();
 
-    // BackButtonClient is a <button>, not a link
     const backButton = page.getByRole("button", { name: "Terug", exact: true });
     await expect(backButton).toBeVisible();
   });
@@ -32,7 +37,6 @@ test.describe("Projects Management @mobile", () => {
     await backButton.click();
     await waitForApiCalls(page);
 
-    // Verify we're back on main page
     await expect(page).toHaveURL(new RegExp(`/my(?:/)?$`));
   });
 
@@ -41,18 +45,12 @@ test.describe("Projects Management @mobile", () => {
     await waitForApiCalls(page);
     await waitForProjectsToLoad(page);
 
-    // Projects list should be visible
-    // Look for project-related content (project names, buttons, etc.)
-    const projectsSection = page
-      .locator("section")
-      .or(page.locator('[class*="project"]'));
-
-    // At least the section should exist
-    const count = await projectsSection.count();
-    expect(count).toBeGreaterThan(0);
+    await expect(
+      page.getByRole("heading", { name: "Projecten", exact: true })
+    ).toBeVisible();
   });
 
-  test("should navigate to project detail page", async ({ page }) => {
+  test("should navigate to project detail page @smoke", async ({ page }) => {
     await navigateToProjects(page, testUser);
     await waitForApiCalls(page);
     await waitForProjectsToLoad(page);
@@ -68,30 +66,70 @@ test.describe("Projects Management @mobile", () => {
     await expect(page).toHaveURL(/\/my\/projecten\/[^/]+$/);
   });
 
-  test("should display project creation form when create button is clicked", async ({
+  test("should display project creation form when create button is clicked @smoke", async ({
     page,
   }) => {
     await navigateToProjects(page, testUser);
     await waitForApiCalls(page);
     await waitForProjectsToLoad(page);
 
-    // Look for create/new project button
     const createButton = page.getByRole("button", {
       name: /Nieuw Project/i,
     });
+    await expect(createButton).toBeVisible();
+    await createButton.click();
+    await waitForApiCalls(page);
 
-    if (await createButton.isVisible().catch(() => false)) {
-      await createButton.click();
+    await expect(page.getByLabel("Projectnaam *")).toBeVisible();
+  });
+
+  test("should create a new project and save full settings", async ({ page }) => {
+    await navigateToProjects(page, testUser);
+    await waitForApiCalls(page);
+    await waitForProjectsToLoad(page);
+
+    const projectName = `E2E Project ${Date.now()}`;
+    const settings = {
+      name: projectName,
+      budgetAmount: "1500.50",
+      hourlyRate: "95.00",
+      budgetHours: "120",
+      capacity: "32.5",
+      priority: "4",
+      zipCode: "1234AB",
+      deadline: "2026-12-31",
+      startDate: "2026-01-15",
+    };
+
+    let projectId;
+    try {
+      const created = await createProjectFromList(page, projectName);
+      projectId = created.id;
+
+      await expect(
+        page.getByRole("heading", { name: projectName, level: 3 })
+      ).toBeVisible({ timeout: 10_000 });
+
+      await openProjectDetail(page, projectName);
+      await openProjectSettingsTab(page);
+      await fillProjectSettings(page, settings);
+      await saveProjectSettings(page);
+
+      await page.reload();
       await waitForApiCalls(page);
+      await openProjectSettingsTab(page);
 
-      // Look for form elements
-      const formInputs = page
-        .locator('input[type="text"]')
-        .or(page.locator('input[name*="name"]'));
-
-      // Form should have at least one input
-      const inputCount = await formInputs.count();
-      expect(inputCount).toBeGreaterThan(0);
+      await expect(page.locator("#projectName")).toHaveValue(projectName);
+      await expect(page.locator("#budgetAmount")).toHaveValue("1500.5");
+      await expect(page.locator("#hourlyRate")).toHaveValue("95");
+      await expect(page.locator("#budgetHours")).toHaveValue("120");
+      await expect(page.locator("#capacity")).toHaveValue("32.5");
+      await expect(page.locator("#priority")).toHaveValue("4");
+      await expect(page.locator("#zipCode")).toHaveValue("1234AB");
+      await expect(page.locator("#deadline")).toHaveValue("2026-12-31");
+      await expect(page.locator("#startDate")).toHaveValue("2026-01-15");
+    } finally {
+      await deleteProjectById(page, projectId);
     }
   });
 
@@ -100,41 +138,28 @@ test.describe("Projects Management @mobile", () => {
     await waitForApiCalls(page);
     await waitForProjectsToLoad(page);
 
-    // Look for tab buttons
     const userTab = page.getByRole("button", { name: /Mijn|User|Eigen/i });
     const sharedTab = page.getByRole("button", { name: /Gedeeld|Shared/i });
 
-    if (await userTab.isVisible().catch(() => false)) {
-      // Click user tab
-      await userTab.click();
-      await waitForApiCalls(page);
+    await expect(userTab).toBeVisible();
+    await userTab.click();
+    await waitForApiCalls(page);
 
-      // Verify tab is active (might have specific class or aria attribute)
-      // This is a basic check
-    }
-
-    if (await sharedTab.isVisible().catch(() => false)) {
-      // Click shared tab
-      await sharedTab.click();
-      await waitForApiCalls(page);
-
-      // Verify tab is active
-    }
+    await expect(sharedTab).toBeVisible();
+    await sharedTab.click();
+    await waitForApiCalls(page);
   });
 
   test("should have responsive layout on mobile viewport", async ({ page }) => {
     await navigateToProjects(page, testUser);
     await waitForApiCalls(page);
 
-    // Check viewport size
     const viewport = page.viewportSize();
-    expect(viewport.width).toBeLessThanOrEqual(428); // Max mobile width
+    expect(viewport.width).toBeLessThanOrEqual(428);
 
-    // Check that main container is visible
     const main = page.locator("main");
     await expect(main).toBeVisible();
 
-    // Check that content doesn't overflow
     const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
     expect(bodyWidth).toBeLessThanOrEqual(viewport.width + 10);
   });
@@ -144,23 +169,10 @@ test.describe("Projects Management @mobile", () => {
     await waitForApiCalls(page);
     await waitForProjectsToLoad(page);
 
-    // Look for project selector
-    const projectSelector = page.getByRole("button", {
-      name: /Selecteer project/i,
-    });
-
-    if (await projectSelector.isVisible().catch(() => false)) {
-      await projectSelector.click();
-      await page.waitForTimeout(500); // Wait for dropdown
-
-      // Look for project options
-      const projectOptions = page.getByRole("button").filter({
-        hasText: /Geen project|project/i,
-      });
-
-      const count = await projectOptions.count();
-      expect(count).toBeGreaterThan(0);
-    }
+    await openTimerProjectDropdown(page);
+    await expect(
+      page.getByRole("button", { name: "Kies een project" })
+    ).toBeVisible();
   });
 
   test("should display project statistics on detail page", async ({ page }) => {
@@ -180,6 +192,33 @@ test.describe("Projects Management @mobile", () => {
     await expect(
       page.getByRole("heading", { name: "Project", exact: true })
     ).toBeVisible();
+  });
+
+  test("should render project detail tabs", async ({ page }) => {
+    await navigateToProjects(page, testUser);
+    await waitForApiCalls(page);
+    await waitForProjectsToLoad(page);
+
+    const projectCard = page
+      .locator("div.cursor-pointer")
+      .filter({ has: page.getByRole("heading", { level: 3 }) })
+      .first();
+    await projectCard.click();
+    await waitForApiCalls(page);
+
+    const tabs = [
+      "Tijdregistraties",
+      "Uitgaven",
+      "Activiteiten",
+      "Instellingen",
+    ];
+
+    for (const tabName of tabs) {
+      const tab = page.getByRole("button", { name: new RegExp(`^${tabName}`) });
+      await expect(tab).toBeVisible();
+      await tab.click();
+      await waitForApiCalls(page);
+    }
   });
 
   test("should handle touch interactions on project items", async ({

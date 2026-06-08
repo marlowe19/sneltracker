@@ -5,6 +5,13 @@
 
 import { supabaseServer } from "@/lib/supabaseServer";
 
+const VALID_CATEGORIES = ["private", "business"];
+
+function normalizeCategory(category) {
+  if (VALID_CATEGORIES.includes(category)) return category;
+  return "business";
+}
+
 function mapRowToClient(row) {
   return {
     id: row.id,
@@ -12,6 +19,7 @@ function mapRowToClient(row) {
     name: row.name,
     price: row.price != null ? Number(row.price) : null,
     period: row.period,
+    category: normalizeCategory(row.category),
     created_at: row.created_at ? new Date(row.created_at).toISOString() : null,
     modified_at: row.modified_at
       ? new Date(row.modified_at).toISOString()
@@ -47,10 +55,13 @@ export async function getAll(userName) {
  * @param {string} period - 'month' | 'quarter' | 'year'
  * @returns {Promise<Object>} Created expense
  */
-export async function create(userName, name, price, period) {
+export async function create(userName, name, price, period, category = "business") {
   const validPeriods = ["month", "quarter", "year"];
   if (!validPeriods.includes(period)) {
     throw new Error(`Invalid period: ${period}`);
+  }
+  if (!VALID_CATEGORIES.includes(category)) {
+    throw new Error(`Invalid category: ${category}`);
   }
 
   const { data, error } = await supabaseServer
@@ -60,6 +71,7 @@ export async function create(userName, name, price, period) {
       name: name.trim(),
       price: typeof price === "string" ? parseFloat(price) : price,
       period,
+      category,
     })
     .select()
     .single();
@@ -108,6 +120,12 @@ export async function update(userName, id, updates) {
       throw new Error(`Invalid period: ${updates.period}`);
     }
     updateData.period = updates.period;
+  }
+  if (updates.category !== undefined) {
+    if (!VALID_CATEGORIES.includes(updates.category)) {
+      throw new Error(`Invalid category: ${updates.category}`);
+    }
+    updateData.category = updates.category;
   }
 
   const { data, error } = await supabaseServer

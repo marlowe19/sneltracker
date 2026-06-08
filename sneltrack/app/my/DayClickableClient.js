@@ -58,6 +58,7 @@ export default function DayClickableClient({
   isToday,
   dayLabel,
   dayNumber,
+  dayIndex,
   hours,
   money,
   expenses,
@@ -76,6 +77,7 @@ export default function DayClickableClient({
         className={`day relative flex flex-col items-center w-full cursor-pointer rounded-lg p-1 transition-colors ${
           isToday ? "bg-[#cce7ff]" : ""
         } hover:bg-gray-50`}
+        data-day-index={dayIndex}
         onClick={handleDayClick}
         role="button"
         tabIndex={0}

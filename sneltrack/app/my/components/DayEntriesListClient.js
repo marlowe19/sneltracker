@@ -100,6 +100,171 @@ function formatMoney(amount) {
   }).format(amount);
 }
 
+function getEffectiveDurationMs(entry) {
+  if (entry.duration_editable !== undefined && entry.duration_editable !== "") {
+    const parsed = parseDuration(entry.duration_editable);
+    if (parsed !== null) return parsed;
+  }
+  return (
+    entry.duration_ms ??
+    (entry.end_time
+      ? computeEntryDurationMs(entry.start_time, entry.end_time, null)
+      : 0)
+  );
+}
+
+function dayMidnight(dayDate) {
+  const date = new Date(dayDate);
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    0,
+    0,
+    0,
+    0
+  );
+}
+
+function resolveEntryTimeUpdates(entry, selectedDate, { isNewEntry = false } = {}) {
+  const updates = {};
+  if (!selectedDate) return updates;
+
+  const hasStartTime =
+    entry.start_time_editable && entry.start_time_editable.trim() !== "";
+  const hasEndTime =
+    entry.end_time_editable && entry.end_time_editable.trim() !== "";
+  const isRunning = entry.is_running === true;
+
+  const newDurationMs =
+    entry.duration_editable !== undefined && entry.duration_editable !== ""
+      ? parseDuration(entry.duration_editable)
+      : null;
+
+  if (isNewEntry) {
+    if (!hasStartTime && newDurationMs !== null && newDurationMs > 0) {
+      const dayStart = dayMidnight(selectedDate);
+      updates.duration_ms = newDurationMs;
+      updates.start_time = dayStart.toISOString();
+      updates.end_time = new Date(dayStart.getTime() + newDurationMs).toISOString();
+      return updates;
+    }
+
+    if (hasStartTime) {
+      const newStart = combineDayDateWithTime(
+        selectedDate,
+        entry.start_time_editable
+      );
+      if (newStart) updates.start_time = newStart.toISOString();
+    }
+
+    if (hasEndTime) {
+      const newEnd = combineDayDateWithTime(
+        selectedDate,
+        entry.end_time_editable
+      );
+      if (newEnd) updates.end_time = newEnd.toISOString();
+    }
+
+    if (updates.start_time && updates.end_time) {
+      const durationMs =
+        new Date(updates.end_time).getTime() -
+        new Date(updates.start_time).getTime();
+      if (durationMs > 0) updates.duration_ms = durationMs;
+    } else if (!hasStartTime && newDurationMs !== null) {
+      updates.duration_ms = newDurationMs;
+    }
+
+    return updates;
+  }
+
+  const storedStartStr = entry.start_time ? formatTime(entry.start_time) : "";
+  const storedEndStr = entry.end_time ? formatTime(entry.end_time) : "";
+  const startTimeChanged =
+    hasStartTime && entry.start_time_editable !== storedStartStr;
+  const endTimeChanged = hasEndTime && entry.end_time_editable !== storedEndStr;
+
+  const currentDurationMs =
+    entry.duration_ms ??
+    (entry.start_time && entry.end_time
+      ? computeEntryDurationMs(entry.start_time, entry.end_time, null)
+      : null);
+  const durationChanged =
+    newDurationMs !== null && newDurationMs !== currentDurationMs;
+
+  if (
+    durationChanged &&
+    !startTimeChanged &&
+    !endTimeChanged &&
+    !isRunning &&
+    hasStartTime
+  ) {
+    const start = combineDayDateWithTime(
+      selectedDate,
+      entry.start_time_editable
+    );
+    if (start && newDurationMs > 0) {
+      updates.duration_ms = newDurationMs;
+      updates.start_time = start.toISOString();
+      updates.end_time = new Date(start.getTime() + newDurationMs).toISOString();
+    }
+    return updates;
+  }
+
+  if (durationChanged && !hasStartTime && newDurationMs > 0) {
+    const dayStart = dayMidnight(selectedDate);
+    updates.duration_ms = newDurationMs;
+    updates.start_time = dayStart.toISOString();
+    updates.end_time = new Date(dayStart.getTime() + newDurationMs).toISOString();
+    return updates;
+  }
+
+  if (hasStartTime) {
+    const newStart = combineDayDateWithTime(
+      selectedDate,
+      entry.start_time_editable
+    );
+    if (newStart) {
+      const startIso = newStart.toISOString();
+      const currentStart = entry.start_time
+        ? new Date(entry.start_time).toISOString()
+        : null;
+      if (startIso !== currentStart) updates.start_time = startIso;
+    }
+  }
+
+  if (hasEndTime && !isRunning) {
+    const newEnd = combineDayDateWithTime(
+      selectedDate,
+      entry.end_time_editable
+    );
+    if (newEnd) {
+      const endIso = newEnd.toISOString();
+      const currentEnd = entry.end_time
+        ? new Date(entry.end_time).toISOString()
+        : null;
+      if (endIso !== currentEnd) updates.end_time = endIso;
+    }
+  }
+
+  if (isRunning && updates.start_time) {
+    const durationMs = Date.now() - new Date(updates.start_time).getTime();
+    if (durationMs > 0) updates.duration_ms = durationMs;
+    return updates;
+  }
+
+  const effectiveStart = updates.start_time ?? entry.start_time ?? null;
+  const effectiveEnd = updates.end_time ?? entry.end_time ?? null;
+
+  if (effectiveStart && effectiveEnd && !isRunning) {
+    const durationMs =
+      new Date(effectiveEnd).getTime() - new Date(effectiveStart).getTime();
+    if (durationMs > 0) updates.duration_ms = durationMs;
+  }
+
+  return updates;
+}
+
 export default function DayEntriesListClient({
   user,
   selectedDate,
@@ -374,6 +539,27 @@ export default function DayEntriesListClient({
       }
     }
 
+    if (field === "duration_editable") {
+      const entry = updated[index];
+      if (
+        entry.start_time_editable &&
+        selectedDate &&
+        entry.is_running !== true
+      ) {
+        const newDurationMs = parseDuration(value);
+        if (newDurationMs !== null && newDurationMs > 0) {
+          const start = combineDayDateWithTime(
+            selectedDate,
+            entry.start_time_editable
+          );
+          if (start) {
+            const end = new Date(start.getTime() + newDurationMs);
+            updated[index].end_time_editable = formatTime(end.toISOString());
+          }
+        }
+      }
+    }
+
     if (field === "start_time_editable" || field === "end_time_editable") {
       const entry = updated[index];
       const isRunning = entry.is_running === true;
@@ -582,11 +768,7 @@ export default function DayEntriesListClient({
   };
 
   const calculateEntryTotal = (entry) => {
-    const durationMs =
-      entry.duration_ms ??
-      (entry.end_time
-        ? computeEntryDurationMs(entry.start_time, entry.end_time, null)
-        : 0);
+    const durationMs = getEffectiveDurationMs(entry);
 
     if (!durationMs) return 0;
 
@@ -680,76 +862,9 @@ export default function DayEntriesListClient({
             throw new Error("Day date is required");
           }
 
-          const updates = {};
-          let durationWasEdited = false;
-
-          const hasStartTime =
-            entry.start_time_editable &&
-            entry.start_time_editable.trim() !== "";
-          const hasEndTime =
-            entry.end_time_editable && entry.end_time_editable.trim() !== "";
-
-          if (
-            entry.duration_editable !== undefined &&
-            entry.duration_editable !== "" &&
-            !hasStartTime
-          ) {
-            const newDurationMs = parseDuration(entry.duration_editable);
-            if (newDurationMs !== null) {
-              updates.duration_ms = newDurationMs;
-              durationWasEdited = true;
-            }
-          }
-
-          if (durationWasEdited && selectedDate && updates.duration_ms) {
-            // Create UTC midnight for the selected date to avoid timezone issues
-            const date = new Date(selectedDate);
-            const year = date.getUTCFullYear();
-            const month = date.getUTCMonth();
-            const day = date.getUTCDate();
-            const dayStart = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-            const dayEnd = new Date(dayStart.getTime() + updates.duration_ms);
-            updates.start_time = dayStart.toISOString();
-            updates.end_time = dayEnd.toISOString();
-          } else {
-            if (entry.start_time_editable && selectedDate) {
-              const newStart = combineDayDateWithTime(
-                selectedDate,
-                entry.start_time_editable
-              );
-              if (newStart) {
-                updates.start_time = newStart.toISOString();
-              }
-            }
-
-            if (entry.end_time_editable && selectedDate) {
-              const newEnd = combineDayDateWithTime(
-                selectedDate,
-                entry.end_time_editable
-              );
-              if (newEnd) {
-                updates.end_time = newEnd.toISOString();
-              }
-            }
-
-            if (updates.start_time && updates.end_time) {
-              const start = new Date(updates.start_time);
-              const end = new Date(updates.end_time);
-              const durationMs = end - start;
-              if (durationMs > 0) {
-                updates.duration_ms = durationMs;
-              }
-            } else if (
-              entry.duration_editable &&
-              entry.duration_editable !== "" &&
-              !hasStartTime
-            ) {
-              const newDurationMs = parseDuration(entry.duration_editable);
-              if (newDurationMs !== null) {
-                updates.duration_ms = newDurationMs;
-              }
-            }
-          }
+          const updates = resolveEntryTimeUpdates(entry, selectedDate, {
+            isNewEntry: true,
+          });
 
           if (
             entry.hourly_rate_editable !== undefined &&
@@ -797,94 +912,7 @@ export default function DayEntriesListClient({
         }
 
         // Existing entry - update it
-        const updates = {};
-        let durationWasEdited = false;
-
-        const hasStartTime =
-          entry.start_time_editable && entry.start_time_editable.trim() !== "";
-        const hasEndTime =
-          entry.end_time_editable && entry.end_time_editable.trim() !== "";
-
-        if (
-          entry.duration_editable !== undefined &&
-          entry.duration_editable !== "" &&
-          !hasStartTime
-        ) {
-          const newDurationMs = parseDuration(entry.duration_editable);
-          const currentDurationMs = entry.duration_ms;
-
-          if (newDurationMs !== null && newDurationMs !== currentDurationMs) {
-            updates.duration_ms = newDurationMs;
-            durationWasEdited = true;
-          }
-        }
-
-        if (durationWasEdited && selectedDate && updates.duration_ms) {
-          const date = new Date(selectedDate);
-          const dayStart = new Date(
-            date.getFullYear(),
-            date.getMonth(),
-            date.getDate(),
-            0,
-            0,
-            0,
-            0
-          );
-          const dayEnd = new Date(dayStart.getTime() + updates.duration_ms);
-          updates.start_time = dayStart.toISOString();
-          updates.end_time = dayEnd.toISOString();
-        } else {
-          if (entry.start_time_editable && !durationWasEdited && selectedDate) {
-            const newStart = combineDayDateWithTime(
-              selectedDate,
-              entry.start_time_editable
-            );
-            if (newStart && newStart.toISOString() !== entry.start_time) {
-              updates.start_time = newStart.toISOString();
-
-              if (entry.is_running === true) {
-                const now = new Date();
-                const durationMs = now - newStart;
-                if (durationMs > 0) {
-                  updates.duration_ms = durationMs;
-                }
-              }
-            }
-          }
-
-          if (
-            entry.end_time_editable &&
-            !durationWasEdited &&
-            selectedDate &&
-            entry.is_running !== true
-          ) {
-            const newEnd = combineDayDateWithTime(
-              selectedDate,
-              entry.end_time_editable
-            );
-            const currentEnd = entry.end_time
-              ? new Date(entry.end_time).toISOString()
-              : null;
-            if (newEnd && newEnd.toISOString() !== currentEnd) {
-              updates.end_time = newEnd.toISOString();
-            }
-          }
-
-          if (
-            hasStartTime &&
-            hasEndTime &&
-            updates.start_time &&
-            updates.end_time &&
-            entry.is_running !== true
-          ) {
-            const start = new Date(updates.start_time);
-            const end = new Date(updates.end_time);
-            const durationMs = end - start;
-            if (durationMs > 0) {
-              updates.duration_ms = durationMs;
-            }
-          }
-        }
+        const updates = resolveEntryTimeUpdates(entry, selectedDate);
 
         if (entry.hourly_rate_editable !== undefined) {
           const newRate =
@@ -933,8 +961,6 @@ export default function DayEntriesListClient({
           if (responseData.entry) {
             updateEntry(entry.id, responseData.entry);
           }
-
-          return { success: true };
         }
 
         return { success: true };
@@ -1082,79 +1108,9 @@ export default function DayEntriesListClient({
           throw new Error("Day date is required");
         }
 
-        const updates = {};
-        let durationWasEdited = false;
-
-        const hasStartTime =
-          entry.start_time_editable && entry.start_time_editable.trim() !== "";
-        const hasEndTime =
-          entry.end_time_editable && entry.end_time_editable.trim() !== "";
-
-        if (
-          entry.duration_editable !== undefined &&
-          entry.duration_editable !== "" &&
-          !hasStartTime
-        ) {
-          const newDurationMs = parseDuration(entry.duration_editable);
-          if (newDurationMs !== null) {
-            updates.duration_ms = newDurationMs;
-            durationWasEdited = true;
-          }
-        }
-
-        if (durationWasEdited && selectedDate && updates.duration_ms) {
-          const date = new Date(selectedDate);
-          const dayStart = new Date(
-            date.getFullYear(),
-            date.getMonth(),
-            date.getDate(),
-            0,
-            0,
-            0,
-            0
-          );
-          const dayEnd = new Date(dayStart.getTime() + updates.duration_ms);
-          updates.start_time = dayStart.toISOString();
-          updates.end_time = dayEnd.toISOString();
-        } else {
-          if (entry.start_time_editable && selectedDate) {
-            const newStart = combineDayDateWithTime(
-              selectedDate,
-              entry.start_time_editable
-            );
-            if (newStart) {
-              updates.start_time = newStart.toISOString();
-            }
-          }
-
-          if (entry.end_time_editable && selectedDate) {
-            const newEnd = combineDayDateWithTime(
-              selectedDate,
-              entry.end_time_editable
-            );
-            if (newEnd) {
-              updates.end_time = newEnd.toISOString();
-            }
-          }
-
-          if (updates.start_time && updates.end_time) {
-            const start = new Date(updates.start_time);
-            const end = new Date(updates.end_time);
-            const durationMs = end - start;
-            if (durationMs > 0) {
-              updates.duration_ms = durationMs;
-            }
-          } else if (
-            entry.duration_editable &&
-            entry.duration_editable !== "" &&
-            !hasStartTime
-          ) {
-            const newDurationMs = parseDuration(entry.duration_editable);
-            if (newDurationMs !== null) {
-              updates.duration_ms = newDurationMs;
-            }
-          }
-        }
+        const updates = resolveEntryTimeUpdates(entry, selectedDate, {
+          isNewEntry: true,
+        });
 
         if (
           entry.hourly_rate_editable !== undefined &&
@@ -1235,94 +1191,7 @@ export default function DayEntriesListClient({
         }, 3000);
       } else {
         // Existing entry - update it
-        const updates = {};
-        let durationWasEdited = false;
-
-        const hasStartTime =
-          entry.start_time_editable && entry.start_time_editable.trim() !== "";
-        const hasEndTime =
-          entry.end_time_editable && entry.end_time_editable.trim() !== "";
-
-        if (
-          entry.duration_editable !== undefined &&
-          entry.duration_editable !== "" &&
-          !hasStartTime
-        ) {
-          const newDurationMs = parseDuration(entry.duration_editable);
-          const currentDurationMs = entry.duration_ms;
-
-          if (newDurationMs !== null && newDurationMs !== currentDurationMs) {
-            updates.duration_ms = newDurationMs;
-            durationWasEdited = true;
-          }
-        }
-
-        if (durationWasEdited && selectedDate && updates.duration_ms) {
-          const date = new Date(selectedDate);
-          const dayStart = new Date(
-            date.getFullYear(),
-            date.getMonth(),
-            date.getDate(),
-            0,
-            0,
-            0,
-            0
-          );
-          const dayEnd = new Date(dayStart.getTime() + updates.duration_ms);
-          updates.start_time = dayStart.toISOString();
-          updates.end_time = dayEnd.toISOString();
-        } else {
-          if (entry.start_time_editable && !durationWasEdited && selectedDate) {
-            const newStart = combineDayDateWithTime(
-              selectedDate,
-              entry.start_time_editable
-            );
-            if (newStart && newStart.toISOString() !== entry.start_time) {
-              updates.start_time = newStart.toISOString();
-
-              if (entry.is_running === true) {
-                const now = new Date();
-                const durationMs = now - newStart;
-                if (durationMs > 0) {
-                  updates.duration_ms = durationMs;
-                }
-              }
-            }
-          }
-
-          if (
-            entry.end_time_editable &&
-            !durationWasEdited &&
-            selectedDate &&
-            entry.is_running !== true
-          ) {
-            const newEnd = combineDayDateWithTime(
-              selectedDate,
-              entry.end_time_editable
-            );
-            const currentEnd = entry.end_time
-              ? new Date(entry.end_time).toISOString()
-              : null;
-            if (newEnd && newEnd.toISOString() !== currentEnd) {
-              updates.end_time = newEnd.toISOString();
-            }
-          }
-
-          if (
-            hasStartTime &&
-            hasEndTime &&
-            updates.start_time &&
-            updates.end_time &&
-            entry.is_running !== true
-          ) {
-            const start = new Date(updates.start_time);
-            const end = new Date(updates.end_time);
-            const durationMs = end - start;
-            if (durationMs > 0) {
-              updates.duration_ms = durationMs;
-            }
-          }
-        }
+        const updates = resolveEntryTimeUpdates(entry, selectedDate);
 
         if (entry.hourly_rate_editable !== undefined) {
           const newRate =
@@ -1689,11 +1558,7 @@ export default function DayEntriesListClient({
     let myTotalPrice = 0;
 
     localEntries.forEach((entry) => {
-      const durationMs =
-        entry.duration_ms ??
-        (entry.end_time
-          ? computeEntryDurationMs(entry.start_time, entry.end_time, null)
-          : 0);
+      const durationMs = getEffectiveDurationMs(entry);
       totalHoursMs += durationMs || 0;
 
       if (durationMs) {
@@ -1768,6 +1633,7 @@ export default function DayEntriesListClient({
 
   return (
     <div
+      data-testid="day-modal"
       className="w-full flex flex-col h-full"
       style={{
         padding: "1rem",
@@ -1877,6 +1743,7 @@ export default function DayEntriesListClient({
         {/* Tab Navigation */}
         <div className="flex border-b border-gray-200">
           <button
+            data-testid="day-tab-entries"
             onClick={() => setActiveTab("entries")}
             className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
               activeTab === "entries"
@@ -1887,6 +1754,7 @@ export default function DayEntriesListClient({
             Tijdregistraties
           </button>
           <button
+            data-testid="day-tab-expenses"
             onClick={() => setActiveTab("expenses")}
             className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
               activeTab === "expenses"
@@ -2839,6 +2707,7 @@ export default function DayEntriesListClient({
                   // Fallback to add button if no valid entry found
                   return (
                     <button
+                      data-testid="add-entry"
                       onClick={handleAddEntry}
                       disabled={isSaving || isDeleting}
                       className="w-full px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
@@ -2850,6 +2719,7 @@ export default function DayEntriesListClient({
 
                 return (
                   <button
+                    data-testid="save-entry"
                     onClick={() => {
                       if (currentIndex >= 0) {
                         handleSaveEntry(currentIndex);
@@ -2871,6 +2741,7 @@ export default function DayEntriesListClient({
               })()
             ) : (
               <button
+                data-testid="add-entry"
                 onClick={handleAddEntry}
                 disabled={isSaving || isDeleting}
                 className="w-full px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
@@ -3151,6 +3022,7 @@ export default function DayEntriesListClient({
                   // Fallback to add button if no valid expense found
                   return (
                     <button
+                      data-testid="add-expense"
                       onClick={handleAddExpense}
                       disabled={isSaving || isDeleting}
                       className="w-full sm:w-auto px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"
@@ -3162,6 +3034,7 @@ export default function DayEntriesListClient({
 
                 return (
                   <button
+                    data-testid="save-expense"
                     onClick={() => {
                       if (currentIndex >= 0) {
                         handleSaveExpense(currentIndex);
@@ -3185,6 +3058,7 @@ export default function DayEntriesListClient({
               })()
             ) : (
               <button
+                data-testid="add-expense"
                 onClick={handleAddExpense}
                 disabled={isSaving || isDeleting}
                 className="w-full sm:w-auto px-4 py-2 bg-[#008eff] text-white rounded-md hover:bg-[#0066b3] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm font-medium"

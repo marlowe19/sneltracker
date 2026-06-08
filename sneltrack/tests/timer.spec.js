@@ -2,12 +2,14 @@ import { test, expect } from "@playwright/test";
 import {
   navigateToUserPage,
   startTimer,
-  stopTimer,
   clickStartStopButton,
   selectProject,
-  waitForActiveTimer,
   waitForApiCalls,
   stopAllRunningTimers,
+  openDayModal,
+  getTodayDayIndex,
+  ensureTimerSlot,
+  openTimerProjectDropdown,
 } from "./helpers/test-helpers";
 
 test.describe("Timer Functionality @mobile", () => {
@@ -24,178 +26,145 @@ test.describe("Timer Functionality @mobile", () => {
     await stopAllRunningTimers(page);
   });
 
-  test("should display start button when no timer is active", async ({
+  test("should display start button when no timer is active @smoke", async ({
     page,
   }) => {
-    // Check that Start button is visible
-    const startButton = page.getByRole("button", { name: /^Start timer$/i });
+    const timerBox = await ensureTimerSlot(page);
+    const startButton = timerBox.getByRole("button", { name: /^Start timer$/i });
     await expect(startButton).toBeVisible();
 
-    // Check that Stop button is not visible
-    const stopButton = page.getByRole("button", { name: /^Stop timer$/i });
+    const stopButton = timerBox.getByRole("button", { name: /^Stop timer$/i });
     await expect(stopButton).not.toBeVisible();
   });
 
-  test("should start timer when start button is clicked", async ({ page }) => {
-    // Click the start button
+  test("should start timer when start button is clicked @smoke", async ({
+    page,
+  }) => {
     await clickStartStopButton(page);
-
-    // Wait for the page to update after starting timer
     await waitForApiCalls(page);
 
-    // Verify that Stop button is now visible
-    const stopButton = page.getByRole("button", { name: /^Stop timer$/i });
-    await expect(stopButton).toBeVisible({ timeout: 10000 });
-
-    // Verify that Start button is no longer visible (or disabled)
-    const startButton = page.getByRole("button", { name: /^Start timer$/i });
-    // Start button might still be visible but should be in a different state
-    // or the UI might show Stop button instead
+    const timerBox = page.locator(".timer-box").first();
+    await expect(
+      timerBox.getByRole("button", { name: /^Stop timer$/i })
+    ).toBeVisible({ timeout: 10_000 });
   });
 
-  test("should stop timer when stop button is clicked", async ({ page }) => {
-    // First start a timer
+  test("should stop timer when stop button is clicked @smoke", async ({
+    page,
+  }) => {
     await startTimer(page, testUser);
     await waitForApiCalls(page);
+    await page.reload();
+    await waitForApiCalls(page);
 
-    // Verify timer is running (Stop button should be visible)
-    const stopButton = page.getByRole("button", { name: /^Stop timer$/i });
-    await expect(stopButton).toBeVisible({ timeout: 10000 });
+    const timerBox = page.locator(".timer-box").first();
+    await expect(
+      timerBox.getByRole("button", { name: /^Stop timer$/i })
+    ).toBeVisible({ timeout: 10_000 });
 
-    // Click stop button
     await clickStartStopButton(page);
     await waitForApiCalls(page);
 
-    // Verify that Start button is visible again
-    const startButton = page.getByRole("button", { name: /^Start timer$/i });
-    await expect(startButton).toBeVisible({ timeout: 10000 });
+    await expect(
+      timerBox.getByRole("button", { name: /^Start timer$/i })
+    ).toBeVisible({ timeout: 10_000 });
   });
 
   test("should allow project selection before starting timer", async ({
     page,
   }) => {
-    // Wait for projects to load
     await waitForApiCalls(page);
-
-    // Check if project selector is visible
-    const projectSelector = page.getByRole("button", {
-      name: /Selecteer project/i,
-    });
-
-    // If project selector exists, test project selection
-    if (await projectSelector.isVisible().catch(() => false)) {
-      await projectSelector.click();
-      await page.waitForTimeout(500); // Wait for dropdown to appear
-
-      // Try to select a project if available
-      const projectOptions = page.getByRole("button", {
-        name: /Geen project|project/i,
-      });
-      const count = await projectOptions.count();
-
-      if (count > 0) {
-        // Select first available project option
-        await projectOptions.first().click();
-        await waitForApiCalls(page);
-      }
-    }
+    await openTimerProjectDropdown(page);
+    await expect(
+      page.getByRole("button", { name: "Kies een project" })
+    ).toBeVisible();
   });
 
   test("should start timer with selected project", async ({ page }) => {
     await waitForApiCalls(page);
-
-    // Try to select a project if project selector is available
-    const projectSelector = page.getByRole("button", {
-      name: /Selecteer project/i,
-    });
-
-    if (await projectSelector.isVisible().catch(() => false)) {
-      await selectProject(page, "Geen project");
-      await waitForApiCalls(page);
-    }
-
-    // Start timer
+    await selectProject(page, "Geen project");
     await clickStartStopButton(page);
     await waitForApiCalls(page);
 
-    // Verify timer started (Stop button should be visible)
-    const stopButton = page.getByRole("button", { name: /^Stop timer$/i });
-    await expect(stopButton).toBeVisible({ timeout: 10000 });
+    const timerBox = page.locator(".timer-box").first();
+    await expect(
+      timerBox.getByRole("button", { name: /^Stop timer$/i })
+    ).toBeVisible({ timeout: 10_000 });
   });
 
   test("should display running timer with time counter", async ({ page }) => {
-    // Start timer
     await startTimer(page, testUser);
     await waitForApiCalls(page);
+    await page.reload();
+    await waitForApiCalls(page);
 
-    // Wait for timer display to appear
-    // Look for time format like "0:00" or "00:00"
     const timePattern = /\d{1,2}:\d{2}/;
-    const timeDisplay = page.locator("text=" + timePattern.source);
-
-    // Timer should show some time (even if 0:00)
-    await expect(timeDisplay.first()).toBeVisible({ timeout: 10000 });
+    const timeDisplay = page.locator(".timer-box").locator("text=" + timePattern.source);
+    await expect(timeDisplay.first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("should handle multiple timer starts and stops", async ({ page }) => {
-    // Start timer
     await clickStartStopButton(page);
     await waitForApiCalls(page);
 
-    // Verify timer is running
-    const stopButton1 = page.getByRole("button", { name: /^Stop$/i });
-    await expect(stopButton1).toBeVisible({ timeout: 10000 });
+    const timerBox = page.locator(".timer-box").first();
+    await expect(
+      timerBox.getByRole("button", { name: /^Stop timer$/i })
+    ).toBeVisible({ timeout: 10_000 });
 
-    // Stop timer
     await clickStartStopButton(page);
     await waitForApiCalls(page);
 
-    // Start timer again
     await clickStartStopButton(page);
     await waitForApiCalls(page);
 
-    // Verify timer is running again
-    const stopButton2 = page.getByRole("button", { name: /^Stop$/i });
-    await expect(stopButton2).toBeVisible({ timeout: 10000 });
+    await expect(
+      timerBox.getByRole("button", { name: /^Stop timer$/i })
+    ).toBeVisible({ timeout: 10_000 });
   });
 
   test("should update timer display while running", async ({ page }) => {
-    // Start timer
     await startTimer(page, testUser);
     await waitForApiCalls(page);
+    await page.reload();
+    await waitForApiCalls(page);
 
-    // Wait for initial timer display
     const timePattern = /\d{1,2}:\d{2}/;
-    const initialTime = await page
-      .locator("text=" + timePattern.source)
-      .first()
-      .textContent();
+    const timerDisplay = page.locator(".timer-box").locator("text=" + timePattern.source);
+    const initialTime = await timerDisplay.first().textContent();
 
-    // Wait a few seconds
     await page.waitForTimeout(3000);
 
-    // Check that timer has updated (time should have increased)
-    const updatedTime = await page
-      .locator("text=" + timePattern.source)
-      .first()
-      .textContent();
-
-    // Times should be different (unless there's a delay in display)
-    // This is a basic check - the actual time format might need adjustment
+    const updatedTime = await timerDisplay.first().textContent();
     expect(updatedTime).toBeTruthy();
+    expect(initialTime).toBeTruthy();
+  });
+
+  test("should persist stopped timer as entry in today day modal @smoke", async ({
+    page,
+  }) => {
+    const dayIndex = getTodayDayIndex();
+
+    await clickStartStopButton(page);
+    await waitForApiCalls(page);
+    await page.waitForTimeout(3000);
+    await clickStartStopButton(page);
+    await waitForApiCalls(page);
+
+    await openDayModal(page, dayIndex);
+    const modal = page.getByTestId("day-modal");
+    await expect(modal.getByText("Duur:")).toBeVisible({ timeout: 10_000 });
   });
 
   test("should be responsive on mobile viewport", async ({ page }) => {
-    // Check that main elements are visible and properly sized
-    const startButton = page.getByRole("button", { name: /^Start timer$/i });
+    const timerBox = await ensureTimerSlot(page);
+    const startButton = timerBox.getByRole("button", { name: /^Start timer$/i });
     await expect(startButton).toBeVisible();
 
-    // Check viewport size
     const viewport = page.viewportSize();
-    expect(viewport.width).toBeLessThanOrEqual(428); // Max mobile width
+    expect(viewport.width).toBeLessThanOrEqual(428);
 
-    // Verify button is touch-friendly (has reasonable size)
     const box = await startButton.boundingBox();
-    expect(box.height).toBeGreaterThan(40); // Minimum touch target size
+    expect(box.height).toBeGreaterThan(40);
   });
 });

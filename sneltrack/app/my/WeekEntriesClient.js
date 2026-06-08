@@ -374,6 +374,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
                 isToday={isToday}
                 dayLabel={d}
                 dayNumber={dayDate.getDate()}
+                dayIndex={i}
                 hours={perDay[i]}
                 money={perDayMoney[i]}
                 expenses={perDayExpenses[i]}

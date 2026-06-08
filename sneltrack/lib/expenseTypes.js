@@ -1,12 +1,28 @@
 export const PREDEFINED_EXPENSE_TYPES = [
-  { value: "huur", label: "Huur" },
-  { value: "wegenbelasting", label: "Wegenbelasting" },
-  { value: "verzekering", label: "Verzekering" },
-  { value: "vervoer", label: "Vervoer" },
-  { value: "materialen", label: "Materialen" },
-  { value: "overige", label: "Overige" },
+  { value: "huur", label: "Huur", suggestedCategory: "private" },
+  { value: "wegenbelasting", label: "Wegenbelasting", suggestedCategory: "private" },
+  { value: "verzekering", label: "Verzekering", suggestedCategory: "private" },
+  { value: "vervoer", label: "Vervoer", suggestedCategory: "business" },
+  { value: "materialen", label: "Materialen", suggestedCategory: "business" },
+  { value: "overige", label: "Overige", suggestedCategory: "business" },
   { value: "__custom__", label: "Anders..." },
 ];
+
+export const EXPENSE_CATEGORIES = [
+  { value: "business", label: "Zakelijk" },
+  { value: "private", label: "Privé" },
+];
+
+export function getSuggestedCategoryForExpenseType(typeValue) {
+  const predefined = PREDEFINED_EXPENSE_TYPES.find((p) => p.value === typeValue);
+  return predefined?.suggestedCategory ?? "business";
+}
+
+export function getCategoryLabel(category) {
+  return (
+    EXPENSE_CATEGORIES.find((c) => c.value === category)?.label ?? category
+  );
+}
 
 /** Icon key per expense type (Huur=Home, Vervoer/Wegenbelasting=Car, etc.) */
 export const EXPENSE_ICON_MAP = {

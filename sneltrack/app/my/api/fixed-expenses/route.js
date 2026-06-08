@@ -72,11 +72,17 @@ export async function POST(request, { params }) {
       );
     }
 
+    const validCategories = ["private", "business"];
+    const category = validCategories.includes(body.category)
+      ? body.category
+      : "business";
+
     const expense = await fixedExpensesService.create(
       user,
       body.name.trim(),
       price,
-      body.period
+      body.period,
+      category,
     );
     return NextResponse.json({ expense });
   } catch (error) {
