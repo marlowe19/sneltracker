@@ -18,6 +18,7 @@ import {
   subWeeks,
   subMonths,
   format,
+  getWeek,
 } from "date-fns";
 import { nl } from "date-fns/locale/nl";
 import NotificationBadge from "@/app/components/NotificationBadge";
@@ -627,11 +628,16 @@ export default function CalendarViewClient({
   }
 
   const monthName = format(referenceDate, "MMMM yyyy", { locale: nl });
+  const weekBounds = getWeekBounds(referenceDate);
+  const weekNumber =
+    viewType === "week"
+      ? getWeek(weekBounds.start, { weekStartsOn: 1 })
+      : null;
   const weekLabel =
     viewType === "week"
-      ? `Week ${format(getWeekBounds(referenceDate).start, "d MMM", {
+      ? `Week ${format(weekBounds.start, "d MMM", {
           locale: nl,
-        })} - ${format(getWeekBounds(referenceDate).end, "d MMM yyyy", {
+        })} - ${format(weekBounds.end, "d MMM yyyy", {
           locale: nl,
         })}`
       : monthName;
@@ -723,7 +729,7 @@ export default function CalendarViewClient({
         <div className="w-full px-3 py-2 bg-white shadow-[inset_0px_1px_0px_0px_rgba(240,240,240,1.00)] flex justify-between items-center">
           <div className="flex flex-col justify-center items-start gap-0.5">
             <div className="text-gray-900 text-xs font-bold font-sans">
-              {viewType === "week" ? "Week" : "Maand"}
+              {viewType === "week" ? `Week ${weekNumber}` : "Maand"}
             </div>
             <div className="text-gray-900 text-xs font-bold font-sans">
               totaal
