@@ -1,8 +1,48 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Receipt, Time, Money } from "@carbon/icons-react";
 import { computeBreakEvenTimeline } from "@/lib/finance/breakEvenTimeline";
+
+function ForecastNumberInput({
+  value,
+  onChange,
+  min,
+  max,
+  step,
+  className,
+}) {
+  const [draft, setDraft] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) {
+      setDraft(String(value));
+    }
+  }, [value, focused]);
+
+  return (
+    <input
+      type="number"
+      min={min}
+      max={max}
+      step={step}
+      value={draft}
+      onFocus={() => setFocused(true)}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        setFocused(false);
+        const parsed = parseFloat(draft);
+        if (Number.isFinite(parsed) && onChange) {
+          onChange(parsed);
+        } else {
+          setDraft(String(value));
+        }
+      }}
+      className={className}
+    />
+  );
+}
 
 function formatMoney(amount) {
   return new Intl.NumberFormat("nl-NL", {
@@ -560,17 +600,11 @@ export default function MonthFinanceSummaryCard({
               <span className="block text-[11px] text-gray-500">
                 Uurtarief (€/uur)
               </span>
-              <input
-                type="number"
+              <ForecastNumberInput
                 min="0"
                 step="0.01"
                 value={hourlyRateForecast}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  if (Number.isFinite(v) && onHourlyRateChange) {
-                    onHourlyRateChange(v);
-                  }
-                }}
+                onChange={onHourlyRateChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base bg-white"
               />
             </label>
@@ -578,17 +612,11 @@ export default function MonthFinanceSummaryCard({
               <span className="block text-[11px] text-gray-500">
                 Uren per week
               </span>
-              <input
-                type="number"
+              <ForecastNumberInput
                 min="0"
                 step="0.5"
                 value={weeklyHoursForecast}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  if (Number.isFinite(v) && onWeeklyHoursChange) {
-                    onWeeklyHoursChange(v);
-                  }
-                }}
+                onChange={onWeeklyHoursChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base bg-white"
               />
             </label>
@@ -596,18 +624,12 @@ export default function MonthFinanceSummaryCard({
               <span className="block text-[11px] text-gray-500">
                 Belastingreserve (% van winst)
               </span>
-              <input
-                type="number"
+              <ForecastNumberInput
                 min="0"
                 max="100"
                 step="1"
                 value={taxReservePct}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  if (Number.isFinite(v) && onTaxReservePctChange) {
-                    onTaxReservePctChange(v);
-                  }
-                }}
+                onChange={onTaxReservePctChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base bg-white"
               />
             </label>
