@@ -58,7 +58,20 @@ export async function POST(request) {
       }
     }
 
-    const stats = await computeDashboardStats(user, weeks, month);
+    const includeTeamEarnings = body?.includeTeamEarnings === true;
+    const includeProjectExpenses = body?.includeProjectExpenses === true;
+    const taxReservePct = (() => {
+      const n = Number(body?.taxReservePct);
+      return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 35;
+    })();
+    const stats = await computeDashboardStats(
+      user,
+      weeks,
+      month,
+      includeTeamEarnings,
+      taxReservePct,
+      includeProjectExpenses,
+    );
     return NextResponse.json(stats);
   } catch (error) {
     console.error("dashboard-stats:", error);

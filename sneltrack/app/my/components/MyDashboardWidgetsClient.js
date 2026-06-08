@@ -4,6 +4,19 @@ import { useEffect, useState, useCallback } from "react";
 import { addWeeks } from "date-fns";
 import { ArrowDown, ArrowUp, SubtractAlt } from "@carbon/icons-react";
 import { getWeekBounds, getMonthBounds, toIso } from "@/lib/time";
+import MonthFinanceSummaryCard from "./MonthFinanceSummaryCard";
+import {
+  DEFAULT_FORECAST_HOURLY_RATE,
+  DEFAULT_FORECAST_WEEKLY_HOURS,
+  INCLUDE_TEAM_EARNINGS_KEY,
+  INCLUDE_PROJECT_EXPENSES_KEY,
+  TAX_RESERVE_PCT_KEY,
+  getForecastHourlyRate,
+  getForecastWeeklyHours,
+  getIncludeTeamEarnings,
+  getIncludeProjectExpenses,
+  getTaxReservePct,
+} from "@/lib/preferences/forecastSettings";
 
 function fmtYmd(d) {
   const y = d.getFullYear();
@@ -132,6 +145,55 @@ export default function MyDashboardWidgetsClient() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [forecastHourlyRate, setForecastHourlyRate] = useState(
+    DEFAULT_FORECAST_HOURLY_RATE,
+  );
+  const [forecastWeeklyHours, setForecastWeeklyHours] = useState(
+    DEFAULT_FORECAST_WEEKLY_HOURS,
+  );
+  const [includeTeamEarnings, setIncludeTeamEarnings] = useState(false);
+  const [includeProjectExpenses, setIncludeProjectExpenses] = useState(false);
+  const [taxReservePct, setTaxReservePct] = useState(35);
+
+  useEffect(() => {
+    setForecastHourlyRate(getForecastHourlyRate());
+    setForecastWeeklyHours(getForecastWeeklyHours());
+    setIncludeTeamEarnings(getIncludeTeamEarnings());
+    setIncludeProjectExpenses(getIncludeProjectExpenses());
+    setTaxReservePct(getTaxReservePct());
+  }, []);
+
+  useEffect(() => {
+    const syncPreferences = () => {
+      setIncludeTeamEarnings(getIncludeTeamEarnings());
+      setIncludeProjectExpenses(getIncludeProjectExpenses());
+      setTaxReservePct(getTaxReservePct());
+    };
+
+    const onStorage = (event) => {
+      if (
+        event.key === INCLUDE_TEAM_EARNINGS_KEY ||
+        event.key === INCLUDE_PROJECT_EXPENSES_KEY ||
+        event.key === TAX_RESERVE_PCT_KEY
+      ) {
+        syncPreferences();
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") syncPreferences();
+    };
+
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", syncPreferences);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", syncPreferences);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -141,7 +203,12 @@ export default function MyDashboardWidgetsClient() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildDashboardStatsBody()),
+        body: JSON.stringify({
+          ...buildDashboardStatsBody(),
+          includeTeamEarnings,
+          includeProjectExpenses,
+          taxReservePct,
+        }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -155,7 +222,7 @@ export default function MyDashboardWidgetsClient() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [includeTeamEarnings, includeProjectExpenses, taxReservePct]);
 
   useEffect(() => {
     load();
@@ -191,15 +258,12 @@ export default function MyDashboardWidgetsClient() {
     );
   }
 
-  const { weekly, monthGap } = data;
+  const { weekly, monthFinance } = data;
   const hoursAvg = formatHoursOneDecimal(weekly.avgPrevTwoWeeksHours);
   const revAvg = formatEur(weekly.avgPrevTwoWeeksRevenue);
-
-  const gapPositive = monthGap.gap >= 0;
-  const monthTitle = new Date().toLocaleDateString("nl-NL", {
-    month: "long",
-    year: "numeric",
-  });
+  const hasFixedExpenses =
+    (monthFinance.fixedBusinessCostsMonthly ?? 0) > 0 ||
+    (monthFinance.privateCostsMonthly ?? 0) > 0;
 
   return (
     <section
@@ -233,26 +297,26 @@ export default function MyDashboardWidgetsClient() {
         </div>
       </div>
 
-      <div className={widgetCardClass}>
-        <p className="text-[10px] font-semibold tracking-wide text-gray-600 uppercase sm:text-[11px]">
-          Resultaat {monthTitle}
-        </p>
-        <div className="mt-0.5 flex items-start justify-between gap-2 sm:mt-1">
-          <div className="min-w-0">
-            <p
-              className={`text-lg font-bold leading-tight sm:text-2xl ${
-                gapPositive ? "text-emerald-700" : "text-rose-700"
-              }`}
-            >
-              {formatEur(monthGap.gap)}
-            </p>
-            <p className="mt-1 text-[10px] leading-snug text-gray-500 sm:mt-1.5 sm:text-xs">
-              Onkosten {formatEur(monthGap.expenses)} · Verdiensten{" "}
-              {formatEur(monthGap.earnings)}
-            </p>
-          </div>
+      {hasFixedExpenses && (
+        <div className={widgetCardClass}>
+          <MonthFinanceSummaryCard
+            earnings={monthFinance.earnings}
+            hours={monthFinance.hours}
+            businessCostsMonthly={monthFinance.businessCostsMonthly}
+            privateCostsMonthly={monthFinance.privateCostsMonthly}
+            businessCostsYearly={monthFinance.businessCostsYearly}
+            taxReserve={monthFinance.taxReserve}
+            taxReservePct={monthFinance.taxReservePct}
+            netAfterTax={monthFinance.netAfterTax}
+            freeToSpend={monthFinance.freeToSpend}
+            expensePercentage={monthFinance.expensePercentage}
+            hourlyRateForecast={forecastHourlyRate}
+            weeklyHoursForecast={forecastWeeklyHours}
+            showWaterfallBreakdown={false}
+            showBusinessCostsSummary={false}
+          />
         </div>
-      </div>
+      )}
     </section>
   );
 }

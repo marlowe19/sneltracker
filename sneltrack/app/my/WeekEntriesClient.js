@@ -7,6 +7,7 @@ import {
   toIso,
   computeEntryDurationMsClipped,
 } from "@/lib/time";
+import { getWeek } from "date-fns";
 import Link from "next/link";
 import DayClickableClient from "./DayClickableClient";
 import NotificationBadge from "@/app/components/NotificationBadge";
@@ -70,6 +71,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
     new Date().getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000,
   );
   const { start: weekStart, end: weekEnd } = getWeekBounds(referenceDate);
+  const weekNumber = getWeek(weekStart, { weekStartsOn: 1 });
 
   // Memoize date strings to prevent infinite loops
   // Calculate dates inside useMemo to avoid Date object dependencies
@@ -374,6 +376,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
                 isToday={isToday}
                 dayLabel={d}
                 dayNumber={dayDate.getDate()}
+                dayIndex={i}
                 hours={perDay[i]}
                 money={perDayMoney[i]}
                 expenses={perDayExpenses[i]}
@@ -444,7 +447,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
           <div className={`grid ${weekSummaryGridCols} items-start gap-2`}>
             <div className="flex flex-col justify-center items-start gap-0.5">
               <div className="text-gray-900 text-xs font-bold font-sans">
-                Week
+                Week {weekNumber}
               </div>
               <div className="text-gray-900 text-xs font-bold font-sans">
                 Totaal

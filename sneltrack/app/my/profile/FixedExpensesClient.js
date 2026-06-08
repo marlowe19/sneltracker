@@ -2,21 +2,46 @@
 
 import { useState, useEffect, useMemo } from "react";
 import {
-  CurrencyEuro,
   Receipt,
   Add,
   Home,
   Car,
   Security,
   ShoppingCart,
-  Time,
 } from "@carbon/icons-react";
 import {
   PREDEFINED_EXPENSE_TYPES,
   PERIOD_OPTIONS,
+  EXPENSE_CATEGORIES,
   getExpenseIconKey,
+  getCategoryLabel,
+  getSuggestedCategoryForExpenseType,
 } from "@/lib/expenseTypes";
 import { formatDateForAPI } from "@/lib/dateRangeUtils";
+import MonthFinanceSummaryCard from "@/app/my/components/MonthFinanceSummaryCard";
+import {
+  DEFAULT_FORECAST_HOURLY_RATE,
+  DEFAULT_FORECAST_WEEKLY_HOURS,
+  DEFAULT_TAX_RESERVE_PCT,
+  getForecastHourlyRate,
+  getForecastWeeklyHours,
+  getIncludeTeamEarnings,
+  getIncludeProjectExpenses,
+  getTaxReservePct,
+  setForecastHourlyRate,
+  setForecastWeeklyHours,
+  setIncludeTeamEarnings,
+  setIncludeProjectExpenses,
+  setTaxReservePct,
+} from "@/lib/preferences/forecastSettings";
+import {
+  canIncludeTeamEarnings,
+  computeBillableTotals,
+} from "@/lib/finance/earningsTotals";
+import { sumFixedExpensesByCategory } from "@/lib/finance/fixedExpenseTotals";
+import { computeMonthFinance } from "@/lib/finance/monthFinance";
+
+const EXPENSE_REVIEW_DISMISSED_KEY = "sneltrack:expenseCategoryReviewDismissed";
 
 function formatMoney(amount) {
   return new Intl.NumberFormat("nl-NL", {
@@ -25,23 +50,6 @@ function formatMoney(amount) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount ?? 0);
-}
-
-function formatHours(hours) {
-  return (
-    new Intl.NumberFormat("nl-NL", {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    }).format(hours ?? 0) + " uur"
-  );
-}
-
-function toMonthlyPrice(price, period) {
-  if (!price || isNaN(price)) return 0;
-  if (period === "month") return price;
-  if (period === "quarter") return price / 3;
-  if (period === "year") return price / 12;
-  return 0;
 }
 
 function getPeriodLabel(period) {
@@ -70,45 +78,68 @@ export default function FixedExpensesClient({ userId }) {
   const [earningsThisMonth, setEarningsThisMonth] = useState(null);
   const [hoursThisMonth, setHoursThisMonth] = useState(null);
   const [earningsLoading, setEarningsLoading] = useState(true);
+  const [reportProjects, setReportProjects] = useState([]);
+  const [includeTeamEarnings, setIncludeTeamEarningsState] = useState(false);
+  const [includeProjectExpenses, setIncludeProjectExpensesState] =
+    useState(false);
+  const [projectExpensesMonthly, setProjectExpensesMonthly] = useState(0);
+  const [showReviewBanner, setShowReviewBanner] = useState(false);
+
+  const [forecastHourlyRate, setForecastHourlyRateState] = useState(
+    DEFAULT_FORECAST_HOURLY_RATE,
+  );
+  const [forecastWeeklyHours, setForecastWeeklyHoursState] = useState(
+    DEFAULT_FORECAST_WEEKLY_HOURS,
+  );
+  const [taxReservePct, setTaxReservePctState] = useState(
+    DEFAULT_TAX_RESERVE_PCT,
+  );
 
   // Form state
   const [nameType, setNameType] = useState("");
   const [customName, setCustomName] = useState("");
   const [price, setPrice] = useState("");
   const [period, setPeriod] = useState("month");
+  const [category, setCategory] = useState("business");
 
   // Edit state
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [editPeriod, setEditPeriod] = useState("month");
+  const [editCategory, setEditCategory] = useState("business");
 
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [managingId, setManagingId] = useState(null);
 
-  const totalPerMonth = useMemo(() => {
-    return expenses.reduce(
-      (sum, e) => sum + toMonthlyPrice(e.price, e.period),
-      0,
+  const { businessMonthly, privateMonthly } = useMemo(
+    () => sumFixedExpensesByCategory(expenses),
+    [expenses],
+  );
+
+  const businessCostsTotal = useMemo(() => {
+    return (
+      businessMonthly +
+      (includeProjectExpenses ? projectExpensesMonthly : 0)
     );
-  }, [expenses]);
+  }, [businessMonthly, includeProjectExpenses, projectExpensesMonthly]);
 
-  const totalPerYear = useMemo(() => totalPerMonth * 12, [totalPerMonth]);
-
-  const remaining = useMemo(() => {
+  const monthFinance = useMemo(() => {
     if (earningsThisMonth === null) return null;
-    return (earningsThisMonth ?? 0) - totalPerMonth;
-  }, [earningsThisMonth, totalPerMonth]);
-
-  const isProfit = remaining !== null && remaining >= 0;
-
-  const expensePercentage = useMemo(() => {
-    const earnings = earningsThisMonth ?? 0;
-    if (earnings <= 0) return 0;
-    return Math.min(100, Math.round((totalPerMonth / earnings) * 100));
-  }, [earningsThisMonth, totalPerMonth]);
+    return computeMonthFinance({
+      earnings: earningsThisMonth ?? 0,
+      businessCostsMonthly: businessCostsTotal,
+      privateCostsMonthly: privateMonthly,
+      taxReservePct,
+    });
+  }, [
+    earningsThisMonth,
+    businessCostsTotal,
+    privateMonthly,
+    taxReservePct,
+  ]);
 
   useEffect(() => {
     fetchExpenses();
@@ -116,7 +147,59 @@ export default function FixedExpensesClient({ userId }) {
 
   useEffect(() => {
     fetchEarningsThisMonth();
+    fetchProjectExpensesThisMonth();
   }, []);
+
+  useEffect(() => {
+    setForecastHourlyRateState(getForecastHourlyRate());
+    setForecastWeeklyHoursState(getForecastWeeklyHours());
+    setIncludeTeamEarningsState(getIncludeTeamEarnings());
+    setIncludeProjectExpensesState(getIncludeProjectExpenses());
+    setTaxReservePctState(getTaxReservePct());
+    try {
+      setShowReviewBanner(
+        localStorage.getItem(EXPENSE_REVIEW_DISMISSED_KEY) !== "true",
+      );
+    } catch {
+      setShowReviewBanner(true);
+    }
+  }, []);
+
+  const showTeamEarningsToggle = useMemo(
+    () => canIncludeTeamEarnings(reportProjects),
+    [reportProjects],
+  );
+
+  const showProjectExpensesToggle = projectExpensesMonthly > 0;
+
+  useEffect(() => {
+    if (reportProjects.length === 0) return;
+    const totals = computeBillableTotals(
+      reportProjects,
+      userId,
+      includeTeamEarnings,
+    );
+    setEarningsThisMonth(totals.totalBillableAmount);
+    setHoursThisMonth(totals.totalBillableHours);
+  }, [reportProjects, includeTeamEarnings, userId]);
+
+  async function fetchProjectExpensesThisMonth() {
+    try {
+      const refDate = formatDateForAPI(new Date());
+      const res = await fetch(
+        `/my/api/project-expenses?rangeType=month&referenceDate=${refDate}`,
+        { credentials: "include" },
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setProjectExpensesMonthly(data.totalCountable ?? 0);
+      } else {
+        setProjectExpensesMonthly(0);
+      }
+    } catch {
+      setProjectExpensesMonthly(0);
+    }
+  }
 
   async function fetchEarningsThisMonth() {
     try {
@@ -128,13 +211,14 @@ export default function FixedExpensesClient({ userId }) {
       );
       if (res.ok) {
         const data = await res.json();
-        setEarningsThisMonth(data.totals?.totalBillableAmount ?? 0);
-        setHoursThisMonth(data.totals?.totalBillableHours ?? 0);
+        setReportProjects(data.projects ?? []);
       } else {
+        setReportProjects([]);
         setEarningsThisMonth(0);
         setHoursThisMonth(0);
       }
     } catch {
+      setReportProjects([]);
       setEarningsThisMonth(0);
       setHoursThisMonth(0);
     } finally {
@@ -197,6 +281,7 @@ export default function FixedExpensesClient({ userId }) {
           name: displayName,
           price: parseFloat(price),
           period,
+          category,
         }),
       });
 
@@ -211,6 +296,7 @@ export default function FixedExpensesClient({ userId }) {
       setCustomName("");
       setPrice("");
       setPeriod("month");
+      setCategory("business");
       setShowAddForm(false);
       setSuccessMessage("Onkosten toegevoegd");
       setTimeout(() => setSuccessMessage(null), 3000);
@@ -226,6 +312,7 @@ export default function FixedExpensesClient({ userId }) {
     setEditName(expense.name);
     setEditPrice(String(expense.price ?? ""));
     setEditPeriod(expense.period ?? "month");
+    setEditCategory(expense.category ?? "business");
   }
 
   function cancelEdit() {
@@ -233,7 +320,17 @@ export default function FixedExpensesClient({ userId }) {
     setEditName("");
     setEditPrice("");
     setEditPeriod("month");
+    setEditCategory("business");
     setManagingId(null);
+  }
+
+  function dismissReviewBanner() {
+    setShowReviewBanner(false);
+    try {
+      localStorage.setItem(EXPENSE_REVIEW_DISMISSED_KEY, "true");
+    } catch {
+      // ignore
+    }
   }
 
   async function handleUpdate() {
@@ -263,6 +360,7 @@ export default function FixedExpensesClient({ userId }) {
           name: editName.trim(),
           price: priceNum,
           period: editPeriod,
+          category: editCategory,
         }),
       });
 
@@ -332,83 +430,64 @@ export default function FixedExpensesClient({ userId }) {
         </div>
       )}
 
-      {/* Financiële widget – light theme */}
-      <div className="rounded-lg border border-gray-200 bg-[#f5f5f5] overflow-hidden ">
-        {/* Top: Verdiensten + netto-badge */}
-        <div className="flex items-center justify-between gap-3 p-4">
-          <div className="flex items-center gap-3 min-w-0 shrink">
-            <div className="shrink-0 w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-              <CurrencyEuro size={20} className="text-[#008eff]" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-gray-500 whitespace-nowrap">
-                Verdiensten deze maand
-              </div>
-              <div className="text-lg font-semibold text-gray-900">
-                {earningsLoading ? (
-                  <span className="animate-pulse">...</span>
-                ) : (
-                  formatMoney(earningsThisMonth ?? 0)
-                )}
-              </div>
-              {hoursThisMonth !== null && (
-                <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
-                  <Time size={14} className="text-gray-500" />
-                  {formatHours(hoursThisMonth)}
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {remaining !== null && (
-              <span
-                className={`px-2.5 py-1 rounded-md text-sm font-medium transition-colors duration-300 ${
-                  isProfit
-                    ? "bg-green-100 text-green-700"
-                    : "bg-red-100 text-red-700"
-                }`}
-              >
-                {isProfit
-                  ? `+ ${formatMoney(remaining)}`
-                  : `- ${formatMoney(Math.abs(remaining))}`}
-              </span>
-            )}
-          </div>
+      {showReviewBanner && expenses.length > 0 && (
+        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm flex items-start justify-between gap-3">
+          <p>
+            Controleer of je bestaande onkosten privé of zakelijk zijn voor een
+            juist financieel beeld.
+          </p>
+          <button
+            type="button"
+            onClick={dismissReviewBanner}
+            className="shrink-0 text-xs font-medium text-amber-800 hover:text-amber-950"
+          >
+            Sluiten
+          </button>
         </div>
+      )}
 
-        {/* Midden: VASTE KOSTEN */}
-        <div className="flex items-center justify-between gap-3 px-4 pb-2">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="shrink-0 w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-              <Receipt size={20} className="text-gray-600" />
-            </div>
-            <div>
-              <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                Vaste kosten
-              </div>
-              <div className="text-lg font-semibold text-gray-900">
-                {formatMoney(totalPerMonth)}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Progress bar */}
-        <div className="px-4 pb-2">
-          <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-[#008eff] transition-all duration-300"
-              style={{ width: `${expensePercentage}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Onder de bar: X% van inkomen | Totaal per jaar */}
-        <div className="flex items-center justify-between px-4 pb-4 text-xs text-gray-500">
-          <span>{expensePercentage}% van je inkomen</span>
-          <span>Totaal per jaar: {formatMoney(totalPerYear)}</span>
-        </div>
-      </div>
+      <MonthFinanceSummaryCard
+        earnings={earningsThisMonth ?? 0}
+        hours={hoursThisMonth}
+        businessCostsMonthly={businessCostsTotal}
+        fixedBusinessCostsMonthly={businessMonthly}
+        projectExpensesMonthly={projectExpensesMonthly}
+        privateCostsMonthly={privateMonthly}
+        businessCostsYearly={businessCostsTotal * 12}
+        taxReserve={monthFinance?.taxReserve ?? 0}
+        taxReservePct={taxReservePct}
+        netAfterTax={monthFinance?.netAfterTax ?? 0}
+        freeToSpend={monthFinance?.freeToSpend ?? 0}
+        expensePercentage={monthFinance?.expensePercentage ?? 0}
+        earningsLoading={earningsLoading}
+        hourlyRateForecast={forecastHourlyRate}
+        weeklyHoursForecast={forecastWeeklyHours}
+        showForecastSettings
+        showTeamEarningsToggle={showTeamEarningsToggle}
+        includeTeamEarnings={includeTeamEarnings}
+        onIncludeTeamEarningsChange={(include) => {
+          setIncludeTeamEarningsState(include);
+          setIncludeTeamEarnings(include);
+        }}
+        showProjectExpensesToggle={showProjectExpensesToggle}
+        includeProjectExpenses={includeProjectExpenses}
+        onIncludeProjectExpensesChange={(include) => {
+          setIncludeProjectExpensesState(include);
+          setIncludeProjectExpenses(include);
+        }}
+        onHourlyRateChange={(rate) => {
+          setForecastHourlyRateState(rate);
+          setForecastHourlyRate(rate);
+        }}
+        onWeeklyHoursChange={(hours) => {
+          setForecastWeeklyHoursState(hours);
+          setForecastWeeklyHours(hours);
+        }}
+        onTaxReservePctChange={(pct) => {
+          setTaxReservePctState(pct);
+          setTaxReservePct(pct);
+        }}
+      />
 
       <div className="space-y-4">
         {showAddForm ? (
@@ -432,7 +511,13 @@ export default function FixedExpensesClient({ userId }) {
                 </label>
                 <select
                   value={nameType}
-                  onChange={(e) => setNameType(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNameType(value);
+                    if (value && value !== "__custom__") {
+                      setCategory(getSuggestedCategoryForExpenseType(value));
+                    }
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
                 >
                   <option value="">Selecteer een type</option>
@@ -458,6 +543,22 @@ export default function FixedExpensesClient({ userId }) {
                   />
                 </div>
               )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Categorie *
+                </label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
+                >
+                  {EXPENSE_CATEGORIES.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -536,6 +637,17 @@ export default function FixedExpensesClient({ userId }) {
                       placeholder="Naam"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
                     />
+                    <select
+                      value={editCategory}
+                      onChange={(e) => setEditCategory(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008eff] text-base"
+                    >
+                      {EXPENSE_CATEGORIES.map((c) => (
+                        <option key={c.value} value={c.value}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
                     <div className="grid grid-cols-2 gap-3">
                       <input
                         type="number"
@@ -588,7 +700,8 @@ export default function FixedExpensesClient({ userId }) {
                       </div>
                       <div className="text-sm text-gray-500">
                         {formatMoney(expense.price)} ·{" "}
-                        {getPeriodLabel(expense.period)}
+                        {getPeriodLabel(expense.period)} ·{" "}
+                        {getCategoryLabel(expense.category ?? "business")}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

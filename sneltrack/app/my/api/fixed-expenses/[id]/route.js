@@ -27,6 +27,16 @@ export async function PATCH(request, context) {
     if (body.name !== undefined) updates.name = body.name;
     if (body.price !== undefined) updates.price = body.price;
     if (body.period !== undefined) updates.period = body.period;
+    if (body.category !== undefined) {
+      const validCategories = ["private", "business"];
+      if (!validCategories.includes(body.category)) {
+        return NextResponse.json(
+          { error: "category must be private or business" },
+          { status: 400 },
+        );
+      }
+      updates.category = body.category;
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
