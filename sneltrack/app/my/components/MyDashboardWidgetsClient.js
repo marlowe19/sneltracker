@@ -261,6 +261,9 @@ export default function MyDashboardWidgetsClient() {
   const { weekly, monthFinance } = data;
   const hoursAvg = formatHoursOneDecimal(weekly.avgPrevTwoWeeksHours);
   const revAvg = formatEur(weekly.avgPrevTwoWeeksRevenue);
+  const hasFixedExpenses =
+    (monthFinance.fixedBusinessCostsMonthly ?? 0) > 0 ||
+    (monthFinance.privateCostsMonthly ?? 0) > 0;
 
   return (
     <section
@@ -294,24 +297,26 @@ export default function MyDashboardWidgetsClient() {
         </div>
       </div>
 
-      <div className={widgetCardClass}>
-        <MonthFinanceSummaryCard
-          earnings={monthFinance.earnings}
-          hours={monthFinance.hours}
-          businessCostsMonthly={monthFinance.businessCostsMonthly}
-          privateCostsMonthly={monthFinance.privateCostsMonthly}
-          businessCostsYearly={monthFinance.businessCostsYearly}
-          taxReserve={monthFinance.taxReserve}
-          taxReservePct={monthFinance.taxReservePct}
-          netAfterTax={monthFinance.netAfterTax}
-          freeToSpend={monthFinance.freeToSpend}
-          expensePercentage={monthFinance.expensePercentage}
-          hourlyRateForecast={forecastHourlyRate}
-          weeklyHoursForecast={forecastWeeklyHours}
-          showWaterfallBreakdown={false}
-          showBusinessCostsSummary={false}
-        />
-      </div>
+      {hasFixedExpenses && (
+        <div className={widgetCardClass}>
+          <MonthFinanceSummaryCard
+            earnings={monthFinance.earnings}
+            hours={monthFinance.hours}
+            businessCostsMonthly={monthFinance.businessCostsMonthly}
+            privateCostsMonthly={monthFinance.privateCostsMonthly}
+            businessCostsYearly={monthFinance.businessCostsYearly}
+            taxReserve={monthFinance.taxReserve}
+            taxReservePct={monthFinance.taxReservePct}
+            netAfterTax={monthFinance.netAfterTax}
+            freeToSpend={monthFinance.freeToSpend}
+            expensePercentage={monthFinance.expensePercentage}
+            hourlyRateForecast={forecastHourlyRate}
+            weeklyHoursForecast={forecastWeeklyHours}
+            showWaterfallBreakdown={false}
+            showBusinessCostsSummary={false}
+          />
+        </div>
+      )}
     </section>
   );
 }
