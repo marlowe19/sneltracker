@@ -238,9 +238,10 @@ export default function MyDashboardWidgetsClient() {
     );
   }
 
-  const { weekly, monthFinance } = data;
-  const hoursAvg = formatHoursOneDecimal(weekly.avgPrevTwoWeeksHours);
-  const revAvg = formatEur(weekly.avgPrevTwoWeeksRevenue);
+  // const { weekly, monthFinance } = data;
+  const { monthFinance } = data;
+  // const hoursAvg = formatHoursOneDecimal(weekly.avgPrevTwoWeeksHours);
+  // const revAvg = formatEur(weekly.avgPrevTwoWeeksRevenue);
   const hasFixedExpenses =
     (monthFinance.fixedBusinessCostsMonthly ?? 0) > 0 ||
     (monthFinance.privateCostsMonthly ?? 0) > 0;
@@ -250,6 +251,7 @@ export default function MyDashboardWidgetsClient() {
       className="w-full px-4 pt-2 pb-1 shrink-0 space-y-2 relative z-20 sm:space-y-3 sm:pt-3 sm:pb-2"
       aria-label="Dashboard statistieken"
     >
+      {/* Gewerkte uren & Omzet cards temporarily hidden
       <div>
         <h2 className="mb-1.5 text-[10px] font-semibold tracking-wide text-gray-500 uppercase leading-tight sm:mb-2 sm:text-[11px]">
           <span className="sm:hidden">Deze week vs. gem. 2 wkn</span>
@@ -276,6 +278,7 @@ export default function MyDashboardWidgetsClient() {
           />
         </div>
       </div>
+      */}
 
       {hasFixedExpenses && (
         <div className={widgetCardClass}>

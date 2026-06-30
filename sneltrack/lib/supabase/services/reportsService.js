@@ -17,7 +17,7 @@ import { supabaseServer } from "@/lib/supabaseServer";
  */
 export async function getUserProjectReports(userName, startDate, endDate) {
   const { data, error } = await supabaseServer.rpc(
-    "get_user_project_reports_v4", // v4: member role='owner' sees all team data
+    "get_user_project_reports_v5", // v5: activity-aware billable/unbillable splits
     {
       p_user_name: userName,
       p_start_date: startDate.toISOString(),

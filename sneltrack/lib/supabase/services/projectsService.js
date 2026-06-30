@@ -370,8 +370,8 @@ export async function getProjectDetail(
   startDate = null,
   endDate = null
 ) {
-  const { data, error } = await supabaseServer.rpc("get_project_detail_v6", {
-    // v6: adds total_break_ms for break deduction statistics
+  const { data, error } = await supabaseServer.rpc("get_project_detail_v7", {
+    // v7: billable-aware total_billable (entry + timer_activities)
     p_user_name: userName,
     p_project_id: projectId,
     p_start_date: startDate ? startDate.toISOString() : null,

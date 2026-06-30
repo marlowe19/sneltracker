@@ -23,6 +23,11 @@ import {
   formatBreakDeductionSubtext,
   resolveProjectBreakMinutes,
 } from "@/lib/breakDeduction";
+import {
+  computeActivitiesBillableMoney,
+  computeActivityBillableMoney,
+  computeEntryBillableMoney,
+} from "@/lib/finance/entryEarnings";
 function formatTime(isoString) {
   if (!isoString) return "";
   const date = new Date(isoString);
@@ -1689,32 +1694,19 @@ export default function DayEntriesListClient({
       const durationMs = getEffectiveDurationMs(entry);
       totalHoursMs += durationMs || 0;
 
-      if (durationMs) {
-        const hourlyRate =
-          entry.hourly_rate_editable !== undefined &&
-          entry.hourly_rate_editable !== ""
-            ? parseFloat(entry.hourly_rate_editable)
-            : entry.hourly_rate;
-        if (hourlyRate) {
-          const hours = durationMs / (1000 * 60 * 60);
-          totalPrice += hours * hourlyRate;
-        }
-      }
+      const activities = entryActivities[entry.id] ?? entry.activities;
+      const entryEarnings =
+        activities?.length > 0
+          ? computeActivitiesBillableMoney(activities)
+          : computeEntryBillableMoney(entry, durationMs, {
+              useEditableFields: true,
+            });
+      totalPrice += entryEarnings;
 
       // Calculate individual totals (only user's own entries)
       if (entry.user_name === user) {
         myTotalHoursMs += durationMs || 0;
-        if (durationMs) {
-          const hourlyRate =
-            entry.hourly_rate_editable !== undefined &&
-            entry.hourly_rate_editable !== ""
-              ? parseFloat(entry.hourly_rate_editable)
-              : entry.hourly_rate;
-          if (hourlyRate) {
-            const hours = durationMs / (1000 * 60 * 60);
-            myTotalPrice += hours * hourlyRate;
-          }
-        }
+        myTotalPrice += entryEarnings;
       }
     });
 
@@ -2182,10 +2174,9 @@ export default function DayEntriesListClient({
                                       new Date(activity.start_time).getTime()
                                     : new Date().getTime() -
                                       new Date(activity.start_time).getTime());
-                                const hours = durationMs / (1000 * 60 * 60);
-                                const earnings = activity.hourly_rate
-                                  ? hours * parseFloat(activity.hourly_rate)
-                                  : 0;
+                                const earnings = computeActivityBillableMoney(
+                                  activity
+                                );
                                 return (
                                   <div
                                     key={activity.id}
@@ -2550,10 +2541,9 @@ export default function DayEntriesListClient({
                                           new Date(
                                             activity.start_time
                                           ).getTime());
-                                    const hours = durationMs / (1000 * 60 * 60);
-                                    const earnings = activity.hourly_rate
-                                      ? hours * parseFloat(activity.hourly_rate)
-                                      : 0;
+                                    const earnings = computeActivityBillableMoney(
+                                      activity
+                                    );
 
                                     return (
                                       <div
@@ -2801,7 +2791,7 @@ export default function DayEntriesListClient({
                                                   {formatHoursMinutes(
                                                     durationMs
                                                   )}
-                                                  {activity.hourly_rate && (
+                                                  {earnings > 0 && (
                                                     <>
                                                       {" • "}
                                                       {formatMoney(earnings)}

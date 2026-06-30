@@ -8,6 +8,11 @@ import TimerActivitySwitcher from "@/app/my/components/TimerActivitySwitcher";
 import { computeEntryDurationMs } from "@/lib/time";
 import { formatHM } from "@/lib/time";
 import { Portfolio, Tag } from "@carbon/icons-react";
+import {
+  computeActivityBillableMoney,
+  computeEntryBillableMoney,
+  isBillable,
+} from "@/lib/finance/entryEarnings";
 
 function sortProjectActivitiesForPicker(rows) {
   return [...(rows || [])].sort(
@@ -313,26 +318,16 @@ export default function TimerSectionClient({ user }) {
   ) {
     let total = 0;
 
-    // Sum earnings from completed activities
+    // Sum earnings from completed billable activities
     activities.forEach((activity) => {
-      if (activity.end_time && activity.hourly_rate) {
-        const durationMs =
-          activity.duration_ms ||
-          new Date(activity.end_time).getTime() -
-            new Date(activity.start_time).getTime();
-        const hours = durationMs / (1000 * 60 * 60);
-        total += hours * parseFloat(activity.hourly_rate);
+      if (activity.end_time) {
+        total += computeActivityBillableMoney(activity, currentTime);
       }
     });
 
-    // Add current activity earnings (will be 0 if rate is 0)
+    // Add current activity earnings (will be 0 if rate is 0 or not billable)
     if (currentActivity && currentActivity.start_time) {
-      const startTime = new Date(currentActivity.start_time).getTime();
-      const currentTimeMs = currentTime || Date.now();
-      const durationMs = currentTimeMs - startTime;
-      const hours = durationMs / (1000 * 60 * 60);
-      const rate = parseFloat(currentActivity.hourly_rate) || 0;
-      total += hours * rate;
+      total += computeActivityBillableMoney(currentActivity, currentTime);
     }
 
     return total;
@@ -388,12 +383,16 @@ export default function TimerSectionClient({ user }) {
         currentActivity,
         currentTime
       );
-    } else if (entry?.hourly_rate && entry?.start_time) {
+    } else if (
+      isBillable(entry?.billable) &&
+      entry?.hourly_rate &&
+      entry?.start_time
+    ) {
       // Fallback to entry rate if no activities
-      const startTime = new Date(entry.start_time).getTime();
-      const durationMs = currentTime - startTime;
-      const hours = durationMs / (1000 * 60 * 60);
-      cumulativeEarnings = hours * parseFloat(entry.hourly_rate);
+      cumulativeEarnings = computeEntryBillableMoney(
+        entry,
+        currentTime - new Date(entry.start_time).getTime()
+      );
     }
 
     // Format money
@@ -826,10 +825,7 @@ export default function TimerSectionClient({ user }) {
     );
     const formattedDuration = formatHM(durationMs);
     const [hours, minutes] = formattedDuration.split(":");
-    const totalMoney =
-      entry.hourly_rate && durationMs > 0
-        ? (durationMs / (1000 * 60 * 60)) * entry.hourly_rate
-        : 0;
+    const totalMoney = computeEntryBillableMoney(entry, durationMs);
 
     // Use project_id (Supabase UUID) to find project, fallback to project (Firestore ID)
     const selectedProject = projects.find(

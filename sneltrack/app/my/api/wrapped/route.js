@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth0 } from "@/lib/auth/auth0";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { computeEntryBillableMoney } from "@/lib/finance/entryEarnings";
 
 export const GET = auth0.withApiAuthRequired(async (request) => {
   try {
@@ -121,10 +122,7 @@ export const GET = auth0.withApiAuthRequired(async (request) => {
       const hours = durationMs / (1000 * 60 * 60);
       totalHours += hours;
 
-      // Calculate money if hourly_rate exists
-      if (entry.hourly_rate) {
-        totalMoney += hours * entry.hourly_rate;
-      }
+      totalMoney += computeEntryBillableMoney(entry, durationMs);
 
       // Track project hours
       if (entry.project_id) {

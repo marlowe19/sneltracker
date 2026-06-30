@@ -11,6 +11,7 @@ import { getWeek } from "date-fns";
 import Link from "next/link";
 import DayClickableClient from "./DayClickableClient";
 import NotificationBadge from "@/app/components/NotificationBadge";
+import { computeEntryBillableMoney } from "@/lib/finance/entryEarnings";
 
 function formatHoursHMM(ms) {
   const totalMinutes = Math.round(ms / 60000);
@@ -193,12 +194,8 @@ export default function WeekEntriesClient({ user, weekOffset }) {
     if (dayIndex >= 0 && dayIndex < 7) {
       perDay[dayIndex] += duration;
 
-      // Calculate money for this entry
-      if (e.hourly_rate) {
-        const hours = duration / (1000 * 60 * 60);
-        const money = hours * e.hourly_rate;
-        perDayMoney[dayIndex] += money;
-      }
+      // Calculate money for this entry (billable only)
+      perDayMoney[dayIndex] += computeEntryBillableMoney(e, duration);
     }
   }
 
@@ -241,11 +238,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
 
     myWeekTotalTime += duration;
 
-    if (e.hourly_rate) {
-      const hours = duration / (1000 * 60 * 60);
-      const money = hours * e.hourly_rate;
-      myWeekTotalMoney += money;
-    }
+    myWeekTotalMoney += computeEntryBillableMoney(e, duration);
   }
 
   // Calculate individual expenses (only user's own expenses)
@@ -287,10 +280,7 @@ export default function WeekEntriesClient({ user, weekOffset }) {
 
     const userTotals = perUserWeekTotalsMap.get(userName);
     userTotals.timeMs += duration;
-    if (e.hourly_rate) {
-      const hours = duration / (1000 * 60 * 60);
-      userTotals.money += hours * e.hourly_rate;
-    }
+    userTotals.money += computeEntryBillableMoney(e, duration);
   }
 
   for (const expense of weekExpenses) {

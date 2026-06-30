@@ -4,6 +4,10 @@
  */
 
 import { supabaseServer } from "@/lib/supabaseServer";
+import {
+  computeActivityBillableMoney,
+  getActivityDurationMs,
+} from "@/lib/finance/entryEarnings";
 
 /**
  * Get all activities for a timer entry
@@ -334,6 +338,7 @@ export async function calculateTimerTotal(timeEntryId) {
 
   const activities = await getTimerActivities(timeEntryId);
   const currentActivity = await getCurrentActivity(timeEntryId);
+  const nowMs = Date.now();
 
   let totalDurationMs = 0;
   let totalEarnings = 0;
@@ -343,18 +348,12 @@ export async function calculateTimerTotal(timeEntryId) {
 
     // If this is the current activity, calculate duration from start to now
     if (currentActivity && activity.id === currentActivity.id) {
-      const startTime = new Date(activity.start_time);
-      const now = new Date();
-      durationMs = now.getTime() - startTime.getTime();
+      durationMs = getActivityDurationMs(activity, nowMs);
     }
 
     if (durationMs && durationMs > 0) {
       totalDurationMs += durationMs;
-      
-      if (activity.hourly_rate) {
-        const hours = durationMs / (1000 * 60 * 60);
-        totalEarnings += hours * parseFloat(activity.hourly_rate);
-      }
+      totalEarnings += computeActivityBillableMoney(activity, nowMs);
     }
   }
 

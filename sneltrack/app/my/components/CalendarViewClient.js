@@ -23,6 +23,7 @@ import {
 import { nl } from "date-fns/locale/nl";
 import NotificationBadge from "@/app/components/NotificationBadge";
 import DayEntriesListClient from "./DayEntriesListClient";
+import { computeEntryBillableMoney } from "@/lib/finance/entryEarnings";
 
 function formatHoursHMM(ms) {
   const totalMinutes = Math.round(ms / 60000);
@@ -295,11 +296,7 @@ export default function CalendarViewClient({
         data[dateKey].hours += duration;
         data[dateKey].entries.push(e);
 
-        if (e.hourly_rate) {
-          const hours = duration / (1000 * 60 * 60);
-          const money = hours * e.hourly_rate;
-          data[dateKey].money += money;
-        }
+        data[dateKey].money += computeEntryBillableMoney(e, duration);
       }
     }
 
