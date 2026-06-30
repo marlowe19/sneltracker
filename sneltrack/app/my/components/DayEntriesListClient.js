@@ -2159,7 +2159,7 @@ export default function DayEntriesListClient({
         </div>
       </div>
 
-      <div className="pb-4 flex-1 min-h-0 overflow-hidden relative">
+      <div className="flex-1 min-h-0 overflow-hidden relative flex flex-col">
         {isDayLoading && (
           <div
             data-testid="day-loading-overlay"
@@ -2182,17 +2182,18 @@ export default function DayEntriesListClient({
 
         {/* Time Entries Tab */}
         <div
-          className={`relative h-full overflow-y-auto ${
+          className={`flex flex-col flex-1 min-h-0 ${
             activeTab === "entries" ? "" : "hidden"
           }`}
         >
+          <div className="flex-1 min-h-0 overflow-y-auto">
           {/* Entries List */}
           {localEntries.length === 0 ? (
             <p className="text-gray-500 text-center py-8 bg-white rounded-lg">
               Geen entries gevonden voor deze dag
             </p>
           ) : (
-            <div className="space-y-4 pt-4 pb-20">
+            <div className="space-y-4 pt-4 pb-4">
               {localEntries.map((entry, index) => {
                 const isExpanded = expandedEntries.has(entry.id);
 
@@ -3072,9 +3073,10 @@ export default function DayEntriesListClient({
               })}
             </div>
           )}
+          </div>
 
           {/* Add Entry Button / Save Button */}
-          <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 mt-4">
+          <div className="shrink-0 bg-white border-t border-gray-200 p-4 z-10">
             {expandedEntries.size > 0 ? (
               (() => {
                 // Find the first expanded entry (or use currentEditingEntryId if set)
@@ -3140,17 +3142,18 @@ export default function DayEntriesListClient({
 
         {/* Expenses Tab */}
         <div
-          className={`relative h-full overflow-y-auto ${
+          className={`flex flex-col flex-1 min-h-0 ${
             activeTab === "expenses" ? "" : "hidden"
           }`}
         >
+          <div className="flex-1 min-h-0 overflow-y-auto">
           {/* Expenses List */}
           {localExpenses.length === 0 ? (
             <p className="text-gray-500 text-center py-8 bg-white rounded-lg">
               Geen uitgaven gevonden voor deze dag
             </p>
           ) : (
-            <div className="space-y-4 pt-4 pb-20">
+            <div className="space-y-4 pt-4 pb-4">
               {localExpenses.map((expense, index) => {
                 const isExpanded = expandedExpenses.has(expense.id);
 
@@ -3385,9 +3388,10 @@ export default function DayEntriesListClient({
               })}
             </div>
           )}
+          </div>
 
           {/* Add Expense Button / Save Button */}
-          <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 mt-4">
+          <div className="shrink-0 bg-white border-t border-gray-200 p-4 z-10">
             {expandedExpenses.size > 0 ? (
               (() => {
                 // Find the first expanded expense (or use currentEditingExpenseId if set)
@@ -3457,7 +3461,7 @@ export default function DayEntriesListClient({
 
         {/* Notes Tab */}
         <div
-          className={`h-full overflow-y-auto ${
+          className={`flex-1 min-h-0 overflow-y-auto ${
             activeTab === "notes" ? "" : "hidden"
           }`}
         >
