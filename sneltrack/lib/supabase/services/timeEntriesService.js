@@ -200,6 +200,7 @@ async function insertEntryWithProjectInfo(entryData, userName) {
     start_time: insertedEntry.start_time,
     end_time: insertedEntry.end_time,
     duration_ms: insertedEntry.duration_ms ?? null,
+    break_deduction_ms: insertedEntry.break_deduction_ms ?? null,
     hourly_rate: insertedEntry.hourly_rate ?? null,
     project: insertedEntry.firestore_project_id ?? null, // Firestore project ID
     project_id: insertedEntry.project_id ?? null, // Supabase project UUID
@@ -1184,8 +1185,10 @@ export async function createEntry(
   hourlyRate = null,
   project = null,
   startTime = null,
-  endTime = null
+  endTime = null,
+  options = {}
 ) {
+  const { billable, deduct_break, break_minutes } = options;
   const now = new Date();
 
   // Use provided start_time if available, otherwise set to start of the selected day
@@ -1253,12 +1256,24 @@ export async function createEntry(
         : null,
     project_id: supabaseProjectId,
     firestore_project_id: firestoreProjectId,
-    billable: true, // Default to billable
+    billable: billable !== undefined ? billable === true : true,
     created_at: now.toISOString(),
     modified_at: now.toISOString(),
     creation_method: "manual",
     is_running: false,
   };
+
+  const grossMs = computeGrossDurationMs(entryData.start_time, entryData.end_time);
+  if (deduct_break === false) {
+    Object.assign(entryData, clearBreakFromGross(grossMs));
+  } else if (deduct_break === true || break_minutes !== undefined) {
+    const projectSettings = await loadProjectBreakSettings(supabaseProjectId);
+    const minutes =
+      break_minutes !== undefined && break_minutes !== null
+        ? break_minutes
+        : resolveProjectBreakMinutes(projectSettings);
+    Object.assign(entryData, applyBreakToGross(grossMs, minutes));
+  }
 
   return await insertEntryWithProjectInfo(entryData, userName);
 }

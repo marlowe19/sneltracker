@@ -10,6 +10,9 @@ import {
   openDayModal,
   getTodayDayIndex,
   ensureTimerSlot,
+  navigateDayModal,
+  addNewEntryCard,
+  dismissNextConfirm,
 } from "./helpers/test-helpers";
 
 test.describe("Navigation and Layout @mobile", () => {
@@ -182,5 +185,62 @@ test.describe("Navigation and Layout @mobile", () => {
       .getByRole("navigation")
       .getByRole("link", { name: "Projecten", exact: true });
     await expect(projectsLink).toBeVisible();
+  });
+});
+
+test.describe("Day modal navigation @mobile", () => {
+  const testUser = "testuser";
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/my");
+    await stopAllRunningTimers(page);
+  });
+
+  test("should navigate to next and previous day without closing modal", async ({
+    page,
+  }) => {
+    await navigateToUserPage(page, testUser);
+    await waitForApiCalls(page);
+
+    await openDayModal(page, getTodayDayIndex());
+    const modal = page.getByTestId("day-modal");
+    await expect(modal.getByTestId("day-nav-next")).toBeVisible();
+
+    const dayBadge = modal.locator(".bg-sky-500 .text-white").first();
+    const initialDay = await dayBadge.textContent();
+
+    await navigateDayModal(page, "next");
+    await expect(modal).toBeVisible();
+    await expect(modal.getByTestId("day-loading-overlay")).not.toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(dayBadge).not.toHaveText(initialDay ?? "");
+
+    await navigateDayModal(page, "prev");
+    await expect(modal).toBeVisible();
+    await expect(modal.getByTestId("day-loading-overlay")).not.toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(dayBadge).toHaveText(initialDay ?? "");
+  });
+
+  test("should confirm before navigating with unsaved changes", async ({
+    page,
+  }) => {
+    await navigateToUserPage(page, testUser);
+    await waitForApiCalls(page);
+
+    await openDayModal(page, getTodayDayIndex());
+    const modal = page.getByTestId("day-modal");
+    const dayBadge = modal.locator(".bg-sky-500 .text-white").first();
+    const initialDay = await dayBadge.textContent();
+
+    await addNewEntryCard(page);
+
+    dismissNextConfirm(page);
+    await modal.getByTestId("day-nav-next").click();
+
+    await expect(dayBadge).toHaveText(initialDay ?? "");
+    await expect(modal.getByTestId("save-entry")).toBeVisible();
   });
 });
