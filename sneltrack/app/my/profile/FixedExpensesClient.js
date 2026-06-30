@@ -23,25 +23,18 @@ import {
   DEFAULT_FORECAST_HOURLY_RATE,
   DEFAULT_FORECAST_WEEKLY_HOURS,
   DEFAULT_TAX_RESERVE_PCT,
-  getForecastHourlyRate,
-  getForecastWeeklyHours,
-  getIncludeTeamEarnings,
-  getIncludeProjectExpenses,
-  getTaxReservePct,
-  setForecastHourlyRate,
-  setForecastWeeklyHours,
-  setIncludeTeamEarnings,
-  setIncludeProjectExpenses,
-  setTaxReservePct,
 } from "@/lib/preferences/forecastSettings";
+import {
+  fetchResolvedFinanceSettings,
+  patchFinanceSettings,
+} from "@/lib/preferences/financeSettingsClient";
+import { resolveFinanceSettings } from "@/lib/preferences/resolveFinanceSettings";
 import {
   canIncludeTeamEarnings,
   computeBillableTotals,
 } from "@/lib/finance/earningsTotals";
 import { sumFixedExpensesByCategory } from "@/lib/finance/fixedExpenseTotals";
 import { computeMonthFinance } from "@/lib/finance/monthFinance";
-
-const EXPENSE_REVIEW_DISMISSED_KEY = "sneltrack:expenseCategoryReviewDismissed";
 
 function formatMoney(amount) {
   return new Intl.NumberFormat("nl-NL", {
@@ -151,19 +144,55 @@ export default function FixedExpensesClient({ userId }) {
   }, []);
 
   useEffect(() => {
-    setForecastHourlyRateState(getForecastHourlyRate());
-    setForecastWeeklyHoursState(getForecastWeeklyHours());
-    setIncludeTeamEarningsState(getIncludeTeamEarnings());
-    setIncludeProjectExpensesState(getIncludeProjectExpenses());
-    setTaxReservePctState(getTaxReservePct());
-    try {
-      setShowReviewBanner(
-        localStorage.getItem(EXPENSE_REVIEW_DISMISSED_KEY) !== "true",
-      );
-    } catch {
-      setShowReviewBanner(true);
+    async function loadFinanceSettings() {
+      try {
+        const resolved = await fetchResolvedFinanceSettings();
+        setForecastHourlyRateState(resolved.forecastHourlyRate);
+        setForecastWeeklyHoursState(resolved.forecastWeeklyHours);
+        setIncludeTeamEarningsState(resolved.includeTeamEarnings);
+        setIncludeProjectExpensesState(resolved.includeProjectExpenses);
+        setTaxReservePctState(resolved.taxReservePct);
+        setShowReviewBanner(!resolved.expenseCategoryReviewDismissed);
+      } catch {
+        const resolved = resolveFinanceSettings(null);
+        setForecastHourlyRateState(resolved.forecastHourlyRate);
+        setForecastWeeklyHoursState(resolved.forecastWeeklyHours);
+        setIncludeTeamEarningsState(resolved.includeTeamEarnings);
+        setIncludeProjectExpensesState(resolved.includeProjectExpenses);
+        setTaxReservePctState(resolved.taxReservePct);
+        setShowReviewBanner(!resolved.expenseCategoryReviewDismissed);
+      }
     }
+    loadFinanceSettings();
   }, []);
+
+  async function saveFinanceSetting(updates) {
+    const merged = {
+      forecastHourlyRate: updates.forecastHourlyRate ?? forecastHourlyRate,
+      forecastWeeklyHours: updates.forecastWeeklyHours ?? forecastWeeklyHours,
+      taxReservePct: updates.taxReservePct ?? taxReservePct,
+      includeTeamEarnings: updates.includeTeamEarnings ?? includeTeamEarnings,
+      includeProjectExpenses:
+        updates.includeProjectExpenses ?? includeProjectExpenses,
+      expenseCategoryReviewDismissed:
+        updates.expenseCategoryReviewDismissed ?? !showReviewBanner,
+    };
+
+    setForecastHourlyRateState(merged.forecastHourlyRate);
+    setForecastWeeklyHoursState(merged.forecastWeeklyHours);
+    setTaxReservePctState(merged.taxReservePct);
+    setIncludeTeamEarningsState(merged.includeTeamEarnings);
+    setIncludeProjectExpensesState(merged.includeProjectExpenses);
+    if (merged.expenseCategoryReviewDismissed) {
+      setShowReviewBanner(false);
+    }
+
+    try {
+      await patchFinanceSettings(merged);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   const showTeamEarningsToggle = useMemo(
     () => canIncludeTeamEarnings(reportProjects),
@@ -325,12 +354,7 @@ export default function FixedExpensesClient({ userId }) {
   }
 
   function dismissReviewBanner() {
-    setShowReviewBanner(false);
-    try {
-      localStorage.setItem(EXPENSE_REVIEW_DISMISSED_KEY, "true");
-    } catch {
-      // ignore
-    }
+    saveFinanceSetting({ expenseCategoryReviewDismissed: true });
   }
 
   async function handleUpdate() {
@@ -466,26 +490,21 @@ export default function FixedExpensesClient({ userId }) {
         showTeamEarningsToggle={showTeamEarningsToggle}
         includeTeamEarnings={includeTeamEarnings}
         onIncludeTeamEarningsChange={(include) => {
-          setIncludeTeamEarningsState(include);
-          setIncludeTeamEarnings(include);
+          saveFinanceSetting({ includeTeamEarnings: include });
         }}
         showProjectExpensesToggle={showProjectExpensesToggle}
         includeProjectExpenses={includeProjectExpenses}
         onIncludeProjectExpensesChange={(include) => {
-          setIncludeProjectExpensesState(include);
-          setIncludeProjectExpenses(include);
+          saveFinanceSetting({ includeProjectExpenses: include });
         }}
         onHourlyRateChange={(rate) => {
-          setForecastHourlyRateState(rate);
-          setForecastHourlyRate(rate);
+          saveFinanceSetting({ forecastHourlyRate: rate });
         }}
         onWeeklyHoursChange={(hours) => {
-          setForecastWeeklyHoursState(hours);
-          setForecastWeeklyHours(hours);
+          saveFinanceSetting({ forecastWeeklyHours: hours });
         }}
         onTaxReservePctChange={(pct) => {
-          setTaxReservePctState(pct);
-          setTaxReservePct(pct);
+          saveFinanceSetting({ taxReservePct: pct });
         }}
       />
 

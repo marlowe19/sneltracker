@@ -38,6 +38,10 @@ function formatHours(totalHours) {
   return minutes > 0 ? `${hours}u ${minutes}m` : `${hours}u`;
 }
 
+function formatBreakTotal(totalBreakMs) {
+  return formatHours(Number(totalBreakMs ?? 0) / (1000 * 60 * 60));
+}
+
 // Color palette for pie chart
 const COLORS = [
   "#008eff", // Primary blue
@@ -126,6 +130,18 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
 
   // Build cards array
   const cards = [];
+
+  if (statistics.totalBreakMs > 0) {
+    cards.push({
+      id: "break-total",
+      title: "Pauze afgetrokken",
+      content: (
+        <div className="text-lg font-semibold text-gray-900">
+          {formatBreakTotal(statistics.totalBreakMs)}
+        </div>
+      ),
+    });
+  }
 
   // Card 2: Pie chart or Totaal waarde
   if (memberStatistics && memberStatistics.length > 1) {
@@ -292,6 +308,12 @@ export default function ProjectStatisticsClient({ user, projectId, project }) {
                 {formatHours(statistics.totalHours)}
               </div>
             </div>
+            {statistics.totalBreakMs > 0 && (
+              <p className="text-xs text-gray-500 mt-2">
+                Totaal pauze afgetrokken:{" "}
+                {formatBreakTotal(statistics.totalBreakMs)}
+              </p>
+            )}
           </div>
           {/* Budget Progress Bar */}
           {statistics.budgetHours && (

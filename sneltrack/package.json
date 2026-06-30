@@ -12,7 +12,7 @@
     "test:ui": "playwright test --ui",
     "test:mobile": "playwright test --grep @mobile",
     "test:debug": "playwright test --debug",
-    "test:unit": "node tests/breakEvenTimeline.test.mjs && node tests/earningsTotals.test.mjs && node tests/fixedExpenseTotals.test.mjs && node tests/monthFinance.test.mjs && node tests/projectExpenseTotals.test.mjs",
+    "test:unit": "node tests/breakEvenTimeline.test.mjs && node tests/earningsTotals.test.mjs && node tests/fixedExpenseTotals.test.mjs && node tests/monthFinance.test.mjs && node tests/projectExpenseTotals.test.mjs && node tests/resolveFinanceSettings.test.mjs && node tests/financeSettingsValidation.test.mjs",
     "test:auth-setup": "playwright test tests/auth.setup.js --headed",
     "playwright:install": "playwright install webkit chromium",
     "backup:firebase": "node scripts/backup-firebase.mjs",

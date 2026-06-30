@@ -18,6 +18,11 @@ import {
   ChevronDown,
   ChevronUp,
 } from "@carbon/icons-react";
+import {
+  computeGrossDurationMs,
+  formatBreakDeductionSubtext,
+  resolveProjectBreakMinutes,
+} from "@/lib/breakDeduction";
 function formatTime(isoString) {
   if (!isoString) return "";
   const date = new Date(isoString);
@@ -274,6 +279,7 @@ export default function DayEntriesListClient({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const projects = useStore((state) => state.projects);
+  const fetchProjects = useStore((state) => state.fetchProjects);
   const addEntry = useStore((state) => state.addEntry);
   const updateEntry = useStore((state) => state.updateEntry);
   const replaceTempEntry = useStore((state) => state.replaceTempEntry);
@@ -308,6 +314,8 @@ export default function DayEntriesListClient({
   const [editingActivityData, setEditingActivityData] = useState(null); // temporary edit data
   const [currentEditingEntryId, setCurrentEditingEntryId] = useState(null); // ID of entry currently being edited
   const [currentEditingExpenseId, setCurrentEditingExpenseId] = useState(null); // ID of expense currently being edited
+  const [savingBreakEntryId, setSavingBreakEntryId] = useState(null);
+  const [breakMinutesDraft, setBreakMinutesDraft] = useState({});
   const toast = useToast();
   // Memoize dayDateString to ensure stable reference
   const dayDateString = useMemo(
@@ -345,6 +353,12 @@ export default function DayEntriesListClient({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayDateString, user]);
+
+  useEffect(() => {
+    if (projects.length === 0) {
+      fetchProjects(user);
+    }
+  }, [projects.length, user, fetchProjects]);
 
   // Initialize activities from entries (activities are now included in the query)
   useEffect(() => {
@@ -782,6 +796,120 @@ export default function DayEntriesListClient({
 
     const hours = durationMs / (1000 * 60 * 60);
     return hours * hourlyRate;
+  };
+
+  const getProjectForEntry = (entry) =>
+    projects.find((project) => project.id === entry.project_id) || null;
+
+  const getBreakMinutesForEntry = (entry) => {
+    if (entry.break_deduction_ms > 0) {
+      return Math.round(entry.break_deduction_ms / 60000);
+    }
+    if (breakMinutesDraft[entry.id] !== undefined) {
+      const parsed = parseInt(breakMinutesDraft[entry.id], 10);
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        return parsed;
+      }
+    }
+    return resolveProjectBreakMinutes(getProjectForEntry(entry));
+  };
+
+  const applyBreakEntryUpdate = (index, updatedEntry) => {
+    updateEntry(updatedEntry.id, updatedEntry);
+    setLocalEntries((prev) => {
+      const next = [...prev];
+      next[index] = {
+        ...updatedEntry,
+        start_time_editable: formatTime(updatedEntry.start_time),
+        end_time_editable: formatTime(updatedEntry.end_time),
+        duration_editable: updatedEntry.duration_ms
+          ? formatHoursMinutes(updatedEntry.duration_ms)
+          : "",
+        hourly_rate_editable: updatedEntry.hourly_rate ?? "",
+        project_editable: updatedEntry.project_id ?? "",
+        isProjectOwner: updatedEntry.isProjectOwner ?? false,
+        isProjectMember: updatedEntry.isProjectMember ?? false,
+      };
+      return next;
+    });
+  };
+
+  const handleBreakToggle = async (entry, index, checked) => {
+    if (entry.is_running || entry.user_name !== user) return;
+
+    setSavingBreakEntryId(entry.id);
+    setError(null);
+
+    try {
+      const breakMinutes = getBreakMinutesForEntry(entry);
+      const response = await fetch(`/my/entries/${entry.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          checked
+            ? { deduct_break: true, break_minutes: breakMinutes }
+            : { deduct_break: false }
+        ),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update break");
+      }
+
+      const responseData = await response.json();
+      if (responseData.entry) {
+        applyBreakEntryUpdate(index, responseData.entry);
+      }
+    } catch (err) {
+      setError(err.message || "Failed to update break");
+    } finally {
+      setSavingBreakEntryId(null);
+    }
+  };
+
+  const handleBreakMinutesBlur = async (entry, index, rawValue) => {
+    if (!entry.break_deduction_ms || entry.is_running || entry.user_name !== user) {
+      return;
+    }
+
+    const parsed = parseInt(rawValue, 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return;
+    }
+
+    const currentMinutes = Math.round(entry.break_deduction_ms / 60000);
+    if (parsed === currentMinutes) {
+      return;
+    }
+
+    setSavingBreakEntryId(entry.id);
+    setError(null);
+
+    try {
+      const response = await fetch(`/my/entries/${entry.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deduct_break: true,
+          break_minutes: parsed,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update break");
+      }
+
+      const responseData = await response.json();
+      if (responseData.entry) {
+        applyBreakEntryUpdate(index, responseData.entry);
+      }
+    } catch (err) {
+      setError(err.message || "Failed to update break");
+    } finally {
+      setSavingBreakEntryId(null);
+    }
   };
 
   const handleAddEntry = () => {
@@ -1829,6 +1957,17 @@ export default function DayEntriesListClient({
                     : entry.hourly_rate
                     ? entry.hourly_rate.toFixed(2)
                     : "-";
+                const showBreakControls =
+                  entry.user_name === user &&
+                  entry.is_running !== true &&
+                  entry.end_time;
+                const breakChecked = (entry.break_deduction_ms ?? 0) > 0;
+                const breakMinutesValue = getBreakMinutesForEntry(entry);
+                const grossMs = computeGrossDurationMs(
+                  entry.start_time,
+                  entry.end_time
+                );
+                const isSavingBreak = savingBreakEntryId === entry.id;
 
                 return (
                   <div
@@ -1943,6 +2082,70 @@ export default function DayEntriesListClient({
                             </span>
                           </div>
                         </div>
+                        {showBreakControls && (
+                          <div
+                            className="space-y-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center gap-3 rounded-md bg-[#E5F5F4] px-3 py-2">
+                              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={breakChecked}
+                                  disabled={isSavingBreak}
+                                  onChange={(e) =>
+                                    handleBreakToggle(
+                                      entry,
+                                      index,
+                                      e.target.checked
+                                    )
+                                  }
+                                  className="h-4 w-4 rounded border-gray-300 text-[#40A69F] focus:ring-[#40A69F] disabled:opacity-50"
+                                />
+                                Pauze aftrekken
+                              </label>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={breakMinutesValue}
+                                  disabled={!breakChecked || isSavingBreak}
+                                  onChange={(e) =>
+                                    setBreakMinutesDraft((prev) => ({
+                                      ...prev,
+                                      [entry.id]: e.target.value,
+                                    }))
+                                  }
+                                  onBlur={(e) => {
+                                    const parsed = parseInt(e.target.value, 10);
+                                    if (Number.isFinite(parsed) && parsed >= 0) {
+                                      setBreakMinutesDraft((prev) => ({
+                                        ...prev,
+                                        [entry.id]: parsed,
+                                      }));
+                                    }
+                                    handleBreakMinutesBlur(
+                                      entry,
+                                      index,
+                                      e.target.value
+                                    );
+                                  }}
+                                  className="w-16 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-900 disabled:bg-gray-100 disabled:text-gray-400"
+                                />
+                                <span className="text-sm text-gray-600">min</span>
+                              </div>
+                            </div>
+                            {breakChecked && grossMs > 0 && (
+                              <p className="text-xs text-gray-500 px-1">
+                                {formatBreakDeductionSubtext(
+                                  grossMs,
+                                  entry.break_deduction_ms
+                                )}
+                              </p>
+                            )}
+                          </div>
+                        )}
                         {/* Second line: Rates and total
                         <div className="flex items-center gap-4 text-sm flex-wrap">
                           <div className="flex items-center gap-1.5">

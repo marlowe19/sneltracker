@@ -22,6 +22,15 @@ import {
 } from "./timerActivitiesService";
 import { getUserActivityById } from "./userActivitiesService";
 import { resolveEffectiveProjectActivityHourlyRate } from "./projectActivitiesService";
+import {
+  applyBreakToGross,
+  applyProjectDefaultBreakOnStop,
+  clearBreakFromGross,
+  computeBreakMs,
+  computeGrossDurationMs,
+  preserveBreakOnGross,
+  resolveProjectBreakMinutes,
+} from "@/lib/breakDeduction";
 
 /**
  * Looks up a Supabase project UUID by Firestore project ID
@@ -300,9 +309,145 @@ export function update(entry) {
     entry.id
   );
 }
+async function loadProjectBreakSettings(projectId) {
+  if (!projectId) return null;
+
+  const { data, error } = await supabaseServer
+    .from("projects")
+    .select("default_break_enabled, default_break_minutes")
+    .eq("id", projectId)
+    .single();
+
+  if (error || !data) return null;
+  return data;
+}
+
+async function mapStoppedEntryForClient(updatedEntry, userName) {
+  let projectName = null;
+  let isProjectOwner = false;
+  let isProjectMember = false;
+
+  if (updatedEntry.project_id) {
+    const { data: accessInfo } = await supabaseServer
+      .rpc("get_project_access", {
+        p_project_id: updatedEntry.project_id,
+        p_user_name: userName,
+      })
+      .single();
+
+    if (accessInfo) {
+      projectName = accessInfo.project_name;
+      isProjectOwner = accessInfo.is_project_owner;
+      isProjectMember = accessInfo.is_project_member;
+    }
+  }
+
+  return {
+    id: updatedEntry.id,
+    user_name: updatedEntry.user_name,
+    start_time: updatedEntry.start_time,
+    end_time: updatedEntry.end_time,
+    duration_ms: updatedEntry.duration_ms ?? null,
+    break_deduction_ms: updatedEntry.break_deduction_ms ?? null,
+    hourly_rate: updatedEntry.hourly_rate ?? null,
+    project: updatedEntry.firestore_project_id ?? null,
+    project_id: updatedEntry.project_id ?? null,
+    project_name: projectName,
+    billable: updatedEntry.billable ?? true,
+    isProjectOwner: isProjectOwner,
+    isProjectMember: isProjectMember,
+    created_at: updatedEntry.created_at,
+    modified_at: updatedEntry.modified_at,
+    creation_method: updatedEntry.creation_method ?? null,
+    is_running: updatedEntry.is_running ?? false,
+    firestore_id: updatedEntry.firestore_id,
+  };
+}
+
+function reconcileBreakAndDuration(currentEntry, fieldsToUpdate, breakControls) {
+  const { deduct_break, break_minutes } = breakControls;
+  const effectiveStart = fieldsToUpdate.start_time ?? currentEntry.start_time;
+  const effectiveEnd = fieldsToUpdate.end_time ?? currentEntry.end_time;
+  const grossMs = computeGrossDurationMs(effectiveStart, effectiveEnd);
+
+  const startChanged =
+    fieldsToUpdate.start_time !== undefined &&
+    fieldsToUpdate.start_time !== currentEntry.start_time;
+  const endChanged =
+    fieldsToUpdate.end_time !== undefined &&
+    fieldsToUpdate.end_time !== currentEntry.end_time;
+  const durationExplicitlyChanged =
+    fieldsToUpdate.duration_ms !== undefined &&
+    deduct_break === undefined &&
+    break_minutes === undefined &&
+    !startChanged &&
+    !endChanged;
+
+  if (deduct_break === false) {
+    Object.assign(fieldsToUpdate, clearBreakFromGross(grossMs));
+    return;
+  }
+
+  if (deduct_break === true || break_minutes !== undefined) {
+    const minutes =
+      break_minutes !== undefined && break_minutes !== null
+        ? break_minutes
+        : resolveProjectBreakMinutes(breakControls.projectSettings);
+    Object.assign(fieldsToUpdate, applyBreakToGross(grossMs, minutes));
+    return;
+  }
+
+  if ((startChanged || endChanged) && currentEntry.break_deduction_ms > 0) {
+    Object.assign(
+      fieldsToUpdate,
+      preserveBreakOnGross(grossMs, currentEntry.break_deduction_ms)
+    );
+    return;
+  }
+
+  if (startChanged || endChanged) {
+    fieldsToUpdate.duration_ms = grossMs > 0 ? grossMs : null;
+    return;
+  }
+
+  if (durationExplicitlyChanged) {
+    fieldsToUpdate.break_deduction_ms = null;
+  }
+}
+
 export async function updateEntry(userName, entryId, updates) {
+  const { deduct_break, break_minutes, ...restUpdates } = updates;
+
+  const { data: currentEntry, error: currentEntryError } = await supabaseServer
+    .from("time_entries")
+    .select("*")
+    .eq("id", entryId)
+    .single();
+
+  if (currentEntryError || !currentEntry) {
+    throw new Error("Time entry not found");
+  }
+
+  if (
+    (deduct_break !== undefined || break_minutes !== undefined) &&
+    currentEntry.is_running
+  ) {
+    throw new Error("Cannot apply break to a running entry");
+  }
+
   // Transform updates to Supabase format - minimal changes needed
-  const fieldsToUpdate = { ...updates };
+  const fieldsToUpdate = { ...restUpdates };
+
+  if (deduct_break !== undefined || break_minutes !== undefined) {
+    const projectSettings = await loadProjectBreakSettings(
+      currentEntry.project_id
+    );
+    reconcileBreakAndDuration(currentEntry, fieldsToUpdate, {
+      deduct_break,
+      break_minutes,
+      projectSettings,
+    });
+  }
 
   // project_id is already correct (from ...updates), look up firestore_project_id if project_id is being updated
   if (updates.project_id !== undefined) {
@@ -417,6 +562,14 @@ export async function updateEntry(userName, entryId, updates) {
     }
   }
 
+  if (deduct_break === undefined && break_minutes === undefined) {
+    reconcileBreakAndDuration(currentEntry, fieldsToUpdate, {
+      deduct_break: undefined,
+      break_minutes: undefined,
+      projectSettings: null,
+    });
+  }
+
   // Always update modified_at
   fieldsToUpdate.modified_at = new Date().toISOString();
 
@@ -424,6 +577,8 @@ export async function updateEntry(userName, entryId, updates) {
   delete fieldsToUpdate.firestore_id;
   delete fieldsToUpdate.user_name;
   delete fieldsToUpdate.id;
+  delete fieldsToUpdate.deduct_break;
+  delete fieldsToUpdate.break_minutes;
   // Filter out computed/read-only fields that aren't database columns
   delete fieldsToUpdate.project_name; // Computed from projects table
   delete fieldsToUpdate.isProjectOwner; // Computed from RPC call
@@ -474,6 +629,7 @@ export async function updateEntry(userName, entryId, updates) {
     start_time: updatedEntry.start_time,
     end_time: updatedEntry.end_time,
     duration_ms: updatedEntry.duration_ms ?? null,
+    break_deduction_ms: updatedEntry.break_deduction_ms ?? null,
     hourly_rate: updatedEntry.hourly_rate ?? null,
     project: updatedEntry.firestore_project_id ?? null, // Firestore project ID
     project_id: updatedEntry.project_id ?? null, // Supabase project UUID
@@ -788,7 +944,7 @@ export async function getDayEntries(userName, dayDate) {
   // what the query needs to do is get all the entries for the user for the given day.
   // if a user is the owner of a project they should see all the entries for the project for the given day.
 
-  const { data, error } = await supabaseServer.rpc("get_day_entries_v4", { // v4: owner-role members see team entries
+  const { data, error } = await supabaseServer.rpc("get_day_entries_v5", { // v5: adds break_deduction_ms
     p_user_name: userName,
     p_day_date: dateStr,
   });
@@ -806,6 +962,7 @@ export async function getDayEntries(userName, dayDate) {
     start_time: row.start_time,
     end_time: row.end_time,
     duration_ms: row.duration_ms ?? null,
+    break_deduction_ms: row.break_deduction_ms ?? null,
     duration_hours: row.duration_hours ?? null, // ✅ Pre-calculated hours
     hourly_rate: row.hourly_rate ?? null,
     project: row.project ?? null, // Firestore project ID (still used for project reference)
@@ -1264,9 +1421,15 @@ export async function stopEntry(userName, entryId = null) {
       }
     }
 
-    // Calculate duration_ms
+    // Calculate duration_ms (gross clock time)
     const startTime = new Date(entry.start_time);
-    const durationMs = endTime.getTime() - startTime.getTime();
+    const grossMs = endTime.getTime() - startTime.getTime();
+    const breakResult = applyProjectDefaultBreakOnStop(
+      grossMs,
+      await loadProjectBreakSettings(entry.project_id)
+    );
+    const durationMs = breakResult.duration_ms;
+    const breakDeductionMs = breakResult.break_deduction_ms;
 
     // Update the entry
     const { data: updatedEntry, error: updateError } = await supabaseServer
@@ -1274,7 +1437,8 @@ export async function stopEntry(userName, entryId = null) {
       .update({
         end_time: endTime.toISOString(),
         is_running: false,
-        duration_ms: durationMs > 0 ? durationMs : null,
+        duration_ms: durationMs,
+        break_deduction_ms: breakDeductionMs,
         modified_at: endTime.toISOString(),
       })
       .eq("id", entryId)
@@ -1286,46 +1450,7 @@ export async function stopEntry(userName, entryId = null) {
       throw updateError;
     }
 
-    // Get project access info if project exists
-    let projectName = null;
-    let isProjectOwner = false;
-    let isProjectMember = false;
-
-    if (updatedEntry.project_id) {
-      const { data: accessInfo } = await supabaseServer
-        .rpc("get_project_access", {
-          p_project_id: updatedEntry.project_id,
-          p_user_name: userName,
-        })
-        .single();
-
-      if (accessInfo) {
-        projectName = accessInfo.project_name;
-        isProjectOwner = accessInfo.is_project_owner;
-        isProjectMember = accessInfo.is_project_member;
-      }
-    }
-
-    // Return entry in the same format as getDayEntries
-    return {
-      id: updatedEntry.id,
-      user_name: updatedEntry.user_name,
-      start_time: updatedEntry.start_time,
-      end_time: updatedEntry.end_time,
-      duration_ms: updatedEntry.duration_ms ?? null,
-      hourly_rate: updatedEntry.hourly_rate ?? null,
-      project: updatedEntry.firestore_project_id ?? null,
-      project_id: updatedEntry.project_id ?? null,
-      project_name: projectName,
-      billable: updatedEntry.billable ?? true,
-      isProjectOwner: isProjectOwner,
-      isProjectMember: isProjectMember,
-      created_at: updatedEntry.created_at,
-      modified_at: updatedEntry.modified_at,
-      creation_method: updatedEntry.creation_method ?? null,
-      is_running: updatedEntry.is_running ?? false,
-      firestore_id: updatedEntry.firestore_id,
-    };
+    return mapStoppedEntryForClient(updatedEntry, userName);
   } else {
     // Stop all active entries for the user
     const { data: activeEntries, error: fetchError } = await supabaseServer
@@ -1353,14 +1478,21 @@ export async function stopEntry(userName, entryId = null) {
     const stoppedEntries = await Promise.all(
       activeEntries.map(async (entry) => {
         const startTimeMs = new Date(entry.start_time).getTime();
-        const durationMs = endTimeMs - startTimeMs;
+        const grossMs = endTimeMs - startTimeMs;
+        const breakResult = applyProjectDefaultBreakOnStop(
+          grossMs,
+          await loadProjectBreakSettings(entry.project_id)
+        );
+        const durationMs = breakResult.duration_ms;
+        const breakDeductionMs = breakResult.break_deduction_ms;
 
         const { data: updatedEntry, error: updateError } = await supabaseServer
           .from("time_entries")
           .update({
             end_time: endTime.toISOString(),
             is_running: false,
-            duration_ms: durationMs > 0 ? durationMs : null,
+            duration_ms: durationMs,
+            break_deduction_ms: breakDeductionMs,
             modified_at: endTime.toISOString(),
           })
           .eq("id", entry.id)
@@ -1372,45 +1504,7 @@ export async function stopEntry(userName, entryId = null) {
           throw updateError;
         }
 
-        // Get project access info if project exists
-        let projectName = null;
-        let isProjectOwner = false;
-        let isProjectMember = false;
-
-        if (updatedEntry.project_id) {
-          const { data: accessInfo } = await supabaseServer
-            .rpc("get_project_access", {
-              p_project_id: updatedEntry.project_id,
-              p_user_name: userName,
-            })
-            .single();
-
-          if (accessInfo) {
-            projectName = accessInfo.project_name;
-            isProjectOwner = accessInfo.is_project_owner;
-            isProjectMember = accessInfo.is_project_member;
-          }
-        }
-
-        return {
-          id: updatedEntry.id,
-          user_name: updatedEntry.user_name,
-          start_time: updatedEntry.start_time,
-          end_time: updatedEntry.end_time,
-          duration_ms: updatedEntry.duration_ms ?? null,
-          hourly_rate: updatedEntry.hourly_rate ?? null,
-          project: updatedEntry.firestore_project_id ?? null,
-          project_id: updatedEntry.project_id ?? null,
-          project_name: projectName,
-          billable: updatedEntry.billable ?? true,
-          isProjectOwner: isProjectOwner,
-          isProjectMember: isProjectMember,
-          created_at: updatedEntry.created_at,
-          modified_at: updatedEntry.modified_at,
-          creation_method: updatedEntry.creation_method ?? null,
-          is_running: updatedEntry.is_running ?? false,
-          firestore_id: updatedEntry.firestore_id,
-        };
+        return mapStoppedEntryForClient(updatedEntry, userName);
       })
     );
 

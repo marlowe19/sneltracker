@@ -1,0 +1,47 @@
+---
+description: Agent behavioral guidelines — ask before assuming, minimal diffs, verify outcomes
+alwaysApply: true
+---
+
+# Agent behavior
+
+Guidelines to reduce common LLM coding mistakes. For trivial one-line fixes, use judgment — skip the full plan.
+
+## Think before coding
+
+- State assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them — don't pick silently.
+- If something is unclear, stop and name what's confusing.
+- If a simpler approach exists, say so. Push back when warranted.
+
+## Simplicity and surgical changes
+
+- Minimum code that solves the problem. No features beyond what was asked.
+- No abstractions for single-use code. No configurability that wasn't requested.
+- Touch only what you must. Don't refactor or "improve" adjacent code.
+- Match existing style, even if you'd do it differently.
+- Remove imports/variables/functions that **your** changes made unused.
+- Don't remove pre-existing dead code unless asked.
+- Every changed line should trace directly to the user's request.
+
+## Goal-driven execution
+
+Transform tasks into verifiable goals:
+
+- "Add validation" → tests for invalid inputs, then make them pass
+- "Fix the bug" → test that reproduces it, then make it pass
+- "Refactor X" → tests pass before and after
+
+For multi-step work, state a brief plan with verify steps:
+
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+
+## Project-specific rules
+
+When touching these areas, follow the dedicated rules:
+
+- **Supabase RPCs / migrations** → `supabase-rpc-versioning.mdc`
+- **RLS policies** → `supabase-rls.mdc`
+- **Auth0 API routes** → `auth0-api-routes.mdc`
+- **Icons** → `icons.mdc`

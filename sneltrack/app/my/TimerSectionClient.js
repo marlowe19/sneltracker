@@ -286,9 +286,10 @@ export default function TimerSectionClient({ user }) {
         // Create a stopped entry object from the current entry + stop time
         const stoppedEntry = {
           ...entry,
-          end_time: data.endedAt || stopTime,
+          end_time: data.entry?.end_time || data.endedAt || stopTime,
           is_running: false,
-          duration_ms: data.durationMs || null,
+          duration_ms: data.entry?.duration_ms ?? data.durationMs ?? null,
+          break_deduction_ms: data.entry?.break_deduction_ms ?? null,
         };
 
         // Add to entries store immediately so it appears in day modal

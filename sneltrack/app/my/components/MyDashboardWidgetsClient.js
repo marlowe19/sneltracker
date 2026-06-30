@@ -8,15 +8,10 @@ import MonthFinanceSummaryCard from "./MonthFinanceSummaryCard";
 import {
   DEFAULT_FORECAST_HOURLY_RATE,
   DEFAULT_FORECAST_WEEKLY_HOURS,
-  INCLUDE_TEAM_EARNINGS_KEY,
-  INCLUDE_PROJECT_EXPENSES_KEY,
-  TAX_RESERVE_PCT_KEY,
-  getForecastHourlyRate,
-  getForecastWeeklyHours,
-  getIncludeTeamEarnings,
-  getIncludeProjectExpenses,
-  getTaxReservePct,
+  DEFAULT_TAX_RESERVE_PCT,
 } from "@/lib/preferences/forecastSettings";
+import { fetchResolvedFinanceSettings } from "@/lib/preferences/financeSettingsClient";
+import { resolveFinanceSettings } from "@/lib/preferences/resolveFinanceSettings";
 
 function fmtYmd(d) {
   const y = d.getFullYear();
@@ -153,46 +148,29 @@ export default function MyDashboardWidgetsClient() {
   );
   const [includeTeamEarnings, setIncludeTeamEarnings] = useState(false);
   const [includeProjectExpenses, setIncludeProjectExpenses] = useState(false);
-  const [taxReservePct, setTaxReservePct] = useState(35);
+  const [taxReservePct, setTaxReservePct] = useState(DEFAULT_TAX_RESERVE_PCT);
+  const [financeSettingsLoaded, setFinanceSettingsLoaded] = useState(false);
+
+  function applyResolvedSettings(resolved) {
+    setForecastHourlyRate(resolved.forecastHourlyRate);
+    setForecastWeeklyHours(resolved.forecastWeeklyHours);
+    setIncludeTeamEarnings(resolved.includeTeamEarnings);
+    setIncludeProjectExpenses(resolved.includeProjectExpenses);
+    setTaxReservePct(resolved.taxReservePct);
+  }
 
   useEffect(() => {
-    setForecastHourlyRate(getForecastHourlyRate());
-    setForecastWeeklyHours(getForecastWeeklyHours());
-    setIncludeTeamEarnings(getIncludeTeamEarnings());
-    setIncludeProjectExpenses(getIncludeProjectExpenses());
-    setTaxReservePct(getTaxReservePct());
-  }, []);
-
-  useEffect(() => {
-    const syncPreferences = () => {
-      setIncludeTeamEarnings(getIncludeTeamEarnings());
-      setIncludeProjectExpenses(getIncludeProjectExpenses());
-      setTaxReservePct(getTaxReservePct());
-    };
-
-    const onStorage = (event) => {
-      if (
-        event.key === INCLUDE_TEAM_EARNINGS_KEY ||
-        event.key === INCLUDE_PROJECT_EXPENSES_KEY ||
-        event.key === TAX_RESERVE_PCT_KEY
-      ) {
-        syncPreferences();
+    async function loadFinanceSettings() {
+      try {
+        const resolved = await fetchResolvedFinanceSettings();
+        applyResolvedSettings(resolved);
+      } catch {
+        applyResolvedSettings(resolveFinanceSettings(null));
+      } finally {
+        setFinanceSettingsLoaded(true);
       }
-    };
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") syncPreferences();
-    };
-
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("focus", syncPreferences);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("focus", syncPreferences);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
+    }
+    loadFinanceSettings();
   }, []);
 
   const load = useCallback(async () => {
@@ -225,10 +203,12 @@ export default function MyDashboardWidgetsClient() {
   }, [includeTeamEarnings, includeProjectExpenses, taxReservePct]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (financeSettingsLoaded) {
+      load();
+    }
+  }, [load, financeSettingsLoaded]);
 
-  if (loading) {
+  if (!financeSettingsLoaded || loading) {
     return (
       <section className="w-full px-4 pt-2 pb-1 shrink-0">
         <div className="flex justify-center py-3 sm:py-6">

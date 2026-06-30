@@ -1,0 +1,46 @@
+---
+description: Supabase RPC functions – always version, never replace in place
+globs: sneltrack/supabase-migrations/*.sql,sneltrack/lib/supabase/**/*.js
+alwaysApply: false
+---
+
+# Supabase RPC versioning
+
+When changing a PostgreSQL function (`get_*`, RPC) return type or behaviour, **create a new version**. Do not `CREATE OR REPLACE` the existing version if its signature or contract changes.
+
+## Rule
+
+| Situation | Do |
+|-----------|-----|
+| New column in `RETURNS TABLE` | New function: `get_foo_vN+1` |
+| Changed join/filter logic (breaking) | New function version |
+| Bug fix, same signature & columns | `CREATE OR REPLACE` on same version is OK |
+| App needs new fields | Point service at new version; leave old RPC in DB |
+
+## Pattern
+
+```sql
+-- ❌ NIET: wijzig v4 return type in place
+CREATE OR REPLACE FUNCTION get_day_entries_v4(...) RETURNS TABLE (..., break_deduction_ms BIGINT)
+
+-- ✅ WEL: nieuwe v5, v4 blijft staan
+CREATE OR REPLACE FUNCTION get_day_entries_v5(...) RETURNS TABLE (..., break_deduction_ms BIGINT)
+-- COMMENT: v4 remains for backward compatibility
+```
+
+```javascript
+// Service: call latest version, comment why
+await supabaseServer.rpc("get_day_entries_v5", { ... }); // v5: break_deduction_ms
+```
+
+## Migration checklist
+
+1. New file: `NNN_create_get_*_vN.sql` or extend migration with **new** function name only
+2. `COMMENT ON FUNCTION get_*_vN` noting what changed vs vN-1
+3. Update the one service/RPC caller to the new version
+4. Never drop or replace older versions unless explicitly deprecating across the whole app
+
+## Examples in this repo
+
+- `get_day_entries_v3` → `v4` → `v5` (break_deduction_ms)
+- `get_project_detail_v5` → `v6` (total_break_ms)
