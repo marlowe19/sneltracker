@@ -1,0 +1,39 @@
+{
+  "name": "sneltrack-mobile",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "date-fns": "^4.4.0",
+    "expo": "~57.0.6",
+    "expo-constants": "~57.0.5",
+    "expo-font": "~57.0.1",
+    "expo-haptics": "~57.0.1",
+    "expo-linking": "~57.0.3",
+    "expo-router": "~57.0.6",
+    "expo-status-bar": "~57.0.1",
+    "expo-symbols": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "4.25.2",
+    "react-native-svg": "15.15.4",
+    "react-native-webview": "13.16.1",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test:logic": "node --test lib/logic/__tests__/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "private": true
+}
