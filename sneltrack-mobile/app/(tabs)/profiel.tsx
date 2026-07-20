@@ -4,7 +4,7 @@ import { Alert, ScrollView, StyleSheet, Switch, Text, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../theme/useTheme";
 import { Card } from "../../components/Card";
-import { ErrorState } from "../../components/ErrorState";
+import { InlineErrorBanner } from "../../components/InlineErrorBanner";
 import { Skeleton } from "../../components/Skeleton";
 import { useAuthStore } from "../../lib/stores/authStore";
 import { usePreferencesStore } from "../../lib/stores/preferencesStore";
@@ -71,7 +71,7 @@ export default function ProfielScreen() {
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: spacing.lg }}>
         <Card style={styles.userCard}>
           <View style={[styles.avatar, { backgroundColor: colors.primarySoft }]}>
-            <Text style={{ color: colors.primaryDeep, fontWeight: "700", fontSize: 20 }} allowFontScaling>
+            <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 20 }} allowFontScaling>
               {initials}
             </Text>
           </View>
@@ -86,10 +86,13 @@ export default function ProfielScreen() {
           <Text style={[styles.sectionTitle, { color: colors.textMain, marginBottom: spacing.sm }]} allowFontScaling>
             XP dit maand
           </Text>
+          {error ? (
+            <View style={{ marginBottom: spacing.sm }}>
+              <InlineErrorBanner message={error} onRetry={load} />
+            </View>
+          ) : null}
           {loading ? (
             <Skeleton height={48} />
-          ) : error ? (
-            <ErrorState message={error} onRetry={load} />
           ) : (
             <View style={styles.xpRow}>
               <Text style={[styles.xpTotal, { color: colors.purple }]} allowFontScaling>

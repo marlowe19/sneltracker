@@ -33,6 +33,14 @@ export function formatWeekdayShort(date: Date | string | number): string {
   return formatDateFns(d, "EEEEEE", { locale: nl });
 }
 
+/** "ma 20 jul" — weekday short + day + short month, for the week-nav "Vandaag" pill. */
+export function formatTodayPill(date: Date | string | number): string {
+  const d = new Date(date);
+  const weekday = formatDateFns(d, "EEEEEE", { locale: nl });
+  const month = formatDateFns(d, "MMM", { locale: nl }).replace(/\.$/, "");
+  return `${weekday} ${d.getDate()} ${month}`;
+}
+
 /** e.g. "6u 30m", "45m", "0m" — matches lib/logic/utils/projectProgress.ts#formatHours */
 export function formatDurationHoursMinutes(hours: number): string {
   if (!hours || hours === 0) return "0m";

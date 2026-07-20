@@ -5,7 +5,7 @@ import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../theme/useTheme";
 import { EmptyState } from "../../components/EmptyState";
-import { ErrorState } from "../../components/ErrorState";
+import { InlineErrorBanner } from "../../components/InlineErrorBanner";
 import { Skeleton } from "../../components/Skeleton";
 import { ProgressBar } from "../../components/ProgressBar";
 import { fetchProjects } from "../../lib/api/endpoints";
@@ -37,29 +37,20 @@ export default function ProjectenScreen() {
     load();
   }, [load]);
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.bgMain }]} edges={["bottom"]}>
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgMain }]} edges={["bottom"]}>
+      {error ? (
+        <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg }}>
+          <InlineErrorBanner message={error} onRetry={load} />
+        </View>
+      ) : null}
+      {loading ? (
         <View style={{ padding: spacing.lg }}>
           <Skeleton height={72} style={{ marginBottom: spacing.sm }} />
           <Skeleton height={72} style={{ marginBottom: spacing.sm }} />
           <Skeleton height={72} />
         </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.bgMain }]} edges={["bottom"]}>
-        <ErrorState message={error} onRetry={load} />
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bgMain }]} edges={["bottom"]}>
-      {projects.length === 0 ? (
+      ) : projects.length === 0 ? (
         <EmptyState title="Nog geen projecten" />
       ) : (
         <FlatList
@@ -74,7 +65,7 @@ export default function ProjectenScreen() {
                 setRefreshing(true);
                 load();
               }}
-              tintColor={colors.primaryDeep}
+              tintColor={colors.primary}
             />
           }
           renderItem={({ item }) => {
@@ -91,15 +82,15 @@ export default function ProjectenScreen() {
                   { borderColor: colors.borderMain, borderRadius: radii.card, marginBottom: spacing.sm },
                 ]}
               >
-                <View style={[styles.dot, { backgroundColor: item.color ?? colors.primaryDeep }]} />
+                <View style={[styles.dot, { backgroundColor: item.color ?? colors.primary }]} />
                 <View style={{ flex: 1, marginLeft: spacing.md }}>
                   <View style={styles.titleRow}>
                     <Text style={[styles.name, { color: colors.textMain }]} allowFontScaling numberOfLines={1}>
                       {item.name}
                     </Text>
                     {progress.isOverBudget ? (
-                      <View style={[styles.badge, { backgroundColor: colors.orange }]}>
-                        <Text style={styles.badgeLabel} allowFontScaling>
+                      <View style={[styles.badge, { backgroundColor: colors.errorSoft }]}>
+                        <Text style={[styles.badgeLabel, { color: colors.orange }]} allowFontScaling>
                           Over budget
                         </Text>
                       </View>
@@ -146,5 +137,5 @@ const styles = StyleSheet.create({
   client: { fontSize: 13, marginTop: 2 },
   hours: { fontSize: 15, fontWeight: "600" },
   badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
-  badgeLabel: { fontSize: 11, color: "#1A1A1A", fontWeight: "600" },
+  badgeLabel: { fontSize: 11, fontWeight: "700" },
 });

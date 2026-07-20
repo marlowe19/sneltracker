@@ -47,6 +47,7 @@ export type StopTimerResponse = StopTimerSingleResponse | StopTimerMultiResponse
 export interface TimeEntry {
   id: string;
   user_name: string;
+  user_display_name?: string | null;
   project_id: string | null;
   activity_id?: string | null;
   activity_type?: string | null;
@@ -141,6 +142,27 @@ export interface DayExpense {
 
 export interface DayExpensesResponse {
   expenses: DayExpense[];
+}
+
+// GET /my/expenses?weekStart=&weekEnd= -> { expenses } (sneltrack/app/my/expenses/route.js GET)
+// weekStart/weekEnd are ISO datetime strings (same as week-entries); the
+// server converts them to calendar dates via formatDateForAPI before
+// querying. Rows carry `date` (YYYY-MM-DD) and `user_name`/`user_display_name`
+// so per-day and per-user aggregation mirrors WeekEntriesClient.js exactly.
+export interface WeekExpense {
+  id: string;
+  user_name: string;
+  user_display_name?: string | null;
+  price: number;
+  date: string;
+  name?: string;
+  project?: string | null;
+  expense_type?: string;
+  [key: string]: unknown;
+}
+
+export interface WeekExpensesResponse {
+  expenses: WeekExpense[];
 }
 
 // GET /my/api/fixed-expenses -> { expenses }

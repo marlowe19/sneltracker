@@ -19,7 +19,7 @@ export default function TabsLayout() {
         // Stack-navigator concept); each tab's own screen sets it instead via
         // its own header configuration where supported.
         headerShadowVisible: false,
-        tabBarActiveTintColor: colors.primaryDeep,
+        tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: { backgroundColor: colors.bgMain, borderTopColor: colors.borderMain },
         headerStyle: { backgroundColor: colors.bgMain },

@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../theme/useTheme";
 import { Card } from "../../components/Card";
 import { EmptyState } from "../../components/EmptyState";
-import { ErrorState } from "../../components/ErrorState";
+import { InlineErrorBanner } from "../../components/InlineErrorBanner";
 import { Skeleton } from "../../components/Skeleton";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { fetchAgenda, generateAgendaPlanning } from "../../lib/api/endpoints";
@@ -66,25 +66,6 @@ export default function AgendaScreen() {
     }
   }, []);
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.bgMain }]} edges={["bottom"]}>
-        <View style={{ padding: spacing.lg }}>
-          <Skeleton height={80} style={{ marginBottom: spacing.sm }} />
-          <Skeleton height={80} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.bgMain }]} edges={["bottom"]}>
-        <ErrorState message={error} onRetry={load} />
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bgMain }]} edges={["bottom"]}>
       <ScrollView
@@ -97,20 +78,31 @@ export default function AgendaScreen() {
               setRefreshing(true);
               load();
             }}
-            tintColor={colors.primaryDeep}
+            tintColor={colors.primary}
           />
         }
       >
+        {error ? <InlineErrorBanner message={error} onRetry={load} /> : null}
+
         <View style={{ marginBottom: spacing.lg }}>
           <PrimaryButton
             label={generating ? "Planning maken…" : "Genereer weekplanning"}
             onPress={handleGeneratePlanning}
             loading={generating}
           />
-          {generateError ? <ErrorState message={generateError} onRetry={handleGeneratePlanning} /> : null}
+          {generateError ? (
+            <View style={{ marginTop: spacing.sm }}>
+              <InlineErrorBanner message={generateError} onRetry={handleGeneratePlanning} />
+            </View>
+          ) : null}
         </View>
 
-        {days.length === 0 ? (
+        {loading ? (
+          <>
+            <Skeleton height={80} style={{ marginBottom: spacing.sm }} />
+            <Skeleton height={80} />
+          </>
+        ) : days.length === 0 ? (
           <EmptyState title="Geen agenda-items gevonden" />
         ) : (
           days.map((day) => {
@@ -139,7 +131,7 @@ export default function AgendaScreen() {
                         <View
                           style={[
                             styles.itemDot,
-                            { backgroundColor: item.projectId ? projectById.get(item.projectId)?.color ?? colors.primaryDeep : colors.purple },
+                            { backgroundColor: item.projectId ? projectById.get(item.projectId)?.color ?? colors.primary : colors.purple },
                           ]}
                         />
                         <View style={{ flex: 1, marginLeft: spacing.sm }}>

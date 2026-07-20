@@ -37,7 +37,7 @@ export function WeekBarChart({ days, height = 96 }: WeekBarChartProps) {
               width={barWidth}
               height={barHeight}
               rx={6}
-              fill={day.isToday ? colors.primaryDeep : colors.primary}
+              fill={day.isToday ? colors.primary : colors.accentSoft}
             />
           );
         })}
@@ -48,7 +48,7 @@ export function WeekBarChart({ days, height = 96 }: WeekBarChartProps) {
             key={day.label + index}
             style={[
               styles.label,
-              { width: barWidth + (index < days.length - 1 ? gap : 0), color: day.isToday ? colors.primaryDeep : colors.textMuted },
+              { width: barWidth + (index < days.length - 1 ? gap : 0), color: day.isToday ? colors.primary : colors.textMuted },
             ]}
             allowFontScaling
           >

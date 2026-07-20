@@ -7,7 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "../../theme/useTheme";
 import { EmptyState } from "../../components/EmptyState";
-import { ErrorState } from "../../components/ErrorState";
+import { InlineErrorBanner } from "../../components/InlineErrorBanner";
 import { Skeleton } from "../../components/Skeleton";
 import { SwipeToDeleteRow } from "../../components/SwipeToDeleteRow";
 import { fetchDayEntries, deleteEntry, fetchProjects } from "../../lib/api/endpoints";
@@ -71,14 +71,17 @@ export default function DayEntriesScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bgMain }]} edges={["bottom"]}>
       <Stack.Screen options={{ title }} />
+      {error ? (
+        <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg }}>
+          <InlineErrorBanner message={error} onRetry={load} />
+        </View>
+      ) : null}
       {loading ? (
         <View style={{ padding: spacing.lg }}>
           <Skeleton height={56} style={{ marginBottom: spacing.sm }} />
           <Skeleton height={56} style={{ marginBottom: spacing.sm }} />
           <Skeleton height={56} />
         </View>
-      ) : error ? (
-        <ErrorState message={error} onRetry={load} />
       ) : entries.length === 0 ? (
         <EmptyState title="Nog geen registraties op deze dag" />
       ) : (

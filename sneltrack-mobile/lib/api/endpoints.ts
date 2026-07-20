@@ -20,6 +20,7 @@ import type {
   UpdateEntryResponse,
   UserResponse,
   WeekEntriesResponse,
+  WeekExpensesResponse,
   XpResponse,
 } from "./types";
 
@@ -101,6 +102,13 @@ export function fetchProjectEntries(projectId: string): Promise<ProjectEntriesRe
 // GET /my/api/day-expenses?dayDate= (sneltrack/app/my/api/day-expenses/route.js)
 export function fetchDayExpenses(dayDate: string): Promise<DayExpensesResponse> {
   return apiFetch<DayExpensesResponse>("/my/api/day-expenses", { query: { dayDate } });
+}
+
+// GET /my/expenses?weekStart=&weekEnd= (sneltrack/app/my/expenses/route.js GET
+// handler) — used by the Vandaag week strip to show per-day/per-user
+// expenses, mirroring web's WeekEntriesClient.js weekExpenses fetch.
+export function fetchWeekExpenses(weekStart: string, weekEnd: string): Promise<WeekExpensesResponse> {
+  return apiFetch<WeekExpensesResponse>("/my/expenses", { query: { weekStart, weekEnd } });
 }
 
 // GET /my/api/fixed-expenses (sneltrack/app/my/api/fixed-expenses/route.js)

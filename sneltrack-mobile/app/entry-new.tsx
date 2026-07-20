@@ -64,14 +64,14 @@ export default function EntryNewSheet() {
         options={{
           headerLeft: () => (
             <Pressable onPress={() => router.back()} accessibilityRole="button">
-              <Text style={{ color: colors.primaryDeep }} allowFontScaling>
+              <Text style={{ color: colors.primary }} allowFontScaling>
                 Annuleer
               </Text>
             </Pressable>
           ),
           headerRight: () => (
             <Pressable onPress={handleSave} disabled={!isValid || saving} accessibilityRole="button">
-              <Text style={{ color: isValid ? colors.primaryDeep : colors.textMuted, fontWeight: "600" }} allowFontScaling>
+              <Text style={{ color: isValid ? colors.primary : colors.textMuted, fontWeight: "600" }} allowFontScaling>
                 {saving ? "Bezig…" : "Voeg toe"}
               </Text>
             </Pressable>
@@ -99,7 +99,7 @@ export default function EntryNewSheet() {
               style={[
                 styles.projectOption,
                 {
-                  borderColor: p.id === projectId ? colors.primaryDeep : colors.borderMain,
+                  borderColor: p.id === projectId ? colors.primary : colors.borderMain,
                   backgroundColor: p.id === projectId ? colors.primarySoft : colors.bgSurface,
                   borderRadius: radii.input,
                 },

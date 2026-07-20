@@ -7,7 +7,7 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../theme/useTheme";
 import { Card } from "../../components/Card";
-import { ErrorState } from "../../components/ErrorState";
+import { InlineErrorBanner } from "../../components/InlineErrorBanner";
 import { Skeleton } from "../../components/Skeleton";
 import { ProgressBar } from "../../components/ProgressBar";
 import { fetchProjectEntries, fetchProjectStatistics, fetchProjects } from "../../lib/api/endpoints";
@@ -60,10 +60,10 @@ export default function ProjectDetailScreen() {
           <Skeleton height={120} style={{ marginBottom: spacing.lg }} />
           <Skeleton height={200} />
         </View>
-      ) : error ? (
-        <ErrorState message={error} onRetry={load} />
       ) : (
         <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: spacing.lg }}>
+          {error ? <InlineErrorBanner message={error} onRetry={load} /> : null}
+
           <Card style={{ marginBottom: spacing.lg }}>
             <View style={styles.statsRow}>
               <View>

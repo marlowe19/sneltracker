@@ -6,7 +6,7 @@ import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../theme/useTheme";
 import { Card } from "../../components/Card";
-import { ErrorState } from "../../components/ErrorState";
+import { InlineErrorBanner } from "../../components/InlineErrorBanner";
 import { Skeleton } from "../../components/Skeleton";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { WeekBarChart } from "../../components/WeekBarChart";
@@ -93,17 +93,6 @@ export default function RapportenScreen() {
     });
   }, [bounds, entries]);
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.bgMain }]} edges={["bottom"]}>
-        <View style={{ padding: spacing.lg }}>
-          <Skeleton height={40} style={{ marginBottom: spacing.lg }} />
-          <Skeleton height={140} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bgMain }]} edges={["bottom"]}>
       <ScrollView
@@ -116,10 +105,12 @@ export default function RapportenScreen() {
               setRefreshing(true);
               load();
             }}
-            tintColor={colors.primaryDeep}
+            tintColor={colors.primary}
           />
         }
       >
+        {error ? <InlineErrorBanner message={error} onRetry={load} /> : null}
+
         <SegmentedControl
           segments={[
             { value: "week", label: "Week" },
@@ -130,9 +121,10 @@ export default function RapportenScreen() {
           onChange={setPeriod}
         />
 
-        {error ? (
+        {loading ? (
           <View style={{ marginTop: spacing.lg }}>
-            <ErrorState message={error} onRetry={load} />
+            <Skeleton height={40} style={{ marginBottom: spacing.lg }} />
+            <Skeleton height={140} />
           </View>
         ) : (
           <>
