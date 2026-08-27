@@ -15,15 +15,10 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        // Native bottom-tabs options don't include headerLargeTitle (that's a
-        // Stack-navigator concept); each tab's own screen sets it instead via
-        // its own header configuration where supported.
-        headerShadowVisible: false,
+        headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: { backgroundColor: colors.bgMain, borderTopColor: colors.borderMain },
-        headerStyle: { backgroundColor: colors.bgMain },
-        headerTintColor: colors.textMain,
       }}
     >
       <Tabs.Screen

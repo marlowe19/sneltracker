@@ -74,23 +74,33 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <Stack screenOptions={{ headerShadowVisible: false }}>
+      <Stack screenOptions={{ headerShadowVisible: false, headerShown: false }}>
         {status === "authenticated" ? (
           <>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="project/[id]" options={{ title: "Project" }} />
-            <Stack.Screen name="day/[date]" options={{ title: "Registraties" }} />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="project/[id]" options={{ headerShown: true, title: "Project" }} />
+            <Stack.Screen name="day/[date]" options={{ headerShown: true, title: "Registraties" }} />
             <Stack.Screen
               name="entry-new"
-              options={{ presentation: "formSheet", sheetAllowedDetents: [0.5, 1], title: "Nieuwe registratie" }}
+              options={{
+                headerShown: true,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.5, 1],
+                title: "Nieuwe registratie",
+              }}
             />
             <Stack.Screen
               name="expense-new"
-              options={{ presentation: "formSheet", sheetAllowedDetents: [0.5, 1], title: "Nieuwe uitgave" }}
+              options={{
+                headerShown: true,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.5, 1],
+                title: "Nieuwe uitgave",
+              }}
             />
           </>
         ) : (
-          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="login" />
         )}
       </Stack>
     </SafeAreaProvider>
