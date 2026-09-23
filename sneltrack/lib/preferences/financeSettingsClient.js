@@ -11,10 +11,6 @@ export async function fetchResolvedFinanceSettings() {
   return resolveFinanceSettings(data.settings);
 }
 
-function isRawBackendError(message) {
-  return /schema cache|PGRST|permission denied|JWT/i.test(String(message || ""));
-}
-
 export async function patchFinanceSettings(updates) {
   const res = await fetch("/my/api/finance-settings", {
     method: "PATCH",
@@ -24,10 +20,7 @@ export async function patchFinanceSettings(updates) {
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    if (data.error && !isRawBackendError(data.error)) {
-      throw new Error(data.error);
-    }
-    throw new Error("Kon instellingen niet opslaan");
+    throw new Error(data.error || "Kon instellingen niet opslaan");
   }
   const data = await res.json();
   return data.settings;

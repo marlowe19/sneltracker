@@ -2,14 +2,6 @@ import { NextResponse } from "next/server";
 import { financeSettingsService } from "@/lib/supabase/services";
 import { auth0 } from "@/lib/auth/auth0";
 
-function publicFinanceError(error, fallback) {
-  const message = error?.message || "";
-  if (!message || /schema cache|PGRST|permission denied|JWT/i.test(message)) {
-    return fallback;
-  }
-  return message;
-}
-
 export async function GET(request) {
   try {
     const session = await auth0.getSession(request);
@@ -26,12 +18,7 @@ export async function GET(request) {
   } catch (error) {
     console.error("Error fetching finance settings:", error);
     return NextResponse.json(
-      {
-        error: publicFinanceError(
-          error,
-          "Kon financiële instellingen niet ophalen",
-        ),
-      },
+      { error: error.message || "Failed to fetch finance settings" },
       { status: 500 },
     );
   }
@@ -55,9 +42,7 @@ export async function PATCH(request) {
     console.error("Error updating finance settings:", error);
     const status = error.message?.includes("must") ? 400 : 500;
     return NextResponse.json(
-      {
-        error: publicFinanceError(error, "Kon instellingen niet opslaan"),
-      },
+      { error: error.message || "Failed to update finance settings" },
       { status },
     );
   }

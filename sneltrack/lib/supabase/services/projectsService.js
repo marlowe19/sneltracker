@@ -31,36 +31,15 @@ export async function lookupUserIdByUsername(username) {
 }
 
 /**
- * Resolve the users.id UUID for an Auth0 subject.
- * Production SnelTracker stores Auth0 session.user.sub on users.user_name
- * and uses users.id as the UUID. A few rows also have authId. Other
- * projects still use auth0_sub + user_id.
+ * Resolve the users.user_id UUID for an Auth0 subject.
+ * Live users are keyed by auth0_sub + user_id; older local schemas
+ * still use user_name + id.
  *
  * @param {string} authIdentity - Auth0 session.user.sub (or legacy user_name)
  * @returns {Promise<string|null>}
  */
 export async function lookupUserIdByAuthIdentity(authIdentity) {
   if (!authIdentity) return null;
-
-  const byUserName = await supabaseServer
-    .from("users")
-    .select("id")
-    .eq("user_name", authIdentity)
-    .maybeSingle();
-
-  if (!byUserName.error && byUserName.data?.id) {
-    return byUserName.data.id;
-  }
-
-  const byAuthId = await supabaseServer
-    .from("users")
-    .select("id")
-    .eq("authId", authIdentity)
-    .maybeSingle();
-
-  if (!byAuthId.error && byAuthId.data?.id) {
-    return byAuthId.data.id;
-  }
 
   const byAuth0Sub = await supabaseServer
     .from("users")
@@ -70,6 +49,16 @@ export async function lookupUserIdByAuthIdentity(authIdentity) {
 
   if (!byAuth0Sub.error) {
     return byAuth0Sub.data?.user_id ?? null;
+  }
+
+  const byUserName = await supabaseServer
+    .from("users")
+    .select("id")
+    .eq("user_name", authIdentity)
+    .maybeSingle();
+
+  if (!byUserName.error && byUserName.data?.id) {
+    return byUserName.data.id;
   }
 
   return null;
