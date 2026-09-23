@@ -1,4 +1,8 @@
 -- User finance settings: forecast rates, tax reserve, toggles
+--
+-- Production already has this table, keyed by users.user_id (uuid).
+-- Do NOT re-run this file on the live database. App code resolves
+-- Auth0 session.user.sub → users.auth0_sub → users.user_id.
 
 CREATE TABLE IF NOT EXISTS public.user_finance_settings (
   user_name VARCHAR(255) PRIMARY KEY,

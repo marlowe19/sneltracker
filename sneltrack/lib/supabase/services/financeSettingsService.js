@@ -4,11 +4,20 @@
  */
 
 import { supabaseServer } from "@/lib/supabaseServer";
+import { lookupUserIdByAuthIdentity } from "./projectsService";
 import {
   DEFAULT_FORECAST_HOURLY_RATE,
   DEFAULT_FORECAST_WEEKLY_HOURS,
   DEFAULT_TAX_RESERVE_PCT,
 } from "@/lib/preferences/forecastSettings";
+
+async function requireFinanceSettingsUserId(authIdentity) {
+  const userId = await lookupUserIdByAuthIdentity(authIdentity);
+  if (!userId) {
+    throw new Error("User not found");
+  }
+  return userId;
+}
 
 function mapRowToClient(row) {
   if (!row) return null;
@@ -81,14 +90,20 @@ export function validatePartial(updates) {
 }
 
 /**
- * @param {string} userName
+ * Live user_finance_settings is keyed by users.user_id (uuid).
+ * `authIdentity` is Auth0 session.user.sub.
+ *
+ * @param {string} authIdentity
  * @returns {Promise<object|null>}
  */
-export async function get(userName) {
+export async function get(authIdentity) {
+  const userId = await lookupUserIdByAuthIdentity(authIdentity);
+  if (!userId) return null;
+
   const { data, error } = await supabaseServer
     .from("user_finance_settings")
     .select("*")
-    .eq("user_name", userName)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (error) {
@@ -100,11 +115,12 @@ export async function get(userName) {
 }
 
 /**
- * @param {string} userName
+ * @param {string} authIdentity
  * @param {object} updates
  * @returns {Promise<object>}
  */
-export async function upsert(userName, updates) {
+export async function upsert(authIdentity, updates) {
+  const userId = await requireFinanceSettingsUserId(authIdentity);
   const updateData = validatePartial(updates);
   if (Object.keys(updateData).length === 0) {
     throw new Error("No valid fields to update");
@@ -114,8 +130,8 @@ export async function upsert(userName, updates) {
 
   const { data: existing, error: fetchError } = await supabaseServer
     .from("user_finance_settings")
-    .select("user_name")
-    .eq("user_name", userName)
+    .select("user_id")
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (fetchError) {
@@ -127,7 +143,7 @@ export async function upsert(userName, updates) {
     const { data, error } = await supabaseServer
       .from("user_finance_settings")
       .update(updateData)
-      .eq("user_name", userName)
+      .eq("user_id", userId)
       .select()
       .single();
 
@@ -142,7 +158,7 @@ export async function upsert(userName, updates) {
   const { data, error } = await supabaseServer
     .from("user_finance_settings")
     .insert({
-      user_name: userName,
+      user_id: userId,
       ...updateData,
     })
     .select()

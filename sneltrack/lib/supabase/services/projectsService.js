@@ -30,6 +30,40 @@ export async function lookupUserIdByUsername(username) {
   return null;
 }
 
+/**
+ * Resolve the users.user_id UUID for an Auth0 subject.
+ * Live users are keyed by auth0_sub + user_id; older local schemas
+ * still use user_name + id.
+ *
+ * @param {string} authIdentity - Auth0 session.user.sub (or legacy user_name)
+ * @returns {Promise<string|null>}
+ */
+export async function lookupUserIdByAuthIdentity(authIdentity) {
+  if (!authIdentity) return null;
+
+  const byAuth0Sub = await supabaseServer
+    .from("users")
+    .select("user_id")
+    .eq("auth0_sub", authIdentity)
+    .maybeSingle();
+
+  if (!byAuth0Sub.error) {
+    return byAuth0Sub.data?.user_id ?? null;
+  }
+
+  const byUserName = await supabaseServer
+    .from("users")
+    .select("id")
+    .eq("user_name", authIdentity)
+    .maybeSingle();
+
+  if (!byUserName.error && byUserName.data?.id) {
+    return byUserName.data.id;
+  }
+
+  return null;
+}
+
 export async function lookupUserByEmail(email) {
   if (!email) return null;
 
