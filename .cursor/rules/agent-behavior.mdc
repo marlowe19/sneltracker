@@ -45,3 +45,4 @@ When touching these areas, follow the dedicated rules:
 - **RLS policies** → `supabase-rls.mdc`
 - **Auth0 API routes** → `auth0-api-routes.mdc`
 - **Icons** → `icons.mdc`
+- **App version (profile `App versie`)** → `app-version-semver.mdc` — always SemVer bump on shipped changes
