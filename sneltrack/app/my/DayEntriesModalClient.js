@@ -1,14 +1,22 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import DayEntriesListClient from "./components/DayEntriesListClient";
 
 export default function DayEntriesModalClient({
   isOpen,
   onClose,
   dayDate,
-  entries,
   user,
 }) {
+  const [activeDayDate, setActiveDayDate] = useState(dayDate);
+
+  useEffect(() => {
+    if (isOpen) {
+      setActiveDayDate(dayDate);
+    }
+  }, [isOpen, dayDate]);
+
   if (!isOpen) return null;
 
   return (
@@ -21,10 +29,10 @@ export default function DayEntriesModalClient({
         onClick={(e) => e.stopPropagation()}
       >
         <DayEntriesListClient
-          selectedDate={dayDate}
-          entries={entries}
+          selectedDate={activeDayDate}
           user={user}
           onClose={onClose}
+          onDateChange={setActiveDayDate}
         />
       </div>
     </div>

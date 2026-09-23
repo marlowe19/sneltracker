@@ -30,6 +30,40 @@ export async function lookupUserIdByUsername(username) {
   return null;
 }
 
+/**
+ * Resolve the users.user_id UUID for an Auth0 subject.
+ * Live users are keyed by auth0_sub + user_id; older local schemas
+ * still use user_name + id.
+ *
+ * @param {string} authIdentity - Auth0 session.user.sub (or legacy user_name)
+ * @returns {Promise<string|null>}
+ */
+export async function lookupUserIdByAuthIdentity(authIdentity) {
+  if (!authIdentity) return null;
+
+  const byAuth0Sub = await supabaseServer
+    .from("users")
+    .select("user_id")
+    .eq("auth0_sub", authIdentity)
+    .maybeSingle();
+
+  if (!byAuth0Sub.error) {
+    return byAuth0Sub.data?.user_id ?? null;
+  }
+
+  const byUserName = await supabaseServer
+    .from("users")
+    .select("id")
+    .eq("user_name", authIdentity)
+    .maybeSingle();
+
+  if (!byUserName.error && byUserName.data?.id) {
+    return byUserName.data.id;
+  }
+
+  return null;
+}
+
 export async function lookupUserByEmail(email) {
   if (!email) return null;
 
@@ -307,7 +341,7 @@ export async function getUserProjectsWithStats(userName) {
   }
 
   // Transform to match expected format
-  return (data || []).map((row) => ({
+  const projects = (data || []).map((row) => ({
     id: row.id,
     name: row.name,
     hourly_rate: row.hourly_rate,
@@ -323,6 +357,34 @@ export async function getUserProjectsWithStats(userName) {
     is_over_budget: row.is_over_budget,
     status: row.status || "active", // ✅ NEW: Include status field
   }));
+
+  if (projects.length === 0) {
+    return projects;
+  }
+
+  const projectIds = projects.map((p) => p.id);
+  const { data: breakSettings, error: breakError } = await supabaseServer
+    .from("projects")
+    .select("id, default_break_enabled, default_break_minutes")
+    .in("id", projectIds);
+
+  if (breakError) {
+    console.error("Error fetching project break settings:", breakError);
+    return projects;
+  }
+
+  const breakByProjectId = new Map(
+    (breakSettings || []).map((row) => [row.id, row])
+  );
+
+  return projects.map((project) => {
+    const settings = breakByProjectId.get(project.id);
+    return {
+      ...project,
+      default_break_enabled: settings?.default_break_enabled ?? false,
+      default_break_minutes: settings?.default_break_minutes ?? null,
+    };
+  });
 }
 
 /**
@@ -342,8 +404,8 @@ export async function getProjectDetail(
   startDate = null,
   endDate = null
 ) {
-  const { data, error } = await supabaseServer.rpc("get_project_detail_v5", {
-    // ✅ v5: member with role='owner' sees all team data, same as creator
+  const { data, error } = await supabaseServer.rpc("get_project_detail_v7", {
+    // v7: billable-aware total_billable (entry + timer_activities)
     p_user_name: userName,
     p_project_id: projectId,
     p_start_date: startDate ? startDate.toISOString() : null,
@@ -378,7 +440,7 @@ export async function getProjectDetail(
   const { data: projectData, error: projectError } = await supabaseServer
     .from("projects")
     .select(
-      "due_date, start_date, end_date, capacity_per_week, priority, zip_code, budget_amount, currency, status"
+      "due_date, start_date, end_date, capacity_per_week, priority, zip_code, budget_amount, currency, status, default_break_enabled, default_break_minutes"
     )
     .eq("id", projectId)
     .single();
@@ -408,10 +470,13 @@ export async function getProjectDetail(
     priority: projectData?.priority || null,
     zip_code: projectData?.zip_code || null,
     status: projectData?.status || "active",
+    default_break_enabled: projectData?.default_break_enabled ?? false,
+    default_break_minutes: projectData?.default_break_minutes ?? null,
     statistics: {
       totalHours: row.total_hours,
       entryCount: Number(row.entry_count),
       totalMoney: row.total_billable,
+      totalBreakMs: Number(row.total_break_ms ?? 0),
     },
     members: members,
     memberStatistics: row.member_statistics || [],
@@ -595,6 +660,12 @@ export async function updateProject(userName, projectId, updates) {
   if (updates.status !== undefined) {
     updateData.status = updates.status;
   }
+  if (updates.default_break_enabled !== undefined) {
+    updateData.default_break_enabled = updates.default_break_enabled === true;
+  }
+  if (updates.default_break_minutes !== undefined) {
+    updateData.default_break_minutes = updates.default_break_minutes;
+  }
 
   const { data, error } = await supabaseServer
     .from("projects")
@@ -621,6 +692,8 @@ export async function updateProject(userName, projectId, updates) {
     priority: data.priority,
     zip_code: data.zip_code,
     status: data.status,
+    default_break_enabled: data.default_break_enabled ?? false,
+    default_break_minutes: data.default_break_minutes ?? null,
     owner: data.owner_name,
   };
 }

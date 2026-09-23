@@ -10,14 +10,27 @@ import { formatLocalDate } from "@/lib/dateRangeUtils";
 import NotificationBadge from "@/app/components/NotificationBadge";
 import { mapEntryToEditable } from "@/lib/utils/entryMapper";
 import { getCurrentDate } from "@/lib/dateRangeUtils";
+import { addDays } from "date-fns";
 import {
   Alarm,
   ChevronLeft,
   ChevronLeft24,
+  ChevronRight,
+  Close,
   ToolBox,
   ChevronDown,
   ChevronUp,
 } from "@carbon/icons-react";
+import {
+  computeGrossDurationMs,
+  formatBreakDeductionSubtext,
+  resolveProjectBreakMinutes,
+} from "@/lib/breakDeduction";
+import {
+  computeActivitiesBillableMoney,
+  computeActivityBillableMoney,
+  computeEntryBillableMoney,
+} from "@/lib/finance/entryEarnings";
 function formatTime(isoString) {
   if (!isoString) return "";
   const date = new Date(isoString);
@@ -98,6 +111,12 @@ function formatMoney(amount) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
+}
+
+function shiftDay(date, delta) {
+  const next = addDays(date, delta);
+  next.setHours(0, 0, 0, 0);
+  return next;
 }
 
 function getEffectiveDurationMs(entry) {
@@ -265,15 +284,68 @@ function resolveEntryTimeUpdates(entry, selectedDate, { isNewEntry = false } = {
   return updates;
 }
 
+function resolveEffectiveEntryTimes(entry, selectedDate) {
+  if (!selectedDate) {
+    return {
+      startTime: entry.start_time ?? null,
+      endTime: entry.end_time ?? null,
+    };
+  }
+
+  const hasStartTime =
+    entry.start_time_editable && entry.start_time_editable.trim() !== "";
+  const hasEndTime =
+    entry.end_time_editable && entry.end_time_editable.trim() !== "";
+  const durationMs =
+    entry.duration_editable !== undefined && entry.duration_editable !== ""
+      ? parseDuration(entry.duration_editable)
+      : null;
+
+  let startTime = hasStartTime
+    ? combineDayDateWithTime(selectedDate, entry.start_time_editable)?.toISOString()
+    : entry.start_time ?? null;
+  let endTime = hasEndTime
+    ? combineDayDateWithTime(selectedDate, entry.end_time_editable)?.toISOString()
+    : entry.end_time ?? null;
+
+  if (!startTime && durationMs > 0) {
+    const dayStart = dayMidnight(selectedDate);
+    startTime = dayStart.toISOString();
+    endTime = new Date(dayStart.getTime() + durationMs).toISOString();
+  } else if (startTime && durationMs > 0 && !endTime) {
+    endTime = new Date(new Date(startTime).getTime() + durationMs).toISOString();
+  }
+
+  return { startTime, endTime };
+}
+
+function buildBreakSavePayload(entry, getBreakMinutesNumericForEntry) {
+  const isTempEntry = entry.id?.startsWith("temp-");
+  const breakChecked = isTempEntry
+    ? entry.break_deduct_editable === true
+    : (entry.break_deduction_ms ?? 0) > 0;
+
+  if (!breakChecked) {
+    return { deduct_break: false };
+  }
+
+  return {
+    deduct_break: true,
+    break_minutes: getBreakMinutesNumericForEntry(entry),
+  };
+}
+
 export default function DayEntriesListClient({
   user,
   selectedDate,
   onEntryUpdate,
-  onClose, // Add this prop
+  onClose,
+  onDateChange,
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const projects = useStore((state) => state.projects);
+  const fetchProjects = useStore((state) => state.fetchProjects);
   const addEntry = useStore((state) => state.addEntry);
   const updateEntry = useStore((state) => state.updateEntry);
   const replaceTempEntry = useStore((state) => state.replaceTempEntry);
@@ -284,6 +356,7 @@ export default function DayEntriesListClient({
   const replaceTempExpense = useStore((state) => state.replaceTempExpense);
   const deleteExpense = useStore((state) => state.deleteExpense);
   const expenses = useStore((state) => state.expenses);
+  const loadingExpenses = useStore((state) => state.loadingExpenses);
   const userDisplayName = useStore((state) => state.userDisplayName);
 
   const [localEntries, setLocalEntries] = useState([]);
@@ -308,12 +381,31 @@ export default function DayEntriesListClient({
   const [editingActivityData, setEditingActivityData] = useState(null); // temporary edit data
   const [currentEditingEntryId, setCurrentEditingEntryId] = useState(null); // ID of entry currently being edited
   const [currentEditingExpenseId, setCurrentEditingExpenseId] = useState(null); // ID of expense currently being edited
+  const [savingBreakEntryId, setSavingBreakEntryId] = useState(null);
+  const [breakMinutesDraft, setBreakMinutesDraft] = useState({});
   const toast = useToast();
   // Memoize dayDateString to ensure stable reference
   const dayDateString = useMemo(
     () => selectedDate?.toISOString(),
     [selectedDate]
   );
+
+  const isDayLoading = loadingEntries || loadingNotes || loadingExpenses;
+
+  useEffect(() => {
+    setExpandedEntries(new Set());
+    setExpandedExpenses(new Set());
+    setExpandedActivities(new Set());
+    setCurrentEditingEntryId(null);
+    setCurrentEditingExpenseId(null);
+    setEditingActivityId(null);
+    setEditingActivityData(null);
+    setBreakMinutesDraft({});
+    setEntryActivities({});
+    setError(null);
+    setSuccessMessage(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayDateString]);
 
   // Fetch day expenses
   useEffect(() => {
@@ -336,6 +428,7 @@ export default function DayEntriesListClient({
       setLoadingEntries(false);
     } catch (error) {
       console.error("Error fetching day entries:", error);
+      setLoadingEntries(false);
     }
   };
   // Fetch day entries
@@ -345,6 +438,12 @@ export default function DayEntriesListClient({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayDateString, user]);
+
+  useEffect(() => {
+    if (projects.length === 0) {
+      fetchProjects(user);
+    }
+  }, [projects.length, user, fetchProjects]);
 
   // Initialize activities from entries (activities are now included in the query)
   useEffect(() => {
@@ -784,6 +883,236 @@ export default function DayEntriesListClient({
     return hours * hourlyRate;
   };
 
+  const getProjectForEntry = (entry) => {
+    const projectId = entry.project_editable || entry.project_id;
+    return projects.find((project) => project.id === projectId) || null;
+  };
+
+  const isBreakCheckedForEntry = (entry) => {
+    if (entry.id?.startsWith("temp-")) {
+      return entry.break_deduct_editable === true;
+    }
+    return (entry.break_deduction_ms ?? 0) > 0;
+  };
+
+  const getBreakMinutesForEntry = (entry) => {
+    if (breakMinutesDraft[entry.id] !== undefined) {
+      return breakMinutesDraft[entry.id];
+    }
+    if (entry.break_deduction_ms > 0) {
+      return Math.round(entry.break_deduction_ms / 60000);
+    }
+    return resolveProjectBreakMinutes(getProjectForEntry(entry));
+  };
+
+  const getBreakMinutesNumericForEntry = (entry) => {
+    const parsed = parseInt(String(getBreakMinutesForEntry(entry)), 10);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return parsed;
+    }
+    return resolveProjectBreakMinutes(getProjectForEntry(entry));
+  };
+
+  const applyBreakEntryUpdate = (index, updatedEntry) => {
+    updateEntry(updatedEntry.id, updatedEntry);
+    setBreakMinutesDraft((prev) => {
+      const next = { ...prev };
+      delete next[updatedEntry.id];
+      return next;
+    });
+    setLocalEntries((prev) => {
+      const next = [...prev];
+      next[index] = {
+        ...updatedEntry,
+        start_time_editable: formatTime(updatedEntry.start_time),
+        end_time_editable: formatTime(updatedEntry.end_time),
+        duration_editable: updatedEntry.duration_ms
+          ? formatHoursMinutes(updatedEntry.duration_ms)
+          : "",
+        hourly_rate_editable: updatedEntry.hourly_rate ?? "",
+        project_editable: updatedEntry.project_id ?? "",
+        isProjectOwner: updatedEntry.isProjectOwner ?? false,
+        isProjectMember: updatedEntry.isProjectMember ?? false,
+      };
+      return next;
+    });
+  };
+
+  const handleBreakToggle = async (entry, index, checked) => {
+    if (entry.is_running || entry.user_name !== user) return;
+
+    if (entry.id?.startsWith("temp-")) {
+      handleEntryChange(index, "break_deduct_editable", checked);
+      if (!checked) {
+        setBreakMinutesDraft((prev) => {
+          const next = { ...prev };
+          delete next[entry.id];
+          return next;
+        });
+      }
+      return;
+    }
+
+    setSavingBreakEntryId(entry.id);
+    setError(null);
+
+    try {
+      const breakMinutes = getBreakMinutesNumericForEntry(entry);
+      const response = await fetch(`/my/entries/${entry.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          checked
+            ? { deduct_break: true, break_minutes: breakMinutes }
+            : { deduct_break: false }
+        ),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update break");
+      }
+
+      const responseData = await response.json();
+      if (responseData.entry) {
+        applyBreakEntryUpdate(index, responseData.entry);
+      }
+    } catch (err) {
+      setError(err.message || "Failed to update break");
+    } finally {
+      setSavingBreakEntryId(null);
+    }
+  };
+
+  const handleBreakMinutesBlur = async (entry, index, rawValue) => {
+    if (entry.id?.startsWith("temp-")) {
+      return;
+    }
+
+    if (!entry.break_deduction_ms || entry.is_running || entry.user_name !== user) {
+      return;
+    }
+
+    const parsed = parseInt(rawValue, 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return;
+    }
+
+    const currentMinutes = Math.round(entry.break_deduction_ms / 60000);
+    if (parsed === currentMinutes) {
+      return;
+    }
+
+    setSavingBreakEntryId(entry.id);
+    setError(null);
+
+    try {
+      const response = await fetch(`/my/entries/${entry.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deduct_break: true,
+          break_minutes: parsed,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update break");
+      }
+
+      const responseData = await response.json();
+      if (responseData.entry) {
+        applyBreakEntryUpdate(index, responseData.entry);
+      }
+    } catch (err) {
+      setError(err.message || "Failed to update break");
+    } finally {
+      setSavingBreakEntryId(null);
+    }
+  };
+
+  const renderBreakControls = (entry, index) => {
+    if (entry.user_name !== user || entry.is_running === true) {
+      return null;
+    }
+
+    const { startTime, endTime } = resolveEffectiveEntryTimes(
+      entry,
+      selectedDate
+    );
+    if (!endTime) {
+      return null;
+    }
+
+    const breakChecked = isBreakCheckedForEntry(entry);
+    const breakMinutesValue = getBreakMinutesForEntry(entry);
+    const grossMs = computeGrossDurationMs(startTime, endTime);
+    const isSavingBreak = savingBreakEntryId === entry.id;
+    const breakDeductionMs = entry.id?.startsWith("temp-")
+      ? breakChecked
+        ? getBreakMinutesNumericForEntry(entry) * 60 * 1000
+        : null
+      : entry.break_deduction_ms;
+
+    return (
+      <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-3 rounded-md bg-[#E5F5F4] px-3 py-2">
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={breakChecked}
+              disabled={isSavingBreak}
+              onChange={(e) =>
+                handleBreakToggle(entry, index, e.target.checked)
+              }
+              className="h-4 w-4 rounded border-gray-300 text-[#40A69F] focus:ring-[#40A69F] disabled:opacity-50"
+            />
+            Pauze aftrekken
+          </label>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={breakMinutesValue}
+              disabled={!breakChecked || isSavingBreak}
+              onChange={(e) =>
+                setBreakMinutesDraft((prev) => ({
+                  ...prev,
+                  [entry.id]: e.target.value,
+                }))
+              }
+              onBlur={(e) => {
+                const parsed = parseInt(e.target.value, 10);
+                if (!Number.isFinite(parsed) || parsed < 0) {
+                  setBreakMinutesDraft((prev) => {
+                    const next = { ...prev };
+                    delete next[entry.id];
+                    return next;
+                  });
+                  return;
+                }
+                setBreakMinutesDraft((prev) => ({
+                  ...prev,
+                  [entry.id]: parsed,
+                }));
+                handleBreakMinutesBlur(entry, index, e.target.value);
+              }}
+              className="w-16 px-2 py-1 border border-gray-300 rounded-md text-sm text-gray-900 disabled:bg-gray-100 disabled:text-gray-400"
+            />
+            <span className="text-sm text-gray-600">min</span>
+          </div>
+        </div>
+        {breakChecked && grossMs > 0 && (
+          <p className="text-xs text-gray-500 px-1">
+            {formatBreakDeductionSubtext(grossMs, breakDeductionMs)}
+          </p>
+        )}
+      </div>
+    );
+  };
+
   const handleAddEntry = () => {
     if (!selectedDate) return;
 
@@ -804,6 +1133,7 @@ export default function DayEntriesListClient({
       duration_editable: "",
       hourly_rate_editable: "",
       project_editable: "",
+      break_deduct_editable: false,
       isProjectMember: false,
     };
 
@@ -895,6 +1225,7 @@ export default function DayEntriesListClient({
               start_time: updates.start_time ?? null,
               end_time: updates.end_time ?? null,
               billable: updates.billable ?? true,
+              ...buildBreakSavePayload(entry, getBreakMinutesNumericForEntry),
             }),
           });
 
@@ -1141,6 +1472,7 @@ export default function DayEntriesListClient({
             start_time: updates.start_time ?? null,
             end_time: updates.end_time ?? null,
             billable: updates.billable ?? true,
+            ...buildBreakSavePayload(entry, getBreakMinutesNumericForEntry),
           }),
         });
 
@@ -1561,32 +1893,19 @@ export default function DayEntriesListClient({
       const durationMs = getEffectiveDurationMs(entry);
       totalHoursMs += durationMs || 0;
 
-      if (durationMs) {
-        const hourlyRate =
-          entry.hourly_rate_editable !== undefined &&
-          entry.hourly_rate_editable !== ""
-            ? parseFloat(entry.hourly_rate_editable)
-            : entry.hourly_rate;
-        if (hourlyRate) {
-          const hours = durationMs / (1000 * 60 * 60);
-          totalPrice += hours * hourlyRate;
-        }
-      }
+      const activities = entryActivities[entry.id] ?? entry.activities;
+      const entryEarnings =
+        activities?.length > 0
+          ? computeActivitiesBillableMoney(activities)
+          : computeEntryBillableMoney(entry, durationMs, {
+              useEditableFields: true,
+            });
+      totalPrice += entryEarnings;
 
       // Calculate individual totals (only user's own entries)
       if (entry.user_name === user) {
         myTotalHoursMs += durationMs || 0;
-        if (durationMs) {
-          const hourlyRate =
-            entry.hourly_rate_editable !== undefined &&
-            entry.hourly_rate_editable !== ""
-              ? parseFloat(entry.hourly_rate_editable)
-              : entry.hourly_rate;
-          if (hourlyRate) {
-            const hours = durationMs / (1000 * 60 * 60);
-            myTotalPrice += hours * hourlyRate;
-          }
-        }
+        myTotalPrice += entryEarnings;
       }
     });
 
@@ -1629,6 +1948,44 @@ export default function DayEntriesListClient({
       })
     : "";
 
+  const hasUnsavedChanges = () => {
+    if (localEntries.some((entry) => entry.id?.startsWith("temp-"))) {
+      return true;
+    }
+    if (
+      localExpenses.some((expense) => expense.id?.startsWith("temp-expense-"))
+    ) {
+      return true;
+    }
+    if (editingActivityId !== null) {
+      return true;
+    }
+    if (Object.keys(breakMinutesDraft).length > 0) {
+      return true;
+    }
+    if (currentEditingEntryId !== null || currentEditingExpenseId !== null) {
+      return true;
+    }
+    return false;
+  };
+
+  const handleNavigateDay = (delta) => {
+    if (!selectedDate || !onDateChange || isDayLoading) {
+      return;
+    }
+
+    if (hasUnsavedChanges()) {
+      const confirmed = confirm(
+        "Je hebt onopgeslagen wijzigingen. Doorgaan naar een andere dag zonder op te slaan?"
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    onDateChange(shiftDay(selectedDate, delta));
+  };
+
   if (!selectedDate) return <div>Geen dag geselecteerd</div>;
 
   return (
@@ -1641,43 +1998,63 @@ export default function DayEntriesListClient({
       }}
     >
       <div className="bg-white border-b border-gray-200 flex-shrink-0">
-        {/* Header */}
-        <div className="px-4 sm:px-6 py-3 border-[#e6e6e6] border rounded-xl bg-[#f5f5f5] justify-between">
-          <div className="flex items-center">
-            {/* Back Button with Carbon Icons Chevron */}
+        {onClose && (
+          <div className="flex items-center justify-end mb-3 px-1">
             <button
               type="button"
-              className="mr-3 p-1 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[#008eff] transition"
-              aria-label="Terug"
-              onClick={() => {
-                if (onClose) onClose();
-              }}
+              className="flex items-center gap-1 p-1 rounded hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[#008eff] transition text-gray-500 hover:text-gray-700"
+              aria-label="Sluiten"
+              onClick={onClose}
             >
-              {/* Use react-carbon ChevronLeft Icon */}
-              <ChevronLeft size={24} />
-            </button>
-            <button
-              type="button"
-              className="text-gray-500 text-base hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#008eff] rounded px-1"
-              onClick={() => {
-                if (onClose) onClose();
-              }}
-            >
-              Terug
+              <Close size={24} />
+              <span className="text-base">Sluiten</span>
             </button>
           </div>
+        )}
+        {/* Header */}
+        <div className="px-4 sm:px-6 py-3 border-[#e6e6e6] border rounded-xl bg-[#f5f5f5] justify-between">
           {/* Day Date */}
-          <div className="self-stretch flex pt-4 gap-2 items-center justify-start ">
-            <div>
-              <div className="w-7 p-1 bg-sky-500 rounded-[999px] inline-flex justify-center items-center overflow-hidden">
-                <div className="text-center justify-center text-white text-sm font-normal leading-5">
-                  {selectedDate.getDate()}
+          <div className="self-stretch flex pt-4 gap-2 items-center justify-between">
+            {onDateChange ? (
+              <button
+                type="button"
+                data-testid="day-nav-prev"
+                aria-label="Vorige dag"
+                disabled={isDayLoading}
+                onClick={() => handleNavigateDay(-1)}
+                className="p-1 rounded hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-[#008eff] disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+              >
+                <ChevronLeft size={20} />
+              </button>
+            ) : (
+              <div className="w-7 shrink-0" />
+            )}
+            <div className="flex gap-2 items-center flex-1 justify-center min-w-0">
+              <div>
+                <div className="w-7 p-1 bg-sky-500 rounded-[999px] inline-flex justify-center items-center overflow-hidden">
+                  <div className="text-center justify-center text-white text-sm font-normal leading-5">
+                    {selectedDate.getDate()}
+                  </div>
                 </div>
               </div>
+              <div className="justify-start text-App-settings-color-color-app-text-black text-base font-medium leading-5 truncate">
+                {dayDateFormatted}
+              </div>
             </div>
-            <div className="justify-start text-App-settings-color-color-app-text-black text-base font-medium leading-5">
-              {dayDateFormatted}
-            </div>
+            {onDateChange ? (
+              <button
+                type="button"
+                data-testid="day-nav-next"
+                aria-label="Volgende dag"
+                disabled={isDayLoading}
+                onClick={() => handleNavigateDay(1)}
+                className="p-1 rounded hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-[#008eff] disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+              >
+                <ChevronRight size={20} />
+              </button>
+            ) : (
+              <div className="w-7 shrink-0" />
+            )}
           </div>
           {/* Summary */}
           <div className="self-stretch flex justify-between pt-4  gap-4">
@@ -1782,7 +2159,16 @@ export default function DayEntriesListClient({
         </div>
       </div>
 
-      <div className="pb-4 flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden relative flex flex-col">
+        {isDayLoading && (
+          <div
+            data-testid="day-loading-overlay"
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/80"
+          >
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#008eff] mx-auto" />
+            <p className="mt-4 text-gray-600">Dag laden...</p>
+          </div>
+        )}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
             {error}
@@ -1796,17 +2182,18 @@ export default function DayEntriesListClient({
 
         {/* Time Entries Tab */}
         <div
-          className={`relative h-full overflow-y-auto ${
+          className={`flex flex-col flex-1 min-h-0 ${
             activeTab === "entries" ? "" : "hidden"
           }`}
         >
+          <div className="flex-1 min-h-0 overflow-y-auto">
           {/* Entries List */}
           {localEntries.length === 0 ? (
             <p className="text-gray-500 text-center py-8 bg-white rounded-lg">
               Geen entries gevonden voor deze dag
             </p>
           ) : (
-            <div className="space-y-4 pt-4 pb-20">
+            <div className="space-y-4 pt-4 pb-4">
               {localEntries.map((entry, index) => {
                 const isExpanded = expandedEntries.has(entry.id);
 
@@ -1829,7 +2216,6 @@ export default function DayEntriesListClient({
                     : entry.hourly_rate
                     ? entry.hourly_rate.toFixed(2)
                     : "-";
-
                 return (
                   <div
                     // onClick={() => handleToggleExpand(entry.id)}
@@ -1943,6 +2329,7 @@ export default function DayEntriesListClient({
                             </span>
                           </div>
                         </div>
+                        {renderBreakControls(entry, index)}
                         {/* Second line: Rates and total
                         <div className="flex items-center gap-4 text-sm flex-wrap">
                           <div className="flex items-center gap-1.5">
@@ -1979,10 +2366,9 @@ export default function DayEntriesListClient({
                                       new Date(activity.start_time).getTime()
                                     : new Date().getTime() -
                                       new Date(activity.start_time).getTime());
-                                const hours = durationMs / (1000 * 60 * 60);
-                                const earnings = activity.hourly_rate
-                                  ? hours * parseFloat(activity.hourly_rate)
-                                  : 0;
+                                const earnings = computeActivityBillableMoney(
+                                  activity
+                                );
                                 return (
                                   <div
                                     key={activity.id}
@@ -2250,6 +2636,8 @@ export default function DayEntriesListClient({
                                   </div>
                                 </div>
 
+                                {renderBreakControls(entry, index)}
+
                                 <div>
                                   <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Declarabel
@@ -2347,10 +2735,9 @@ export default function DayEntriesListClient({
                                           new Date(
                                             activity.start_time
                                           ).getTime());
-                                    const hours = durationMs / (1000 * 60 * 60);
-                                    const earnings = activity.hourly_rate
-                                      ? hours * parseFloat(activity.hourly_rate)
-                                      : 0;
+                                    const earnings = computeActivityBillableMoney(
+                                      activity
+                                    );
 
                                     return (
                                       <div
@@ -2598,7 +2985,7 @@ export default function DayEntriesListClient({
                                                   {formatHoursMinutes(
                                                     durationMs
                                                   )}
-                                                  {activity.hourly_rate && (
+                                                  {earnings > 0 && (
                                                     <>
                                                       {" • "}
                                                       {formatMoney(earnings)}
@@ -2686,9 +3073,10 @@ export default function DayEntriesListClient({
               })}
             </div>
           )}
+          </div>
 
           {/* Add Entry Button / Save Button */}
-          <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 mt-4">
+          <div className="shrink-0 bg-white border-t border-gray-200 p-4 z-10">
             {expandedEntries.size > 0 ? (
               (() => {
                 // Find the first expanded entry (or use currentEditingEntryId if set)
@@ -2754,17 +3142,18 @@ export default function DayEntriesListClient({
 
         {/* Expenses Tab */}
         <div
-          className={`relative h-full overflow-y-auto ${
+          className={`flex flex-col flex-1 min-h-0 ${
             activeTab === "expenses" ? "" : "hidden"
           }`}
         >
+          <div className="flex-1 min-h-0 overflow-y-auto">
           {/* Expenses List */}
           {localExpenses.length === 0 ? (
             <p className="text-gray-500 text-center py-8 bg-white rounded-lg">
               Geen uitgaven gevonden voor deze dag
             </p>
           ) : (
-            <div className="space-y-4 pt-4 pb-20">
+            <div className="space-y-4 pt-4 pb-4">
               {localExpenses.map((expense, index) => {
                 const isExpanded = expandedExpenses.has(expense.id);
 
@@ -2999,9 +3388,10 @@ export default function DayEntriesListClient({
               })}
             </div>
           )}
+          </div>
 
           {/* Add Expense Button / Save Button */}
-          <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 mt-4">
+          <div className="shrink-0 bg-white border-t border-gray-200 p-4 z-10">
             {expandedExpenses.size > 0 ? (
               (() => {
                 // Find the first expanded expense (or use currentEditingExpenseId if set)
@@ -3071,7 +3461,7 @@ export default function DayEntriesListClient({
 
         {/* Notes Tab */}
         <div
-          className={`h-full overflow-y-auto ${
+          className={`flex-1 min-h-0 overflow-y-auto ${
             activeTab === "notes" ? "" : "hidden"
           }`}
         >

@@ -8,15 +8,10 @@ import MonthFinanceSummaryCard from "./MonthFinanceSummaryCard";
 import {
   DEFAULT_FORECAST_HOURLY_RATE,
   DEFAULT_FORECAST_WEEKLY_HOURS,
-  INCLUDE_TEAM_EARNINGS_KEY,
-  INCLUDE_PROJECT_EXPENSES_KEY,
-  TAX_RESERVE_PCT_KEY,
-  getForecastHourlyRate,
-  getForecastWeeklyHours,
-  getIncludeTeamEarnings,
-  getIncludeProjectExpenses,
-  getTaxReservePct,
+  DEFAULT_TAX_RESERVE_PCT,
 } from "@/lib/preferences/forecastSettings";
+import { fetchResolvedFinanceSettings } from "@/lib/preferences/financeSettingsClient";
+import { resolveFinanceSettings } from "@/lib/preferences/resolveFinanceSettings";
 
 function fmtYmd(d) {
   const y = d.getFullYear();
@@ -153,46 +148,29 @@ export default function MyDashboardWidgetsClient() {
   );
   const [includeTeamEarnings, setIncludeTeamEarnings] = useState(false);
   const [includeProjectExpenses, setIncludeProjectExpenses] = useState(false);
-  const [taxReservePct, setTaxReservePct] = useState(35);
+  const [taxReservePct, setTaxReservePct] = useState(DEFAULT_TAX_RESERVE_PCT);
+  const [financeSettingsLoaded, setFinanceSettingsLoaded] = useState(false);
+
+  function applyResolvedSettings(resolved) {
+    setForecastHourlyRate(resolved.forecastHourlyRate);
+    setForecastWeeklyHours(resolved.forecastWeeklyHours);
+    setIncludeTeamEarnings(resolved.includeTeamEarnings);
+    setIncludeProjectExpenses(resolved.includeProjectExpenses);
+    setTaxReservePct(resolved.taxReservePct);
+  }
 
   useEffect(() => {
-    setForecastHourlyRate(getForecastHourlyRate());
-    setForecastWeeklyHours(getForecastWeeklyHours());
-    setIncludeTeamEarnings(getIncludeTeamEarnings());
-    setIncludeProjectExpenses(getIncludeProjectExpenses());
-    setTaxReservePct(getTaxReservePct());
-  }, []);
-
-  useEffect(() => {
-    const syncPreferences = () => {
-      setIncludeTeamEarnings(getIncludeTeamEarnings());
-      setIncludeProjectExpenses(getIncludeProjectExpenses());
-      setTaxReservePct(getTaxReservePct());
-    };
-
-    const onStorage = (event) => {
-      if (
-        event.key === INCLUDE_TEAM_EARNINGS_KEY ||
-        event.key === INCLUDE_PROJECT_EXPENSES_KEY ||
-        event.key === TAX_RESERVE_PCT_KEY
-      ) {
-        syncPreferences();
+    async function loadFinanceSettings() {
+      try {
+        const resolved = await fetchResolvedFinanceSettings();
+        applyResolvedSettings(resolved);
+      } catch {
+        applyResolvedSettings(resolveFinanceSettings(null));
+      } finally {
+        setFinanceSettingsLoaded(true);
       }
-    };
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") syncPreferences();
-    };
-
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("focus", syncPreferences);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("focus", syncPreferences);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
+    }
+    loadFinanceSettings();
   }, []);
 
   const load = useCallback(async () => {
@@ -225,10 +203,12 @@ export default function MyDashboardWidgetsClient() {
   }, [includeTeamEarnings, includeProjectExpenses, taxReservePct]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (financeSettingsLoaded) {
+      load();
+    }
+  }, [load, financeSettingsLoaded]);
 
-  if (loading) {
+  if (!financeSettingsLoaded || loading) {
     return (
       <section className="w-full px-4 pt-2 pb-1 shrink-0">
         <div className="flex justify-center py-3 sm:py-6">
@@ -258,9 +238,10 @@ export default function MyDashboardWidgetsClient() {
     );
   }
 
-  const { weekly, monthFinance } = data;
-  const hoursAvg = formatHoursOneDecimal(weekly.avgPrevTwoWeeksHours);
-  const revAvg = formatEur(weekly.avgPrevTwoWeeksRevenue);
+  // const { weekly, monthFinance } = data;
+  const { monthFinance } = data;
+  // const hoursAvg = formatHoursOneDecimal(weekly.avgPrevTwoWeeksHours);
+  // const revAvg = formatEur(weekly.avgPrevTwoWeeksRevenue);
   const hasFixedExpenses =
     (monthFinance.fixedBusinessCostsMonthly ?? 0) > 0 ||
     (monthFinance.privateCostsMonthly ?? 0) > 0;
@@ -270,6 +251,7 @@ export default function MyDashboardWidgetsClient() {
       className="w-full px-4 pt-2 pb-1 shrink-0 space-y-2 relative z-20 sm:space-y-3 sm:pt-3 sm:pb-2"
       aria-label="Dashboard statistieken"
     >
+      {/* Gewerkte uren & Omzet cards temporarily hidden
       <div>
         <h2 className="mb-1.5 text-[10px] font-semibold tracking-wide text-gray-500 uppercase leading-tight sm:mb-2 sm:text-[11px]">
           <span className="sm:hidden">Deze week vs. gem. 2 wkn</span>
@@ -296,6 +278,7 @@ export default function MyDashboardWidgetsClient() {
           />
         </div>
       </div>
+      */}
 
       {hasFixedExpenses && (
         <div className={widgetCardClass}>

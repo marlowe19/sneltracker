@@ -61,6 +61,14 @@ export default function ProjectDetailClient({
   const [capacity, setCapacity] = useState(
     project?.capacity_per_week ? String(project.capacity_per_week) : ""
   );
+  const [defaultBreakEnabled, setDefaultBreakEnabled] = useState(
+    project?.default_break_enabled === true
+  );
+  const [defaultBreakMinutes, setDefaultBreakMinutes] = useState(
+    project?.default_break_minutes != null
+      ? String(project.default_break_minutes)
+      : ""
+  );
   const [priority, setPriority] = useState(
     project?.priority ? String(project.priority) : ""
   );
@@ -117,6 +125,12 @@ export default function ProjectDetailClient({
       setBudgetHours(project.budget_hours ? String(project.budget_hours) : "");
       setCapacity(
         project.capacity_per_week ? String(project.capacity_per_week) : ""
+      );
+      setDefaultBreakEnabled(project.default_break_enabled === true);
+      setDefaultBreakMinutes(
+        project.default_break_minutes != null
+          ? String(project.default_break_minutes)
+          : ""
       );
       setPriority(project.priority ? String(project.priority) : "");
       setBudgetAmount(
@@ -326,6 +340,10 @@ export default function ProjectDetailClient({
         budget_hours: budgetHours ? parseFloat(budgetHours) : null,
         budget_amount: budgetAmount ? parseFloat(budgetAmount) : null,
         capacity_per_week: capacity ? parseFloat(capacity) : null,
+        default_break_enabled: defaultBreakEnabled,
+        default_break_minutes: defaultBreakMinutes
+          ? parseInt(defaultBreakMinutes, 10)
+          : null,
         priority: priority ? parseInt(priority, 10) : null,
         zip_code:
           zipCode && zipCode.trim() !== ""
@@ -798,6 +816,57 @@ export default function ProjectDetailClient({
                 }`}
                 placeholder="0.0"
               />
+            </div>
+
+            <div className="pt-4 border-t border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                Pauze
+              </h3>
+              <div className="space-y-4">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={defaultBreakEnabled}
+                    onChange={(e) => setDefaultBreakEnabled(e.target.checked)}
+                    disabled={!canEdit}
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-[#40A69F] focus:ring-[#40A69F] disabled:opacity-50"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-gray-700">
+                      Pauze standaard aftrekken
+                    </span>
+                    <span className="block text-xs text-gray-500 mt-0.5">
+                      Nieuwe registraties starten met pauze aan of uit.
+                    </span>
+                  </span>
+                </label>
+
+                <div>
+                  <label
+                    htmlFor="defaultBreakMinutes"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Standaard pauze (minuten)
+                  </label>
+                  <input
+                    type="number"
+                    id="defaultBreakMinutes"
+                    value={defaultBreakMinutes}
+                    onChange={(e) => setDefaultBreakMinutes(e.target.value)}
+                    step="1"
+                    min="0"
+                    disabled={!canEdit}
+                    className={`w-full max-w-[8rem] px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-gray-400 text-base ${
+                      !canEdit ? "bg-gray-100 cursor-not-allowed" : ""
+                    }`}
+                    placeholder="30"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Leeg = 30 minuten. Alleen gebruikt wanneer pauze standaard
+                    aan staat.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div>

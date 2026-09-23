@@ -339,6 +339,15 @@ function buildProjectUpdates(body) {
   if (body.status !== undefined) {
     updates.status = body.status;
   }
+  if (body.default_break_enabled !== undefined) {
+    updates.default_break_enabled = body.default_break_enabled === true;
+  }
+  if (body.default_break_minutes !== undefined) {
+    updates.default_break_minutes =
+      body.default_break_minutes === null || body.default_break_minutes === ""
+        ? null
+        : parseInt(body.default_break_minutes, 10);
+  }
 
   return updates;
 }

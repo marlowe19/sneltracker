@@ -55,6 +55,7 @@ export const POST = auth0.withApiAuthRequired(async (req, context) => {
       startedAt: entry.start_time,
       endedAt: entry.end_time,
       durationMs,
+      entry,
     });
   } else {
     // Multiple entries - return array format

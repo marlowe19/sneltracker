@@ -22,6 +22,8 @@ export const POST = auth0.withApiAuthRequired(async (req, context) => {
     const project = body.project_id ?? null;
     const startTime = body.start_time ? new Date(body.start_time) : null;
     const endTime = body.end_time ? new Date(body.end_time) : null;
+    const billable =
+      body.billable !== undefined ? body.billable === true : undefined;
 
     const newEntry = await createEntry(
       user,
@@ -30,7 +32,12 @@ export const POST = auth0.withApiAuthRequired(async (req, context) => {
       hourlyRate,
       project,
       startTime,
-      endTime
+      endTime,
+      {
+        billable,
+        deduct_break: body.deduct_break,
+        break_minutes: body.break_minutes,
+      }
     );
     return NextResponse.json({ entry: newEntry });
   } catch (error) {

@@ -190,11 +190,11 @@ export async function openDayModal(page, dayIndex = getTodayDayIndex()) {
 }
 
 /**
- * Close the day modal via the Terug button
+ * Close the day modal via the Sluiten button
  * @param {import('@playwright/test').Page} page
  */
 export async function closeDayModal(page) {
-  await page.getByTestId("day-modal").getByRole("button", { name: "Terug" }).click();
+  await page.getByTestId("day-modal").getByRole("button", { name: "Sluiten" }).click();
   await waitForApiCalls(page);
   await expect(page.getByTestId("day-modal")).not.toBeVisible({ timeout: 10_000 });
 }
@@ -225,6 +225,25 @@ export async function clickDayEntry(page, dayIndex) {
  */
 export async function acceptNextConfirm(page) {
   page.once("dialog", (dialog) => dialog.accept());
+}
+
+/**
+ * Dismiss the next browser confirm dialog
+ * @param {import('@playwright/test').Page} page
+ */
+export async function dismissNextConfirm(page) {
+  page.once("dialog", (dialog) => dialog.dismiss());
+}
+
+/**
+ * Navigate to previous or next day in the open day modal
+ * @param {import('@playwright/test').Page} page
+ * @param {"prev"|"next"} direction
+ */
+export async function navigateDayModal(page, direction) {
+  const testId = direction === "next" ? "day-nav-next" : "day-nav-prev";
+  await page.getByTestId(testId).click();
+  await waitForApiCalls(page);
 }
 
 /**

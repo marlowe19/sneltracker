@@ -3,6 +3,8 @@ const WEEKLY_HOURS_KEY = "sneltrack:forecastWeeklyHours";
 export const INCLUDE_TEAM_EARNINGS_KEY = "sneltrack:includeTeamEarnings";
 export const TAX_RESERVE_PCT_KEY = "sneltrack:taxReservePct";
 export const INCLUDE_PROJECT_EXPENSES_KEY = "sneltrack:includeProjectExpenses";
+export const EXPENSE_REVIEW_DISMISSED_KEY =
+  "sneltrack:expenseCategoryReviewDismissed";
 
 export const DEFAULT_FORECAST_HOURLY_RATE = 55;
 export const DEFAULT_FORECAST_WEEKLY_HOURS = 40;
@@ -30,43 +32,12 @@ export function getForecastWeeklyHours() {
   }
 }
 
-export function setForecastHourlyRate(rate) {
-  if (typeof window === "undefined") return;
-  const n = Number(rate);
-  if (!Number.isFinite(n) || n <= 0) return;
-  try {
-    localStorage.setItem(HOURLY_RATE_KEY, String(n));
-  } catch {
-    // ignore
-  }
-}
-
-export function setForecastWeeklyHours(hours) {
-  if (typeof window === "undefined") return;
-  const n = Number(hours);
-  if (!Number.isFinite(n) || n <= 0) return;
-  try {
-    localStorage.setItem(WEEKLY_HOURS_KEY, String(n));
-  } catch {
-    // ignore
-  }
-}
-
 export function getIncludeTeamEarnings() {
   if (typeof window === "undefined") return false;
   try {
     return localStorage.getItem(INCLUDE_TEAM_EARNINGS_KEY) === "true";
   } catch {
     return false;
-  }
-}
-
-export function setIncludeTeamEarnings(include) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(INCLUDE_TEAM_EARNINGS_KEY, include ? "true" : "false");
-  } catch {
-    // ignore
   }
 }
 
@@ -83,17 +54,6 @@ export function getTaxReservePct() {
   }
 }
 
-export function setTaxReservePct(pct) {
-  if (typeof window === "undefined") return;
-  const n = Number(pct);
-  if (!Number.isFinite(n) || n < 0 || n > 100) return;
-  try {
-    localStorage.setItem(TAX_RESERVE_PCT_KEY, String(n));
-  } catch {
-    // ignore
-  }
-}
-
 export function getIncludeProjectExpenses() {
   if (typeof window === "undefined") return false;
   try {
@@ -103,14 +63,11 @@ export function getIncludeProjectExpenses() {
   }
 }
 
-export function setIncludeProjectExpenses(include) {
-  if (typeof window === "undefined") return;
+export function getExpenseCategoryReviewDismissed() {
+  if (typeof window === "undefined") return false;
   try {
-    localStorage.setItem(
-      INCLUDE_PROJECT_EXPENSES_KEY,
-      include ? "true" : "false",
-    );
+    return localStorage.getItem(EXPENSE_REVIEW_DISMISSED_KEY) === "true";
   } catch {
-    // ignore
+    return false;
   }
 }
