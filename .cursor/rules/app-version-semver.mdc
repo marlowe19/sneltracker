@@ -1,0 +1,37 @@
+---
+description: Always bump the user-visible app version with SemVer on shipped changes
+globs: sneltrack/app/my/profile/page.js
+alwaysApply: true
+---
+
+# App version — always SemVer
+
+The version customers see is **not** `package.json` (that stays `0.1.0`). It is the string on the profile page:
+
+`sneltrack/app/my/profile/page.js` → `App versie: X.Y.Z`
+
+## Always bump it
+
+When you ship user-visible work to `test` or `main` (feature, fix, or behaviour change), bump that string in the **same PR**. Do not leave it on the previous release.
+
+Use [SemVer](https://semver.org/): `MAJOR.MINOR.PATCH`
+
+| Change | Bump | Example |
+|--------|------|---------|
+| Bug fix, small correction, no new capability | PATCH | `2.9.0` → `2.9.1` |
+| New user-facing feature or behaviour | MINOR | `2.8.0` → `2.9.0` |
+| Breaking change for users or a incompatible data/API contract | MAJOR | `2.9.0` → `3.0.0` |
+
+Reset the lower numbers when you bump a higher one (`2.8.3` + minor → `2.9.0`).
+
+## Do
+
+- Read the current `App versie` first, then increment one segment
+- Keep three numbers (`2.9` is written as `2.9.0`)
+- Mention the new version in the commit and PR
+
+## Don't
+
+- Skip the bump because the change “is small”
+- Bump `sneltrack/package.json` instead of (or only) the profile string
+- Invent a fourth number or a date-based version
