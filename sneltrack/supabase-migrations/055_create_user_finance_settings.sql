@@ -1,11 +1,12 @@
 -- User finance settings: forecast rates, tax reserve, toggles
 --
--- Production already has this table, keyed by users.user_id (uuid).
--- Do NOT re-run this file on the live database. App code resolves
--- Auth0 session.user.sub → users.auth0_sub → users.user_id.
+-- Production SnelTracker (zdiluzjpfkiexbeyutgl) users are keyed by
+-- users.id (uuid) + users.user_name (Auth0 sub). This table stores both.
+-- The Next.js API uses SUPABASE_SERVICE_ROLE_KEY, which bypasses RLS.
 
 CREATE TABLE IF NOT EXISTS public.user_finance_settings (
-  user_name VARCHAR(255) PRIMARY KEY,
+  user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
+  user_name VARCHAR(255) UNIQUE,
   forecast_hourly_rate NUMERIC(10, 2) NOT NULL DEFAULT 55,
   forecast_weekly_hours NUMERIC(6, 2) NOT NULL DEFAULT 40,
   tax_reserve_pct NUMERIC(5, 2) NOT NULL DEFAULT 35
@@ -19,9 +20,17 @@ CREATE TABLE IF NOT EXISTS public.user_finance_settings (
 CREATE INDEX IF NOT EXISTS idx_user_finance_settings_updated_at
   ON public.user_finance_settings(updated_at);
 
-ALTER TABLE public.user_finance_settings DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_user_finance_settings_user_name
+  ON public.user_finance_settings(user_name);
+
+ALTER TABLE public.user_finance_settings ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON public.user_finance_settings FROM anon;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_finance_settings TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_finance_settings TO service_role;
 
 COMMENT ON TABLE public.user_finance_settings IS
   'User finance forecast settings and toggles for onkosten dashboard';
+
+NOTIFY pgrst, 'reload schema';

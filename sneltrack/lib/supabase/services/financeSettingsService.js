@@ -11,6 +11,12 @@ import {
   DEFAULT_TAX_RESERVE_PCT,
 } from "@/lib/preferences/forecastSettings";
 
+function isMissingRelationOrColumn(error) {
+  const code = error?.code;
+  if (code === "PGRST204" || code === "PGRST205") return true;
+  return /schema cache/i.test(String(error?.message || ""));
+}
+
 async function requireFinanceSettingsUserId(authIdentity) {
   const userId = await lookupUserIdByAuthIdentity(authIdentity);
   if (!userId) {
@@ -89,29 +95,51 @@ export function validatePartial(updates) {
   return data;
 }
 
+async function selectExisting(authIdentity, userId) {
+  const byName = await supabaseServer
+    .from("user_finance_settings")
+    .select("*")
+    .eq("user_name", authIdentity)
+    .maybeSingle();
+
+  if (!byName.error) {
+    return byName.data ?? null;
+  }
+  if (!isMissingRelationOrColumn(byName.error)) {
+    throw byName.error;
+  }
+
+  const byId = await supabaseServer
+    .from("user_finance_settings")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (byId.error) {
+    throw byId.error;
+  }
+  return byId.data ?? null;
+}
+
 /**
- * Live user_finance_settings is keyed by users.user_id (uuid).
- * `authIdentity` is Auth0 session.user.sub.
+ * Live SnelTracker keys the row by users.id (uuid) and also stores
+ * Auth0 session.user.sub on user_name. Older 055-only schemas use
+ * user_name as the primary key.
  *
  * @param {string} authIdentity
  * @returns {Promise<object|null>}
  */
 export async function get(authIdentity) {
   const userId = await lookupUserIdByAuthIdentity(authIdentity);
-  if (!userId) return null;
+  if (!userId && !authIdentity) return null;
 
-  const { data, error } = await supabaseServer
-    .from("user_finance_settings")
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error) {
+  try {
+    const row = await selectExisting(authIdentity, userId);
+    return row ? mapRowToClient(row) : null;
+  } catch (error) {
     console.error("Error fetching finance settings:", error);
     throw error;
   }
-
-  return data ? mapRowToClient(data) : null;
 }
 
 /**
@@ -127,25 +155,28 @@ export async function upsert(authIdentity, updates) {
   }
 
   updateData.updated_at = new Date().toISOString();
+  updateData.user_name = authIdentity;
 
-  const { data: existing, error: fetchError } = await supabaseServer
-    .from("user_finance_settings")
-    .select("user_id")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (fetchError) {
+  let existing;
+  try {
+    existing = await selectExisting(authIdentity, userId);
+  } catch (fetchError) {
     console.error("Error checking finance settings:", fetchError);
     throw fetchError;
   }
 
   if (existing) {
-    const { data, error } = await supabaseServer
+    let query = supabaseServer
       .from("user_finance_settings")
-      .update(updateData)
-      .eq("user_id", userId)
-      .select()
-      .single();
+      .update(updateData);
+
+    if (existing.user_id) {
+      query = query.eq("user_id", existing.user_id);
+    } else {
+      query = query.eq("user_name", existing.user_name || authIdentity);
+    }
+
+    const { data, error } = await query.select().single();
 
     if (error) {
       console.error("Error updating finance settings:", error);
@@ -165,6 +196,24 @@ export async function upsert(authIdentity, updates) {
     .single();
 
   if (error) {
+    // Older 055 schemas only have user_name as PK.
+    if (isMissingRelationOrColumn(error)) {
+      const { data: namedRow, error: namedError } = await supabaseServer
+        .from("user_finance_settings")
+        .insert({
+          user_name: authIdentity,
+          ...updateData,
+        })
+        .select()
+        .single();
+
+      if (namedError) {
+        console.error("Error creating finance settings:", namedError);
+        throw namedError;
+      }
+      return mapRowToClient(namedRow);
+    }
+
     console.error("Error creating finance settings:", error);
     throw error;
   }
